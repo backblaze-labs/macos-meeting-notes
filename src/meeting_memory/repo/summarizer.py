@@ -1,0 +1,1 @@
+"""Anthropic summarization adapter placeholder."""

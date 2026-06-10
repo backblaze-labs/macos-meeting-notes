@@ -1,0 +1,1 @@
+"""Local meeting storage placeholder."""

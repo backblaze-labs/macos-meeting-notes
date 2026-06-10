@@ -1,0 +1,1 @@
+"""Tray application placeholder."""
