@@ -26,13 +26,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "doctor":
         return doctor_main(())
     if args.command == "auth":
-        sys.stderr.write("Google Calendar auth is planned for Milestone 3.\n")
-        return 2
+        return run_auth()
 
     sys.stderr.write(
         "Tray application startup is planned for Milestone 4. Run `make doctor` now.\n"
     )
     return 2
+
+
+def run_auth() -> int:
+    from meeting_memory.config.settings import validate_or_exit
+    from meeting_memory.repo.calendar_client import GoogleCalendarClient
+
+    settings = validate_or_exit()
+    GoogleCalendarClient.from_settings(settings).authenticate()
+    sys.stderr.write("Google Calendar auth token saved to Keychain.\n")
+    return 0
 
 
 if __name__ == "__main__":

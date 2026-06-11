@@ -42,6 +42,14 @@ class B2UploadResult:
 
 
 @dataclass(frozen=True)
+class CalendarMeeting:
+    event_id: str
+    calendar_title: str
+    starts_at: datetime
+    meeting_url: str
+
+
+@dataclass(frozen=True)
 class RecentMeeting:
     slug: str
     calendar_title: str

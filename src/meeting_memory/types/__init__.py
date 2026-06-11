@@ -3,6 +3,7 @@
 from meeting_memory.types.events import MeetingDetected, NotifyEvent, RecordingStateChanged
 from meeting_memory.types.meeting import (
     B2UploadResult,
+    CalendarMeeting,
     MeetingFiles,
     MeetingMeta,
     RecentMeeting,
@@ -15,6 +16,7 @@ from meeting_memory.types.transcript import TranscriptResult, TranscriptSegment
 __all__ = [
     "ActionItem",
     "B2UploadResult",
+    "CalendarMeeting",
     "MeetingDetected",
     "MeetingFiles",
     "MeetingMeta",

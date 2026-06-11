@@ -25,6 +25,7 @@ EXTERNAL_SDK_PREFIXES = (
     "google",
     "google_auth_oauthlib",
     "googleapiclient",
+    "keyring",
     "sounddevice",
 )
 
