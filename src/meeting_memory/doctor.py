@@ -10,16 +10,16 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from meeting_memory.config.settings import (
+from meeting_memory.config.defaults import (
     DEFAULT_AUDIO_DEVICE,
     DEFAULT_GOOGLE_CALENDAR_CREDENTIALS_FILE,
+    PLACEHOLDER_MARKERS,
     REQUIRED_ENV_VARS,
 )
 from meeting_memory.repo.audio_device import AudioDeviceCheckUnavailable, list_audio_device_names
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = PROJECT_ROOT / ".env"
-PLACEHOLDER_MARKERS = ("replace-me", "changeme", "todo", "<", ">")
 
 
 @dataclass(frozen=True)

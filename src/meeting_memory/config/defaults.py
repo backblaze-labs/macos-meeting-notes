@@ -1,0 +1,21 @@
+"""Configuration defaults shared by settings and doctor."""
+
+REQUIRED_ENV_VARS = (
+    "B2_APPLICATION_KEY_ID",
+    "B2_APPLICATION_KEY",
+    "B2_ENDPOINT",
+    "B2_REGION",
+    "B2_BUCKET_NAME",
+    "ASSEMBLYAI_API_KEY",
+)
+
+PLACEHOLDER_MARKERS = ("replace-me", "changeme", "todo", "<", ">")
+
+DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"
+DEFAULT_GOOGLE_CALENDAR_CREDENTIALS_FILE = "credentials.json"
+DEFAULT_GOOGLE_CALENDAR_ID = "primary"
+DEFAULT_MEETINGS_DIR = "~/Meetings"
+DEFAULT_AUDIO_DEVICE = "Meeting Aggregate"
+DEFAULT_NOTIFY_MINUTES_BEFORE = 5
+DEFAULT_MAX_RECORDING_MINUTES = 180
+DEFAULT_CALENDAR_POLL_INTERVAL = 120
