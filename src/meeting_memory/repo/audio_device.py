@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 class AudioDeviceCheckUnavailable(RuntimeError):
@@ -14,6 +15,29 @@ class AudioDeviceInfo:
     index: int
     name: str
     max_input_channels: int
+
+
+def open_input_stream(
+    *,
+    device_index: int,
+    sample_rate: int,
+    channels: int,
+    callback,
+) -> Any:
+    try:
+        import sounddevice
+    except ModuleNotFoundError as exc:
+        raise AudioDeviceCheckUnavailable(
+            "sounddevice is not installed; recording is unavailable."
+        ) from exc
+
+    return sounddevice.InputStream(
+        device=device_index,
+        samplerate=sample_rate,
+        channels=channels,
+        dtype="int16",
+        callback=callback,
+    )
 
 
 def list_audio_device_names() -> list[str]:
