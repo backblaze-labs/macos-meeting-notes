@@ -36,6 +36,12 @@ class MeetingFiles:
 
 
 @dataclass(frozen=True)
+class B2UploadResult:
+    audio_key: str
+    transcript_key: str
+
+
+@dataclass(frozen=True)
 class RecentMeeting:
     slug: str
     calendar_title: str

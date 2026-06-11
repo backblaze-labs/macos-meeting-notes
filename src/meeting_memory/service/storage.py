@@ -23,6 +23,12 @@ def write_meeting_dir(
     transcript: TranscriptResult,
     summary: SummaryResult,
 ) -> MeetingFiles:
+    files = create_meeting_dir(meetings_dir, meta, audio_source)
+    write_meeting_markdown(files, transcript, summary)
+    return files
+
+
+def create_meeting_dir(meetings_dir: Path, meta: MeetingMeta, audio_source: Path) -> MeetingFiles:
     meetings_dir = meetings_dir.expanduser()
     meetings_dir.mkdir(parents=True, exist_ok=True)
 
@@ -34,15 +40,22 @@ def write_meeting_dir(
     audio_path = meeting_dir / RECORDING_AUDIO
     markdown_path = meeting_dir / MEETING_MARKDOWN
     shutil.copy2(audio_source, audio_path)
-    markdown_path.write_text(
-        render_meeting_markdown(final_meta, transcript, summary),
-        encoding="utf-8",
-    )
     return MeetingFiles(
         meta=final_meta,
         directory=meeting_dir,
         audio_path=audio_path,
         markdown_path=markdown_path,
+    )
+
+
+def write_meeting_markdown(
+    files: MeetingFiles,
+    transcript: TranscriptResult,
+    summary: SummaryResult,
+) -> None:
+    files.markdown_path.write_text(
+        render_meeting_markdown(files.meta, transcript, summary),
+        encoding="utf-8",
     )
 
 
