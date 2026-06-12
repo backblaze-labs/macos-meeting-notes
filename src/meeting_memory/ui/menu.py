@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from meeting_memory.types.meeting import RecentMeeting
 
+TRAY_IDLE_TITLE = "●"
+
 APP_TITLE = "● Meeting Memory"
 RECENT_HEADER = "Recent Meetings"
 NO_MEETINGS_LABEL = "No meetings yet"
@@ -17,6 +19,12 @@ def recording_label(*, is_recording: bool, duration_seconds: int = 0) -> str:
     if is_recording:
         return f"■ Stop Recording · {_format_duration(duration_seconds)}"
     return "▶ Start Recording"
+
+
+def tray_title(*, is_recording: bool, duration_seconds: int = 0) -> str | None:
+    if not is_recording:
+        return TRAY_IDLE_TITLE
+    return f"{TRAY_IDLE_TITLE} {_format_duration(duration_seconds)}"
 
 
 def recent_meeting_label(meeting: RecentMeeting) -> str:

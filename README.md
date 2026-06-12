@@ -38,11 +38,34 @@ Fill in `.env`, then run:
 ```bash
 make doctor
 meeting-memory auth
-meeting-memory
+make PYTHON=.venv/bin/python install-macos-app
+make PYTHON=.venv/bin/python open-macos-app
 ```
 
 `make doctor` checks local setup. It is expected to fail until `.env`,
 credentials, `ffmpeg`, and audio device setup are complete.
+
+The clickable app is installed at `~/Applications/Meeting Memory.app` so it can
+be launched from Finder or found with Cmd+Space by searching for
+`Meeting Memory`.
+
+After changing app code, reload the official local app bundle:
+
+```bash
+make PYTHON=.venv/bin/python reload-macos-app
+```
+
+To start Meeting Memory automatically at login as a background menu-bar app:
+
+```bash
+make PYTHON=.venv/bin/python install-launch-agent
+```
+
+To remove the login item:
+
+```bash
+make PYTHON=.venv/bin/python uninstall-launch-agent
+```
 
 ## Setup Guides
 
@@ -69,6 +92,7 @@ Optional:
 
 - `ANTHROPIC_API_KEY`
 - `ANTHROPIC_MODEL`
+- `SUMMARY_PROMPT_FILE`
 - `GOOGLE_CALENDAR_ID`
 - `MEETINGS_DIR`
 - `AUDIO_DEVICE`
@@ -95,13 +119,22 @@ Anthropic summary cost depends on the selected model, transcript length, and
 current Anthropic pricing. The app sends at most the first 60,000 transcript
 characters to Claude.
 
+## Summary Prompt
+
+The default summary prompt lives at [prompts/summary.md](prompts/summary.md).
+Set `SUMMARY_PROMPT_FILE` to point at another prompt file. If the file contains
+`{transcript}`, the app replaces that placeholder with the clipped transcript;
+otherwise it appends the transcript below the prompt.
+
 ## Known Limitations
 
-- The current implementation is a Python menu bar app, not a packaged `.app`.
+- The `.app` bundle is a local wrapper around this repo and its Python virtual
+  environment, not a standalone signed binary.
 - Recording requires manual start/stop.
 - Speaker labels are preserved as AssemblyAI labels; the app does not map them
   to real attendee names.
-- Calendar watching is limited to `GOOGLE_CALENDAR_ID` in v1.
+- Calendar watching uses all accessible calendars by default; set
+  `GOOGLE_CALENDAR_ID` to a specific ID to narrow it.
 - Failed offline/network work is surfaced through local status and manual retry;
   a durable offline queue is future work.
 - The preferences window edits `.env`; restart the app after saving changes.

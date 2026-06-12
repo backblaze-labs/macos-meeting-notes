@@ -19,6 +19,7 @@ class CalendarClient(Protocol):
         *,
         now: datetime,
         lookahead_minutes: int,
+        lookbehind_minutes: int = 0,
     ) -> list[CalendarMeeting]:
         """Return upcoming video meetings."""
 
@@ -83,5 +84,6 @@ class CalendarWatcher:
                     calendar_title=meeting.calendar_title,
                     starts_at=meeting.starts_at,
                     meeting_url=meeting.meeting_url,
+                    ends_at=meeting.ends_at,
                 )
             )

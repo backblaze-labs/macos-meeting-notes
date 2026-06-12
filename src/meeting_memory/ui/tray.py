@@ -2,75 +2,20 @@
 
 from __future__ import annotations
 
-import queue
-import subprocess
-import threading
-from collections.abc import Callable
-from dataclasses import dataclass, field
+import logging
 from datetime import datetime
 from pathlib import Path
 
-from meeting_memory.config.settings import Settings
 from meeting_memory.doctor import CheckResult
-from meeting_memory.service.pipeline import Pipeline
-from meeting_memory.service.recorder import RecorderService
-from meeting_memory.service.storage import list_recent_meetings
 from meeting_memory.types.events import MeetingDetected, NotifyEvent
-from meeting_memory.types.meeting import RecentMeeting
 from meeting_memory.ui import menu
+from meeting_memory.ui.controller import TrayController
+from meeting_memory.ui.macos import hide_dock_icon, keep_timer_running_during_menu_tracking
+from meeting_memory.ui.notifications import send_notification
 from meeting_memory.ui.preferences import open_preferences_window
+from meeting_memory.ui.title_prompt import ask_recording_title
 
-EventQueue = queue.Queue[object]
-ThreadFactory = Callable[..., threading.Thread]
-
-
-@dataclass
-class TrayController:
-    settings: Settings
-    recorder: RecorderService
-    pipeline: Pipeline
-    event_queue: EventQueue = field(default_factory=queue.Queue)
-    opener: Callable[[Path], None] = field(default_factory=lambda: open_in_finder)
-    sync_runner: Callable[[], object] | None = None
-    thread_factory: ThreadFactory = threading.Thread
-
-    def start_recording(self, calendar_title: str = "Untitled") -> None:
-        self.recorder.start(calendar_title=calendar_title)
-
-    def stop_recording(self) -> None:
-        result = self.recorder.stop()
-        if result is None:
-            return
-        thread = self.thread_factory(
-            target=self.pipeline.run,
-            args=(result.audio_path, result.meta),
-            daemon=True,
-        )
-        thread.start()
-
-    def sync_to_b2(self) -> None:
-        if self.sync_runner is None:
-            return
-        thread = self.thread_factory(target=self.sync_runner, daemon=True)
-        thread.start()
-
-    def recent_meetings(self) -> list[RecentMeeting]:
-        return list_recent_meetings(self.settings.meetings_dir_path)
-
-    def open_meetings_folder(self) -> None:
-        self.settings.meetings_dir_path.mkdir(parents=True, exist_ok=True)
-        self.opener(self.settings.meetings_dir_path)
-
-    def open_meeting(self, meeting: RecentMeeting) -> None:
-        self.opener(meeting.directory)
-
-    def drain_events(self) -> list[object]:
-        events: list[object] = []
-        while True:
-            try:
-                events.append(self.event_queue.get_nowait())
-            except queue.Empty:
-                return events
+LOGGER = logging.getLogger(__name__)
 
 
 class RumpsTrayApp:
@@ -84,24 +29,34 @@ class RumpsTrayApp:
         self.rumps = rumps_module or _load_rumps()
         self.controller = controller
         self.doctor_results = doctor_results or []
-        self.app = self.rumps.App("Meeting Memory", title="●")
+        if rumps_module is None:
+            hide_dock_icon(LOGGER)
+        self._register_notification_handler()
+        self.app = self.rumps.App(
+            "Meeting Memory",
+            title=self.current_tray_title(),
+            quit_button=None,
+        )
         self.timer = self.rumps.Timer(self.drain_events, 1)
+        self.recording_item = None
+        self.recording_label = ""
         self.rebuild_menu()
 
     def run(self) -> None:
         self.timer.start()
+        keep_timer_running_during_menu_tracking(self.timer, LOGGER)
         self.app.run()
 
     def rebuild_menu(self, _sender=None) -> None:
         self.app.menu.clear()
         self.app.menu.add(self.rumps.MenuItem(menu.APP_TITLE, callback=None))
         self.app.menu.add(None)
-        self.app.menu.add(
-            self.rumps.MenuItem(
-                menu.recording_label(is_recording=self.controller.recorder.is_recording),
-                callback=self.toggle_recording,
-            )
+        self.recording_item = self.rumps.MenuItem(
+            self.current_recording_label(),
+            callback=self.toggle_recording,
         )
+        self.recording_label = self.recording_item.title
+        self.app.menu.add(self.recording_item)
         self.app.menu.add(None)
         self.app.menu.add(self.rumps.MenuItem(menu.RECENT_HEADER, callback=None))
         for recent in self.controller.recent_meetings():
@@ -127,7 +82,14 @@ class RumpsTrayApp:
         if self.controller.recorder.is_recording:
             self.controller.stop_recording()
         else:
-            self.controller.start_recording()
+            context = self.controller.recording_context()
+            if context is None:
+                title = ask_recording_title(self.rumps)
+                if title is None:
+                    return
+                self.controller.start_recording(title)
+            else:
+                self.controller.start_recording(context.calendar_title, ends_at=context.ends_at)
         self.rebuild_menu()
 
     def open_meetings_folder(self, _sender=None) -> None:
@@ -142,24 +104,109 @@ class RumpsTrayApp:
     def drain_events(self, _timer=None) -> None:
         for event in self.controller.drain_events():
             self.handle_event(event)
+        self.update_tray_title()
+        self.update_recording_label()
+
+    def current_tray_title(self) -> str | None:
+        return menu.tray_title(
+            is_recording=self.controller.recorder.is_recording,
+            duration_seconds=self.controller.recording_duration_seconds(),
+        )
+
+    def update_tray_title(self) -> None:
+        title = self.current_tray_title()
+        if self.app.title != title:
+            self.app.title = title
+
+    def current_recording_label(self) -> str:
+        return menu.recording_label(
+            is_recording=self.controller.recorder.is_recording,
+            duration_seconds=self.controller.recording_duration_seconds(),
+        )
+
+    def update_recording_label(self) -> None:
+        if self.recording_item is None:
+            return
+
+        label = self.current_recording_label()
+        if label == self.recording_label:
+            return
+
+        self.recording_item.title = label
+        self.recording_label = label
 
     def handle_event(self, event: object) -> None:
         if isinstance(event, NotifyEvent):
-            self.rumps.notification(event.title, "", event.body)
+            self.notify_event(event)
+            if event.meeting_directory is not None:
+                self.rebuild_menu()
         elif isinstance(event, MeetingDetected):
-            minutes = max(
-                0,
-                round((event.starts_at - datetime.now().astimezone()).total_seconds() / 60),
+            self.controller.remember_meeting(event)
+            self.notify_meeting_detected(event)
+
+    def notify_event(self, event: NotifyEvent) -> None:
+        kwargs = {}
+        if event.action_label:
+            kwargs["action_button"] = event.action_label
+        if event.action:
+            kwargs["data"] = {"action": event.action}
+        if event.meeting_directory is not None:
+            kwargs["data"] = {
+                "action": "open_meeting",
+                "meeting_directory": str(event.meeting_directory),
+            }
+        self._send_notification(event.title, "", event.body, **kwargs)
+
+    def notify_meeting_detected(self, event: MeetingDetected) -> None:
+        minutes = max(
+            0,
+            round((event.starts_at - datetime.now().astimezone()).total_seconds() / 60),
+        )
+        self._send_notification(
+            "Meeting starting soon",
+            "",
+            f"{event.calendar_title} starts in {minutes} minutes",
+            action_button="Record",
+            data={
+                "action": "start_recording",
+                "calendar_title": event.calendar_title,
+                "ends_at": event.ends_at.isoformat() if event.ends_at is not None else "",
+            },
+        )
+
+    def handle_notification(self, data) -> None:
+        if not isinstance(data, dict):
+            return
+        if data.get("action") == "start_recording":
+            self.controller.start_recording(
+                str(data.get("calendar_title") or "Untitled"),
+                ends_at=_parse_datetime(data.get("ends_at")),
             )
-            self.rumps.notification(
-                "Meeting starting soon",
-                "",
-                f"{event.calendar_title} starts in {minutes} minutes",
-            )
+            self.rebuild_menu()
+        elif data.get("action") == "stop_recording":
+            self.controller.stop_recording()
+            self.rebuild_menu()
+        elif data.get("action") == "open_meeting":
+            directory = data.get("meeting_directory")
+            if directory:
+                self.controller.opener(Path(str(directory)))
+
+    def _register_notification_handler(self) -> None:
+        register = getattr(self.rumps, "notifications", None)
+        if callable(register):
+            register(self.handle_notification)
+
+    def _send_notification(self, title: str, subtitle: str, message: str, **kwargs) -> None:
+        send_notification(self.rumps, title, subtitle, message, LOGGER, **kwargs)
 
 
-def open_in_finder(path: Path) -> None:
-    subprocess.run(["open", str(path)], check=False)
+def _parse_datetime(value: object) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
 
 
 def _load_rumps():

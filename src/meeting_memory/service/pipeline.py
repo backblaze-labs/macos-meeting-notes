@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +35,7 @@ class B2Client(Protocol):
 
 
 EventSink = Callable[[NotifyEvent], None]
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -59,7 +61,7 @@ class Pipeline:
         summary = self._summarize(transcript)
 
         write_meeting_markdown(files, transcript, summary)
-        self._emit_completion(files, transcript)
+        self._emit_completion(files, transcript, summary)
 
         b2_uploaded, b2_error = self._upload_to_b2(files)
         return PipelineResult(
@@ -89,19 +91,33 @@ class Pipeline:
         try:
             return self.summarizer_client.summarize(transcript.text)
         except Exception:
+            LOGGER.exception("Summarization failed")
             return SummaryResult.failed()
 
-    def _emit_completion(self, files: MeetingFiles, transcript: TranscriptResult) -> None:
+    def _emit_completion(
+        self,
+        files: MeetingFiles,
+        transcript: TranscriptResult,
+        summary: SummaryResult,
+    ) -> None:
         if self.event_sink is None:
             return
 
         if transcript.error:
             body = f"{files.meta.calendar_title} · transcription failed. Audio saved locally."
+        elif summary.status == "failed":
+            body = (
+                f"{files.meta.calendar_title} · {files.meta.duration_minutes} min · summary failed"
+            )
+        elif summary.status == "skipped":
+            body = (
+                f"{files.meta.calendar_title} · {files.meta.duration_minutes} min · summary skipped"
+            )
         else:
-            body = f"{files.meta.calendar_title} · {files.meta.duration_minutes} min"
+            body = f"{files.meta.calendar_title} · {files.meta.duration_minutes} min · ready"
         self.event_sink(
             NotifyEvent(
-                title="Meeting transcribed",
+                title="Meeting ready",
                 body=body,
                 action_label="Open",
                 meeting_directory=files.directory,

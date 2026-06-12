@@ -15,7 +15,13 @@ def test_calendar_watcher_emits_each_meeting_once() -> None:
     watcher = CalendarWatcher(
         client=FakeCalendarClient(
             [
-                CalendarMeeting("soon", "Standup", now + timedelta(minutes=4), "meet"),
+                CalendarMeeting(
+                    "soon",
+                    "Standup",
+                    now + timedelta(minutes=4),
+                    "meet",
+                    now + timedelta(minutes=34),
+                ),
                 CalendarMeeting("later", "Planning", now + timedelta(minutes=10), "zoom"),
             ]
         ),
@@ -28,7 +34,15 @@ def test_calendar_watcher_emits_each_meeting_once() -> None:
     watcher.poll_once()
     watcher.poll_once()
 
-    assert events == [MeetingDetected("soon", "Standup", now + timedelta(minutes=4), "meet")]
+    assert events == [
+        MeetingDetected(
+            "soon",
+            "Standup",
+            now + timedelta(minutes=4),
+            "meet",
+            now + timedelta(minutes=34),
+        )
+    ]
 
 
 def test_calendar_watcher_reports_poll_errors_as_events() -> None:

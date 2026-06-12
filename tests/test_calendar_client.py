@@ -65,10 +65,37 @@ def test_calendar_lists_only_video_meetings(monkeypatch, tmp_path: Path) -> None
     assert meetings[0].event_id == "meet"
     assert meetings[0].calendar_title == "Daily Standup"
     assert meetings[0].meeting_url == "https://meet.google.com/abc-defg-hij"
+    assert meetings[0].ends_at == datetime(2026, 6, 11, 9, 30, tzinfo=UTC)
     assert meetings[1].meeting_url == "https://acme.zoom.us/j/123456789"
     assert fake_service.list_kwargs["calendarId"] == "primary"
     assert fake_service.list_kwargs["singleEvents"] is True
     assert fake_service.list_kwargs["orderBy"] == "startTime"
+
+
+def test_calendar_lists_all_accessible_calendars(monkeypatch, tmp_path: Path) -> None:
+    token_store = InMemoryTokenStore('{"token":"valid"}')
+    fake_service = FakeCalendarService()
+    monkeypatch.setattr(calendar_client, "_load_google_credentials", lambda: ValidCredentials)
+    monkeypatch.setattr(calendar_client, "_load_google_build", lambda: fake_service.build)
+
+    client = GoogleCalendarClient(
+        credentials_file=tmp_path / "credentials.json",
+        calendar_id="all",
+        token_store=token_store,
+    )
+    meetings = client.list_upcoming_meetings(
+        now=datetime(2026, 6, 11, 9, 0, tzinfo=UTC),
+        lookahead_minutes=7,
+        lookbehind_minutes=5,
+    )
+
+    assert [call["calendarId"] for call in fake_service.list_calls] == ["primary", "team"]
+    assert [meeting.calendar_title for meeting in meetings] == [
+        "Daily Standup",
+        "Daily Standup",
+        "Customer Call",
+        "Customer Call",
+    ]
 
 
 def test_keychain_token_store_uses_keyring(monkeypatch) -> None:
@@ -171,6 +198,7 @@ class FakeRequest:
 class FakeCalendarService:
     def __init__(self):
         self.list_kwargs = {}
+        self.list_calls = []
 
     def build(self, service_name: str, version: str, *, credentials):
         assert service_name == "calendar"
@@ -183,7 +211,11 @@ class FakeCalendarService:
 
     def list(self, **kwargs):
         self.list_kwargs = kwargs
+        self.list_calls.append(kwargs)
         return self
+
+    def calendarList(self):
+        return FakeCalendarList()
 
     def execute(self):
         return {
@@ -193,12 +225,14 @@ class FakeCalendarService:
                     "summary": "Daily Standup",
                     "description": "Join https://meet.google.com/abc-defg-hij",
                     "start": {"dateTime": "2026-06-11T09:05:00+00:00"},
+                    "end": {"dateTime": "2026-06-11T09:30:00+00:00"},
                 },
                 {
                     "id": "zoom",
                     "summary": "Customer Call",
                     "location": "https://acme.zoom.us/j/123456789",
                     "start": {"dateTime": "2026-06-11T09:06:00Z"},
+                    "end": {"dateTime": "2026-06-11T09:45:00Z"},
                 },
                 {
                     "id": "focus",
@@ -208,6 +242,14 @@ class FakeCalendarService:
                 },
             ]
         }
+
+
+class FakeCalendarList:
+    def list(self):
+        return self
+
+    def execute(self):
+        return {"items": [{"id": "primary"}, {"id": "team"}, {"id": "deleted", "deleted": True}]}
 
 
 class FakeKeyring:

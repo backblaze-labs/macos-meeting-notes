@@ -7,6 +7,7 @@ import tempfile
 import threading
 import wave
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -70,24 +71,45 @@ class RecorderService:
             slug = build_meeting_slug(started_at, title)
             wav_path = self.temp_dir / f"meeting-memory-{slug}.wav"
             device = self.device_lookup(self.audio_device)
+            input_channels = max(CHANNELS, int(device.max_input_channels or CHANNELS))
 
             self.temp_dir.mkdir(parents=True, exist_ok=True)
-            self._wave_file = wave.open(str(wav_path), "wb")
-            self._wave_file.setnchannels(CHANNELS)
-            self._wave_file.setsampwidth(SAMPLE_WIDTH_BYTES)
-            self._wave_file.setframerate(SAMPLE_RATE)
-            self._stream = self.stream_factory(
-                device_index=device.index,
-                sample_rate=SAMPLE_RATE,
-                channels=CHANNELS,
-                callback=self._audio_callback,
-            )
-            self._stream.start()
-            self._session = RecordingSession(
+            wave_file = wave.open(str(wav_path), "wb")
+            stream = None
+
+            try:
+                wave_file.setnchannels(CHANNELS)
+                wave_file.setsampwidth(SAMPLE_WIDTH_BYTES)
+                wave_file.setframerate(SAMPLE_RATE)
+                self._wave_file = wave_file
+                stream = self.stream_factory(
+                    device_index=device.index,
+                    sample_rate=SAMPLE_RATE,
+                    channels=input_channels,
+                    callback=self._audio_callback,
+                )
+                self._stream = stream
+                stream.start()
+            except Exception:
+                self._wave_file = None
+                self._stream = None
+                with suppress(Exception):
+                    if stream is not None:
+                        stream.stop()
+                with suppress(Exception):
+                    if stream is not None:
+                        stream.close()
+                wave_file.close()
+                with suppress(OSError):
+                    wav_path.unlink()
+                raise
+
+            session = RecordingSession(
                 meta=MeetingMeta(slug=slug, started_at=started_at, calendar_title=title),
                 wav_path=wav_path,
             )
-            return self._session
+            self._session = session
+            return session
 
     def stop(self) -> RecordingResult | None:
         with self._lock:
@@ -125,7 +147,16 @@ class RecorderService:
         del frames, time_info, status
         with self._lock:
             if self._wave_file is not None:
-                self._wave_file.writeframes(indata.tobytes())
+                self._wave_file.writeframes(_mono_pcm16_bytes(indata))
+
+
+def _mono_pcm16_bytes(indata) -> bytes:
+    shape = getattr(indata, "shape", ())
+    if len(shape) < 2 or shape[1] <= 1:
+        return indata.tobytes()
+
+    mono = indata.astype("int32").mean(axis=1).clip(-32768, 32767).astype("int16")
+    return mono.tobytes()
 
 
 def convert_wav_to_m4a(wav_path: Path, m4a_path: Path) -> None:

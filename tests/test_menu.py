@@ -6,7 +6,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from meeting_memory.types.meeting import RecentMeeting
-from meeting_memory.ui.menu import NO_MEETINGS_LABEL, recent_meeting_labels, recording_label
+from meeting_memory.ui.menu import (
+    NO_MEETINGS_LABEL,
+    recent_meeting_labels,
+    recording_label,
+    tray_title,
+)
 
 
 def test_recording_labels() -> None:
@@ -16,6 +21,8 @@ def test_recording_labels() -> None:
         recording_label(is_recording=True, duration_seconds=3661)
         == "■ Stop Recording · 01:01:01"
     )
+    assert tray_title(is_recording=False) == "●"
+    assert tray_title(is_recording=True, duration_seconds=65) == "● 01:05"
 
 
 def test_recent_meeting_labels() -> None:

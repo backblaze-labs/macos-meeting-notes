@@ -13,6 +13,7 @@ class MeetingDetected:
     calendar_title: str
     starts_at: datetime
     meeting_url: str
+    ends_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,7 @@ class NotifyEvent:
     title: str
     body: str
     action_label: str | None = None
+    action: str | None = None
     meeting_directory: Path | None = None
 
 

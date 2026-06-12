@@ -39,15 +39,20 @@ GOOGLE_CALENDAR_CREDENTIALS_FILE=/absolute/path/to/credentials.json
 
 ## Configure Calendar ID
 
-For the primary calendar:
+For all accessible calendars, which is the default:
+
+```bash
+GOOGLE_CALENDAR_ID=all
+```
+
+For only the primary calendar:
 
 ```bash
 GOOGLE_CALENDAR_ID=primary
 ```
 
-For another calendar, use the calendar ID shown in Google Calendar settings.
-Milestone 5 validates one configured calendar; multi-calendar watching is future
-work.
+For only one other calendar, use the calendar ID shown in Google Calendar
+settings.
 
 ## Run Auth
 

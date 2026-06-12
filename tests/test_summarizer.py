@@ -6,7 +6,11 @@ from types import SimpleNamespace
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.repo import summarizer
-from meeting_memory.repo.summarizer import MAX_TRANSCRIPT_CHARS, ClaudeSummarizer
+from meeting_memory.repo.summarizer import (
+    MAX_TRANSCRIPT_CHARS,
+    ClaudeSummarizer,
+    summary_result_from_json,
+)
 
 
 def test_claude_summarizer_requests_json_and_truncates_transcript(monkeypatch) -> None:
@@ -18,13 +22,15 @@ def test_claude_summarizer_requests_json_and_truncates_transcript(monkeypatch) -
     )
     monkeypatch.setattr(summarizer, "_anthropic_client", fake_client.with_api_key)
 
-    result = ClaudeSummarizer(api_key="anthropic-key", model="claude-test").summarize("x" * 61_000)
+    transcript = "9" * 61_000
+    result = ClaudeSummarizer(api_key="anthropic-key", model="claude-test").summarize(transcript)
 
     assert fake_client.api_key == "anthropic-key"
     assert fake_client.kwargs["model"] == "claude-test"
     prompt = fake_client.kwargs["messages"][0]["content"]
     assert "strict JSON" in prompt
-    assert len(prompt) < MAX_TRANSCRIPT_CHARS + 300
+    assert prompt.count("9") == MAX_TRANSCRIPT_CHARS
+    assert len(prompt) < MAX_TRANSCRIPT_CHARS + 800
     assert result.summary == "Good meeting."
     assert result.decisions == ("Ship it",)
     assert result.action_items[0].owner == "Alex"
@@ -56,6 +62,33 @@ def test_claude_summarizer_from_settings() -> None:
 
     assert client.api_key == "anthropic-key"
     assert client.model == "claude-test"
+
+
+def test_claude_summarizer_loads_custom_prompt_from_settings(tmp_path) -> None:
+    prompt_file = tmp_path / "summary.md"
+    prompt_file.write_text("Custom privacy prompt\n{transcript}", encoding="utf-8")
+    settings = Settings(
+        b2_application_key_id="key-id",
+        b2_application_key="secret",
+        b2_endpoint="https://s3.example.com",
+        b2_region="us-west-004",
+        b2_bucket_name="bucket",
+        assemblyai_api_key="assembly-key",
+        anthropic_api_key="anthropic-key",
+        summary_prompt_file=prompt_file,
+    )
+
+    client = ClaudeSummarizer.from_settings(settings)
+
+    assert client._prompt("hello") == "Custom privacy prompt\nhello"
+
+
+def test_summary_parser_accepts_fenced_json() -> None:
+    result = summary_result_from_json(
+        'Here is the JSON:\n```json\n{"summary":"Done","decisions":[],"action_items":[]}\n```'
+    )
+
+    assert result.summary == "Done"
 
 
 class FakeMessages:

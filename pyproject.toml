@@ -37,6 +37,9 @@ meeting-memory = "meeting_memory.__main__:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"meeting_memory.ui.assets" = ["*.png", "*.svg"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

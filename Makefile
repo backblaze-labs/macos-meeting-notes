@@ -1,6 +1,6 @@
 PYTHON ?= python
 
-.PHONY: install run auth doctor lint format test check check-structure check\:structure
+.PHONY: install run auth doctor install-macos-app reload-macos-app open-macos-app quit-macos-app install-launch-agent uninstall-launch-agent lint format test check check-structure check\:structure
 
 install:
 	$(PYTHON) -m pip install -e ".[dev]"
@@ -13,6 +13,24 @@ auth:
 
 doctor:
 	PYTHONPATH=src $(PYTHON) -m meeting_memory.doctor
+
+install-macos-app:
+	PYTHONPATH=src $(PYTHON) -m meeting_memory install-macos-app
+
+reload-macos-app:
+	PYTHONPATH=src $(PYTHON) -m meeting_memory reload-macos-app
+
+open-macos-app:
+	PYTHONPATH=src $(PYTHON) -m meeting_memory open-macos-app
+
+quit-macos-app:
+	PYTHONPATH=src $(PYTHON) -m meeting_memory quit-macos-app
+
+install-launch-agent:
+	PYTHONPATH=src $(PYTHON) -m meeting_memory install-launch-agent
+
+uninstall-launch-agent:
+	PYTHONPATH=src $(PYTHON) -m meeting_memory uninstall-launch-agent
 
 lint:
 	$(PYTHON) -m ruff check .

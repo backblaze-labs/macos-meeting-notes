@@ -16,6 +16,7 @@ GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
 KEYCHAIN_SERVICE = "meeting-memory.google-calendar"
 KEYCHAIN_USERNAME = "oauth-token"
 MEETING_URL_RE = re.compile(r"(https?://)?(meet\.google\.com/\S+|[\w.-]*zoom\.us/[js]/\S+)")
+ALL_CALENDARS = "all"
 
 
 class TokenStore(Protocol):
@@ -84,28 +85,43 @@ class GoogleCalendarClient:
         *,
         now: datetime,
         lookahead_minutes: int,
+        lookbehind_minutes: int = 0,
     ) -> list[CalendarMeeting]:
         service = _load_google_build()("calendar", "v3", credentials=self.credentials())
-        response = (
-            service.events()
-            .list(
-                calendarId=self.calendar_id,
-                timeMin=now.isoformat(),
-                timeMax=(now + timedelta(minutes=lookahead_minutes)).isoformat(),
-                singleEvents=True,
-                orderBy="startTime",
+        meetings: list[CalendarMeeting] = []
+        for calendar_id in self._calendar_ids(service):
+            response = (
+                service.events()
+                .list(
+                    calendarId=calendar_id,
+                    timeMin=(now - timedelta(minutes=lookbehind_minutes)).isoformat(),
+                    timeMax=(now + timedelta(minutes=lookahead_minutes)).isoformat(),
+                    singleEvents=True,
+                    orderBy="startTime",
+                )
+                .execute()
             )
-            .execute()
-        )
-        return [
-            meeting
-            for item in response.get("items", ())
-            if (meeting := _meeting_from_event(item))
-        ]
+            meetings.extend(
+                meeting
+                for item in response.get("items", ())
+                if (meeting := _meeting_from_event(item))
+            )
+        return sorted(meetings, key=lambda meeting: meeting.starts_at)
 
     def _credentials_from_token(self, token_json: str):
         credentials_cls = _load_google_credentials()
         return credentials_cls.from_authorized_user_info(json.loads(token_json), list(self.scopes))
+
+    def _calendar_ids(self, service) -> list[str]:
+        if self.calendar_id.strip().lower() != ALL_CALENDARS:
+            return [self.calendar_id]
+
+        response = service.calendarList().list().execute()
+        return [
+            str(item["id"])
+            for item in response.get("items", ())
+            if item.get("id") and not item.get("deleted")
+        ]
 
 
 def _meeting_from_event(item: dict[str, object]) -> CalendarMeeting | None:
@@ -117,6 +133,7 @@ def _meeting_from_event(item: dict[str, object]) -> CalendarMeeting | None:
         calendar_title=str(item.get("summary") or "Untitled"),
         starts_at=_parse_start(item),
         meeting_url=meeting_url,
+        ends_at=_parse_end(item),
     )
 
 
@@ -134,10 +151,21 @@ def _extract_meeting_url(item: dict[str, object]) -> str | None:
 
 
 def _parse_start(item: dict[str, object]) -> datetime:
-    start = item.get("start")
-    if not isinstance(start, dict):
-        raise ValueError("calendar event is missing start time")
-    raw_value = str(start.get("dateTime") or start.get("date"))
+    return _parse_time(item, "start")
+
+
+def _parse_end(item: dict[str, object]) -> datetime | None:
+    try:
+        return _parse_time(item, "end")
+    except ValueError:
+        return None
+
+
+def _parse_time(item: dict[str, object], field_name: str) -> datetime:
+    value = item.get(field_name)
+    if not isinstance(value, dict):
+        raise ValueError(f"calendar event is missing {field_name} time")
+    raw_value = str(value.get("dateTime") or value.get("date"))
     return datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
 
 

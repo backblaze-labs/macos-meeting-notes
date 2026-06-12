@@ -47,6 +47,14 @@ class CalendarMeeting:
     calendar_title: str
     starts_at: datetime
     meeting_url: str
+    ends_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class RecordingContext:
+    calendar_title: str
+    ends_at: datetime | None = None
+    event_id: str | None = None
 
 
 @dataclass(frozen=True)

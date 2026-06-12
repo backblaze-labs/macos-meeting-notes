@@ -67,6 +67,7 @@ Pass criteria:
 - The menu bar app starts.
 - A pre-meeting notification appears once.
 - Dismissing the notification does not start recording.
+- Clicking `Record` starts a recording named after the calendar event.
 
 ## 4. Manual Recording
 
@@ -79,8 +80,11 @@ Pass criteria:
 Pass criteria:
 
 - The tray menu changes between start and stop states.
+- The status bar title shows the live recording duration while recording.
 - A new meeting directory appears under `MEETINGS_DIR`.
 - `recording.m4a` exists and is playable.
+- If the recording maps to a calendar event with an end time, a stop reminder
+  appears at the event finish time.
 
 ## 5. Transcription
 
@@ -157,6 +161,7 @@ Pass criteria:
 - The app is run as a Python process, not as a signed packaged `.app`.
 - Recording is manual only.
 - Real participant names are not resolved.
-- Calendar watching uses one configured calendar.
+- Calendar watching uses all accessible calendars unless `GOOGLE_CALENDAR_ID`
+  is set to a specific calendar ID.
 - Offline retry queueing is not implemented in v1.
 - The preferences window writes `.env` and requires restart.

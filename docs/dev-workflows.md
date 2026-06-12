@@ -29,7 +29,14 @@ spend API credits or require local audio hardware.
 make doctor
 meeting-memory auth
 meeting-memory
+make install-launch-agent
+make uninstall-launch-agent
 ```
 
 `meeting-memory` starts the tray process. Stop it from the tray menu with
 `Quit`.
+
+`make install-launch-agent` installs
+`~/Library/LaunchAgents/com.meeting-memory.app.plist`, starts the app at login,
+and kicks off the background process immediately. `make uninstall-launch-agent`
+stops and removes it.

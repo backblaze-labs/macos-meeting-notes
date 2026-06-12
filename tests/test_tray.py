@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import queue
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from meeting_memory.config.settings import Settings
-from meeting_memory.service.recorder import RecordingResult
+from meeting_memory.service.recorder import RecordingResult, RecordingSession
 from meeting_memory.types.events import MeetingDetected, NotifyEvent
 from meeting_memory.types.meeting import MeetingMeta
+from meeting_memory.ui import menu
 from meeting_memory.ui.tray import RumpsTrayApp, TrayController
 
 
@@ -47,6 +48,63 @@ def test_tray_controller_drains_events(tmp_path: Path) -> None:
     assert controller.drain_events() == []
 
 
+def test_tray_controller_reports_start_recording_errors(tmp_path: Path) -> None:
+    event_queue: queue.Queue[object] = queue.Queue()
+    controller = TrayController(
+        settings=_settings(tmp_path),
+        recorder=FailingRecorder("Audio device not found: Meeting Aggregate"),
+        pipeline=FakePipeline(),
+        event_queue=event_queue,
+    )
+
+    controller.start_recording()
+
+    assert controller.drain_events() == [
+        NotifyEvent(
+            title="Recording could not start",
+            body="Audio device not found: Meeting Aggregate",
+        )
+    ]
+
+
+def test_tray_controller_reports_stop_recording_errors(tmp_path: Path) -> None:
+    event_queue: queue.Queue[object] = queue.Queue()
+    controller = TrayController(
+        settings=_settings(tmp_path),
+        recorder=FailingRecorder("ffmpeg failed", is_recording=True),
+        pipeline=FakePipeline(),
+        event_queue=event_queue,
+    )
+
+    controller.stop_recording()
+
+    assert controller.drain_events() == [
+        NotifyEvent(title="Recording could not finish", body="ffmpeg failed")
+    ]
+
+
+def test_tray_controller_calculates_recording_duration(tmp_path: Path) -> None:
+    started_at = datetime(2026, 6, 11, 9, 0, tzinfo=UTC)
+    recorder = FakeRecorder(tmp_path, is_recording=True)
+    recorder.active_session = RecordingSession(
+        meta=MeetingMeta(
+            slug="2026-06-11_09-00_product-sync",
+            started_at=started_at,
+            calendar_title="Product Sync",
+        ),
+        wav_path=tmp_path / "recording.wav",
+    )
+    controller = TrayController(
+        settings=_settings(tmp_path),
+        recorder=recorder,
+        pipeline=FakePipeline(),
+        event_queue=queue.Queue(),
+        now=lambda: datetime(2026, 6, 11, 9, 1, 5, tzinfo=UTC),
+    )
+
+    assert controller.recording_duration_seconds() == 65
+
+
 def test_rumps_tray_app_renders_notifications(tmp_path: Path) -> None:
     fake_rumps = FakeRumps()
     controller = TrayController(
@@ -56,7 +114,7 @@ def test_rumps_tray_app_renders_notifications(tmp_path: Path) -> None:
         event_queue=queue.Queue(),
     )
     app = RumpsTrayApp(controller, rumps_module=fake_rumps)
-    meeting_time = datetime.now().astimezone() + _minutes(4)
+    meeting_time = datetime.now().astimezone() + timedelta(minutes=4)
 
     app.handle_event(NotifyEvent("Meeting transcribed", "Done"))
     app.handle_event(MeetingDetected("event", "Standup", meeting_time, "meet"))
@@ -66,10 +124,51 @@ def test_rumps_tray_app_renders_notifications(tmp_path: Path) -> None:
     assert "Standup starts in" in fake_rumps.notifications[1][2]
 
 
-def _minutes(value: int):
-    from datetime import timedelta
+def test_rumps_tray_app_updates_recording_duration_label(tmp_path: Path) -> None:
+    started_at = datetime(2026, 6, 11, 9, 0, tzinfo=UTC)
+    current_time = datetime(2026, 6, 11, 9, 0, tzinfo=UTC)
+    recorder = FakeRecorder(tmp_path, is_recording=True)
+    recorder.active_session = RecordingSession(
+        meta=MeetingMeta(
+            slug="2026-06-11_09-00_product-sync",
+            started_at=started_at,
+            calendar_title="Product Sync",
+        ),
+        wav_path=tmp_path / "recording.wav",
+    )
+    controller = TrayController(
+        settings=_settings(tmp_path),
+        recorder=recorder,
+        pipeline=FakePipeline(),
+        event_queue=queue.Queue(),
+        now=lambda: current_time,
+    )
+    app = RumpsTrayApp(controller, rumps_module=FakeRumps())
 
-    return timedelta(minutes=value)
+    current_time = datetime(2026, 6, 11, 9, 1, 5, tzinfo=UTC)
+    app.drain_events()
+
+    assert app.recording_item.title == "■ Stop Recording · 01:05"
+    assert app.app.title == "● 01:05"
+
+
+def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
+    fake_rumps = FakeRumps()
+    controller = TrayController(
+        settings=_settings(tmp_path),
+        recorder=FakeRecorder(tmp_path),
+        pipeline=FakePipeline(),
+        event_queue=queue.Queue(),
+    )
+
+    app = RumpsTrayApp(controller, rumps_module=fake_rumps)
+
+    assert app.app.quit_button is None
+    assert app.app.title == "●"
+    assert app.app.icon is None
+    assert app.app.template is None
+    titles = [item.title for item in app.app.menu.items if item is not None]
+    assert titles.count(menu.QUIT_LABEL) == 1
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -89,6 +188,7 @@ class FakeRecorder:
     tmp_path: Path
     is_recording: bool = False
     started_title: str | None = None
+    active_session: RecordingSession | None = None
 
     def __post_init__(self) -> None:
         audio_path = self.tmp_path / "recording.m4a"
@@ -104,13 +204,33 @@ class FakeRecorder:
             wav_path=self.tmp_path / "recording.wav",
         )
 
-    def start(self, calendar_title: str = "Untitled") -> None:
+    def start(self, calendar_title: str = "Untitled") -> RecordingSession:
         self.started_title = calendar_title
         self.is_recording = True
+        self.active_session = RecordingSession(
+            meta=self.result.meta,
+            wav_path=self.result.wav_path,
+        )
+        return self.active_session
 
     def stop(self):
         self.is_recording = False
+        self.active_session = None
         return self.result
+
+
+@dataclass
+class FailingRecorder:
+    message: str
+    is_recording: bool = False
+    active_session: RecordingSession | None = None
+
+    def start(self, calendar_title: str = "Untitled") -> None:
+        del calendar_title
+        raise RuntimeError(self.message)
+
+    def stop(self):
+        raise RuntimeError(self.message)
 
 
 class FakePipeline:
@@ -145,6 +265,7 @@ class FakeMenu:
 class FakeRumps:
     def __init__(self):
         self.notifications = []
+        self.notification_options = []
 
     class MenuItem:
         def __init__(self, title, callback=None):
@@ -160,16 +281,20 @@ class FakeRumps:
             pass
 
     class App:
-        def __init__(self, name, title=None):
+        def __init__(self, name, title=None, icon=None, template=None, quit_button="Quit"):
             self.name = name
             self.title = title
+            self.icon = icon
+            self.template = template
+            self.quit_button = quit_button
             self.menu = FakeMenu()
 
         def run(self) -> None:
             pass
 
-    def notification(self, title, subtitle, message) -> None:
+    def notification(self, title, subtitle, message, **kwargs) -> None:
         self.notifications.append((title, subtitle, message))
+        self.notification_options.append(kwargs)
 
     def quit_application(self, _sender=None) -> None:
         pass

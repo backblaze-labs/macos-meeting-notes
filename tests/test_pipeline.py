@@ -40,8 +40,8 @@ def test_pipeline_happy_path_writes_files_emits_event_and_updates_b2(tmp_path: P
 
     assert events == [
         NotifyEvent(
-            title="Meeting transcribed",
-            body="Product Sync · 15 min",
+            title="Meeting ready",
+            body="Product Sync · 15 min · ready",
             action_label="Open",
             meeting_directory=result.files.directory,
         )
@@ -70,7 +70,7 @@ def test_pipeline_summarization_failure_does_not_block_completion(tmp_path: Path
 
     assert result.summary.status == "failed"
     assert result.b2_uploaded is False
-    assert events[0].body == "Product Sync · 15 min"
+    assert events[0].body == "Product Sync · 15 min · summary failed"
     assert frontmatter["summary_status"] == "failed"
     assert frontmatter["b2_status"] == "pending"
     assert "_Summarization failed._" in markdown
@@ -117,7 +117,7 @@ def test_pipeline_marks_frontmatter_when_b2_upload_fails(tmp_path: Path) -> None
 
     assert result.b2_uploaded is False
     assert result.b2_error == "b2 unavailable"
-    assert events[0].title == "Meeting transcribed"
+    assert events[0].title == "Meeting ready"
     assert frontmatter["b2_audio"] is None
     assert frontmatter["b2_transcript"] is None
     assert frontmatter["b2_status"] == "upload_failed"

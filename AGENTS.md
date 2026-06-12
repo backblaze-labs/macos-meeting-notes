@@ -44,6 +44,10 @@ repo, or service modules as needed.
 - `make run`: run the current application entrypoint.
 - `make auth`: run the future Google Calendar auth flow.
 - `make doctor`: run preflight checks.
+- `make install-macos-app`: install the clickable app bundle at
+  `~/Applications/Meeting Memory.app`.
+- `make reload-macos-app`: install/update the official app bundle, quit the
+  running official app, and reopen it.
 - `make lint`: run Ruff.
 - `make format`: format with Ruff.
 - `make test`: run all tests.
@@ -66,4 +70,14 @@ repo, or service modules as needed.
 2. Inspect existing code before editing.
 3. Make the smallest coherent change.
 4. Run the strongest available check, usually `make check`.
-5. Commit a passing, reviewable milestone slice.
+5. After app behavior changes, run `make reload-macos-app` with the project
+   virtualenv Python so the official clickable app is updated and restarted.
+6. Commit a passing, reviewable milestone slice.
+
+## Official macOS App
+
+- The user expects the app to be clickable and searchable with Cmd+Space as
+  `Meeting Memory`.
+- Treat `~/Applications/Meeting Memory.app` as the official local app bundle.
+- After making any change to the app, update the official bundle and restart it
+  with `make PYTHON=.venv/bin/python reload-macos-app`.

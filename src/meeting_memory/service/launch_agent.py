@@ -1,0 +1,97 @@
+"""Install and remove the macOS LaunchAgent for Meeting Memory."""
+
+from __future__ import annotations
+
+import os
+import plistlib
+import subprocess
+import sys
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+LABEL = "com.meeting-memory.app"
+PLIST_NAME = f"{LABEL}.plist"
+DEFAULT_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+
+Runner = Callable[..., subprocess.CompletedProcess]
+
+
+def install_launch_agent(
+    *,
+    project_dir: Path | None = None,
+    plist_path: Path | None = None,
+    python_executable: str | None = None,
+    runner: Runner = subprocess.run,
+    uid: int | None = None,
+) -> Path:
+    target = plist_path or default_plist_path()
+    root = (project_dir or Path.cwd()).resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    log_dir = Path.home() / "Library" / "Logs" / "meeting-memory"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(
+        plistlib.dumps(launch_agent_plist(root, python_executable or sys.executable, log_dir))
+    )
+    reload_launch_agent(target, runner=runner, uid=uid)
+    return target
+
+
+def uninstall_launch_agent(
+    *,
+    plist_path: Path | None = None,
+    runner: Runner = subprocess.run,
+    uid: int | None = None,
+) -> Path:
+    target = plist_path or default_plist_path()
+    unload_launch_agent(target, runner=runner, uid=uid)
+    target.unlink(missing_ok=True)
+    return target
+
+
+def launch_agent_plist(project_dir: Path, python_executable: str, log_dir: Path) -> dict[str, Any]:
+    environment = {
+        "PATH": DEFAULT_PATH,
+        "PYTHONUNBUFFERED": "1",
+    }
+    source_dir = project_dir / "src"
+    if source_dir.exists():
+        environment["PYTHONPATH"] = str(source_dir)
+
+    return {
+        "Label": LABEL,
+        "ProgramArguments": [python_executable, "-m", "meeting_memory"],
+        "WorkingDirectory": str(project_dir),
+        "EnvironmentVariables": environment,
+        "RunAtLoad": True,
+        "KeepAlive": False,
+        "ProcessType": "Background",
+        "StandardOutPath": str(log_dir / "launch-agent.out.log"),
+        "StandardErrorPath": str(log_dir / "launch-agent.err.log"),
+    }
+
+
+def reload_launch_agent(
+    plist_path: Path,
+    *,
+    runner: Runner = subprocess.run,
+    uid: int | None = None,
+) -> None:
+    unload_launch_agent(plist_path, runner=runner, uid=uid)
+    domain = f"gui/{uid if uid is not None else os.getuid()}"
+    runner(["launchctl", "bootstrap", domain, str(plist_path)], check=True)
+    runner(["launchctl", "kickstart", "-k", f"{domain}/{LABEL}"], check=False)
+
+
+def unload_launch_agent(
+    plist_path: Path,
+    *,
+    runner: Runner = subprocess.run,
+    uid: int | None = None,
+) -> None:
+    domain = f"gui/{uid if uid is not None else os.getuid()}"
+    runner(["launchctl", "bootout", domain, str(plist_path)], check=False)
+
+
+def default_plist_path() -> Path:
+    return Path.home() / "Library" / "LaunchAgents" / PLIST_NAME

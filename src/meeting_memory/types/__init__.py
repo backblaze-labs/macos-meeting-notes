@@ -7,6 +7,7 @@ from meeting_memory.types.meeting import (
     MeetingFiles,
     MeetingMeta,
     RecentMeeting,
+    RecordingContext,
     build_meeting_slug,
     slugify_title,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "MeetingMeta",
     "NotifyEvent",
     "RecentMeeting",
+    "RecordingContext",
     "RecordingStateChanged",
     "SummaryResult",
     "TranscriptResult",
