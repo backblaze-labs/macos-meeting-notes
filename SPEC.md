@@ -201,7 +201,9 @@ B2_BUCKET_NAME
 
 **REQ-F1-03** The watcher MUST fetch events that start within the next `NOTIFY_MINUTES_BEFORE + 2` minutes (lookahead window) from the calendar scope configured by `GOOGLE_CALENDAR_ID`. The default value `all` means every non-deleted calendar accessible to the authenticated account; `primary` or a specific calendar ID narrows the scope.
 
-**REQ-F1-04** An event is considered a "meeting" if its `description`, `location`, or Google Calendar `hangoutLink` fields contain at least one of:
+**REQ-F1-04** An event is considered a "meeting" if its `description`,
+`location`, Google Calendar `hangoutLink`, or Google Calendar `conferenceData`
+fields contain at least one of:
 - `meet.google.com`
 - `zoom.us/j/`
 - `zoom.us/s/`

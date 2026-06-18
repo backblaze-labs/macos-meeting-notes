@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from html import unescape
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import parse_qs, urlsplit
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.types.meeting import CalendarMeeting
@@ -15,7 +18,10 @@ from meeting_memory.types.meeting import CalendarMeeting
 GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
 KEYCHAIN_SERVICE = "meeting-memory.google-calendar"
 KEYCHAIN_USERNAME = "oauth-token"
-MEETING_URL_RE = re.compile(r"(https?://)?(meet\.google\.com/\S+|[\w.-]*zoom\.us/[js]/\S+)")
+MEETING_URL_RE = re.compile(
+    r"(https?://)?(meet\.google\.com/[^\s<>'\"]+|[\w.-]*zoom\.us/[js]/[^\s<>'\"]+)"
+)
+GOOGLE_REDIRECT_RE = re.compile(r"https://www\.google\.com/url\?[^\s<>'\"]+")
 ALL_CALENDARS = "all"
 
 
@@ -138,16 +144,57 @@ def _meeting_from_event(item: dict[str, object]) -> CalendarMeeting | None:
 
 
 def _extract_meeting_url(item: dict[str, object]) -> str | None:
-    candidates = (
-        str(item.get("description") or ""),
-        str(item.get("location") or ""),
-        str(item.get("hangoutLink") or ""),
-    )
-    for candidate in candidates:
-        match = MEETING_URL_RE.search(candidate)
-        if match:
-            return match.group(0)
+    for candidate in _meeting_url_candidates(item):
+        for variant in _candidate_variants(candidate):
+            match = MEETING_URL_RE.search(variant)
+            if match:
+                return _clean_meeting_url(match.group(0))
     return None
+
+
+def _meeting_url_candidates(item: dict[str, object]) -> Iterator[str]:
+    yield from _conference_video_entry_point_values(item)
+    yield str(item.get("description") or "")
+    yield str(item.get("location") or "")
+    yield str(item.get("hangoutLink") or "")
+
+    conference_data = item.get("conferenceData")
+    if isinstance(conference_data, dict):
+        yield str(conference_data.get("notes") or "")
+
+
+def _conference_video_entry_point_values(item: dict[str, object]) -> Iterator[str]:
+    conference_data = item.get("conferenceData")
+    if not isinstance(conference_data, dict):
+        return
+
+    entry_points = conference_data.get("entryPoints")
+    if not isinstance(entry_points, list):
+        return
+
+    for entry_point in entry_points:
+        if not isinstance(entry_point, dict):
+            continue
+        if entry_point.get("entryPointType") != "video":
+            continue
+        yield str(entry_point.get("uri") or "")
+        yield str(entry_point.get("label") or "")
+
+
+def _candidate_variants(candidate: str) -> list[str]:
+    text = unescape(candidate)
+    redirect_targets = []
+    for match in GOOGLE_REDIRECT_RE.finditer(text):
+        query = parse_qs(urlsplit(match.group(0)).query)
+        redirect_targets.extend(query.get("q", []))
+    return [*redirect_targets, text]
+
+
+def _clean_meeting_url(raw_url: str) -> str:
+    url = unescape(raw_url).strip().rstrip(".,);]")
+    if url.startswith(("http://", "https://")):
+        return url
+    return f"https://{url}"
 
 
 def _parse_start(item: dict[str, object]) -> datetime:

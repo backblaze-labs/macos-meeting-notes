@@ -72,6 +72,43 @@ def test_calendar_lists_only_video_meetings(monkeypatch, tmp_path: Path) -> None
     assert fake_service.list_kwargs["orderBy"] == "startTime"
 
 
+def test_calendar_extracts_conference_data_meeting_urls() -> None:
+    zoom_url = "https://acme.zoom.us/j/123456789?pwd=example&jst=2"
+    cases = [
+        {
+            "conferenceData": {
+                "entryPoints": [
+                    {"entryPointType": "phone", "uri": "tel:+15550101010,,123456789#"},
+                    {"entryPointType": "video", "uri": zoom_url},
+                ],
+            }
+        },
+        {
+            "conferenceData": {
+                "notes": (
+                    'Join Zoom Meeting: <a href="https://www.google.com/url?'
+                    "q=https%3A%2F%2Facme.zoom.us%2Fj%2F123456789%3F"
+                    f'pwd%3Dexample%26jst%3D2&amp;sa=D">{zoom_url}</a>'
+                )
+            }
+        },
+    ]
+
+    for event_data in cases:
+        meeting = calendar_client._meeting_from_event(
+            {
+                "id": "zoom-addon",
+                "summary": "Claude Code 202",
+                "description": "The event description has no meeting URL.",
+                "start": {"dateTime": "2026-06-11T09:05:00+00:00"},
+                "end": {"dateTime": "2026-06-11T09:30:00+00:00"},
+                **event_data,
+            }
+        )
+        assert meeting is not None
+        assert meeting.meeting_url == zoom_url
+
+
 def test_calendar_lists_all_accessible_calendars(monkeypatch, tmp_path: Path) -> None:
     token_store = InMemoryTokenStore('{"token":"valid"}')
     fake_service = FakeCalendarService()
