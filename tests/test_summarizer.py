@@ -26,6 +26,7 @@ def test_claude_summarizer_requests_json_and_truncates_transcript(monkeypatch) -
     result = ClaudeSummarizer(api_key="anthropic-key", model="claude-test").summarize(transcript)
 
     assert fake_client.api_key == "anthropic-key"
+    assert fake_client.timeout_seconds == 60.0
     assert fake_client.kwargs["model"] == "claude-test"
     prompt = fake_client.kwargs["messages"][0]["content"]
     assert "strict JSON" in prompt
@@ -44,6 +45,25 @@ def test_claude_summarizer_skips_without_api_key(monkeypatch) -> None:
     monkeypatch.setattr(summarizer, "_anthropic_client", fail_if_called)
 
     assert ClaudeSummarizer(api_key=None).summarize("hello").status == "skipped"
+
+
+def test_claude_summarizer_retries_transient_errors(monkeypatch) -> None:
+    fake_client = FakeAnthropicClient(
+        response_text='{"summary":"Recovered.","decisions":[],"action_items":[]}',
+        failures=(TimeoutError("temporary network timeout"),),
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(summarizer, "_anthropic_client", fake_client.with_api_key)
+
+    result = ClaudeSummarizer(
+        api_key="anthropic-key",
+        retry_delays=(0.5,),
+        sleeper=sleeps.append,
+    ).summarize("hello")
+
+    assert result.summary == "Recovered."
+    assert sleeps == [0.5]
+    assert fake_client.messages.attempts == 2
 
 
 def test_claude_summarizer_from_settings() -> None:
@@ -92,24 +112,31 @@ def test_summary_parser_accepts_fenced_json() -> None:
 
 
 class FakeMessages:
-    def __init__(self, response_text: str):
+    def __init__(self, response_text: str, failures=()):
         self.response_text = response_text
+        self.failures = list(failures)
         self.kwargs = {}
+        self.attempts = 0
 
     def create(self, **kwargs):
         self.kwargs = kwargs
+        self.attempts += 1
+        if self.failures:
+            raise self.failures.pop(0)
         return SimpleNamespace(content=(SimpleNamespace(text=self.response_text),))
 
 
 class FakeAnthropicClient:
-    def __init__(self, response_text: str):
+    def __init__(self, response_text: str, failures=()):
         self.api_key: str | None = None
-        self.messages = FakeMessages(response_text)
+        self.timeout_seconds: float | None = None
+        self.messages = FakeMessages(response_text, failures)
 
     @property
     def kwargs(self):
         return self.messages.kwargs
 
-    def with_api_key(self, api_key: str):
+    def with_api_key(self, api_key: str, *, timeout_seconds: float):
         self.api_key = api_key
+        self.timeout_seconds = timeout_seconds
         return self

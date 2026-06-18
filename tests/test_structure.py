@@ -43,6 +43,7 @@ REQUIRED_SOURCE_FILES = (
     "config/settings.py",
     "repo/__init__.py",
     "repo/b2_client.py",
+    "repo/retry.py",
     "repo/transcription.py",
     "repo/summarizer.py",
     "repo/calendar_client.py",

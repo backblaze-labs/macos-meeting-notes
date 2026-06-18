@@ -23,6 +23,7 @@ def test_tray_controller_reminds_to_stop_at_calendar_end(tmp_path: Path) -> None
         pipeline=FakePipeline(),
         event_queue=queue.Queue(),
         thread_factory=ImmediateThread,
+        timer_thread_factory=PassiveThread,
         now=lambda: now,
         sleeper=lambda seconds: sleeps.append(seconds),
     )
@@ -38,6 +39,31 @@ def test_tray_controller_reminds_to_stop_at_calendar_end(tmp_path: Path) -> None
             action="stop_recording",
         )
     ]
+
+
+def test_tray_controller_auto_stops_at_recording_limit(tmp_path: Path) -> None:
+    sleeps: list[float] = []
+    recorder = FakeRecorder(tmp_path)
+    pipeline = FakePipeline()
+    controller = TrayController(
+        settings=_settings(tmp_path, max_recording_minutes=1),
+        recorder=recorder,
+        pipeline=pipeline,
+        event_queue=queue.Queue(),
+        thread_factory=ImmediateThread,
+        timer_thread_factory=ImmediateThread,
+        sleeper=lambda seconds: sleeps.append(seconds),
+    )
+
+    controller.start_recording("Long Meeting")
+
+    assert sleeps == [60]
+    assert recorder.is_recording is False
+    assert pipeline.calls == [(recorder.result.audio_path, recorder.result.meta)]
+    assert controller.drain_events()[0] == NotifyEvent(
+        title="Recording limit reached",
+        body="Long Meeting reached 1 min.",
+    )
 
 
 def test_rumps_tray_app_prompts_for_title_without_calendar_context(tmp_path: Path) -> None:
@@ -76,7 +102,7 @@ def test_rumps_tray_app_uses_calendar_context_without_prompt(tmp_path: Path) -> 
     assert fake_rumps.window_requests == []
 
 
-def _settings(tmp_path: Path) -> Settings:
+def _settings(tmp_path: Path, *, max_recording_minutes: int = 180) -> Settings:
     return Settings(
         b2_application_key_id="key-id",
         b2_application_key="secret",
@@ -85,6 +111,7 @@ def _settings(tmp_path: Path) -> Settings:
         b2_bucket_name="bucket",
         assemblyai_api_key="assembly-key",
         meetings_dir=tmp_path / "meetings",
+        max_recording_minutes=max_recording_minutes,
     )
 
 
@@ -121,8 +148,11 @@ class FakeRecorder:
 
 
 class FakePipeline:
+    def __init__(self):
+        self.calls = []
+
     def run(self, audio_path: Path, meta: MeetingMeta) -> None:
-        pass
+        self.calls.append((audio_path, meta))
 
 
 class ImmediateThread:
@@ -133,6 +163,16 @@ class ImmediateThread:
 
     def start(self) -> None:
         self.target(*self.args)
+
+
+class PassiveThread:
+    def __init__(self, *, target, args=(), daemon=False):
+        self.target = target
+        self.args = args
+        self.daemon = daemon
+
+    def start(self) -> None:
+        pass
 
 
 class FakeMenu:

@@ -38,6 +38,7 @@ meeting-memory = "meeting_memory.__main__:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
+"meeting_memory.service.assets" = ["*.icns"]
 "meeting_memory.ui.assets" = ["*.png", "*.svg"]
 
 [tool.ruff]

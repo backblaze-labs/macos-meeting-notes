@@ -5,11 +5,13 @@ from __future__ import annotations
 import os
 import plistlib
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
 import time
 from collections.abc import Callable
+from importlib.resources import as_file, files
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +19,7 @@ APP_NAME = "Meeting Memory"
 APP_BUNDLE_NAME = f"{APP_NAME}.app"
 BUNDLE_IDENTIFIER = "com.meeting-memory.app"
 EXECUTABLE_NAME = APP_NAME
+APP_ICON_FILE = "MeetingMemory.icns"
 DEFAULT_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 LSREGISTER = (
     "/System/Library/Frameworks/CoreServices.framework/Frameworks/"
@@ -40,6 +43,7 @@ def install_macos_app(
     resources_dir = contents / "Resources"
     macos_dir.mkdir(parents=True, exist_ok=True)
     resources_dir.mkdir(parents=True, exist_ok=True)
+    copy_macos_app_icon(resources_dir)
 
     executable = macos_dir / EXECUTABLE_NAME
     executable.write_text(
@@ -75,6 +79,7 @@ def macos_app_plist() -> dict[str, Any]:
         "CFBundleDevelopmentRegion": "en",
         "CFBundleDisplayName": APP_NAME,
         "CFBundleExecutable": EXECUTABLE_NAME,
+        "CFBundleIconFile": APP_ICON_FILE,
         "CFBundleIdentifier": BUNDLE_IDENTIFIER,
         "CFBundleInfoDictionaryVersion": "6.0",
         "CFBundleName": APP_NAME,
@@ -107,6 +112,13 @@ def macos_app_executable(project_dir: Path, python_executable: str) -> str:
             "",
         ]
     )
+
+
+def copy_macos_app_icon(resources_dir: Path) -> None:
+    destination = resources_dir / APP_ICON_FILE
+    source_ref = files("meeting_memory.service.assets").joinpath(APP_ICON_FILE)
+    with as_file(source_ref) as source:
+        shutil.copyfile(source, destination)
 
 
 def register_macos_app(app_path: Path, *, runner: Runner = subprocess.run) -> None:

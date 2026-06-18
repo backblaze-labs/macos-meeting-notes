@@ -23,10 +23,17 @@ def test_assemblyai_transcription_uses_speaker_labels(tmp_path: Path, monkeypatc
     )
     monkeypatch.setattr(transcription, "_load_assemblyai", lambda: fake_aai)
 
-    client = AssemblyAITranscriptionClient(api_key="assembly-key")
+    client = AssemblyAITranscriptionClient(
+        api_key="assembly-key",
+        poll_interval_seconds=9,
+        timeout_seconds=7,
+    )
     result = client.transcribe(tmp_path / "recording.m4a")
 
     assert fake_aai.settings.api_key == "assembly-key"
+    assert fake_aai.settings.polling_interval == 9.0
+    assert fake_aai.settings.sync_http_timeout == 7.0
+    assert fake_aai.settings.http_timeout == 7.0
     assert fake_aai.last_config.speaker_labels is True
     assert fake_aai.last_transcriber.audio_path == str(tmp_path / "recording.m4a")
     assert result.assemblyai_id == "tx-123"
@@ -45,6 +52,29 @@ def test_assemblyai_transcription_returns_error_result(monkeypatch) -> None:
     assert result.assemblyai_id == "tx-err"
     assert result.error == "bad audio"
     assert result.segments == ()
+
+
+def test_assemblyai_transcription_retries_transient_errors(tmp_path: Path, monkeypatch) -> None:
+    fake_aai = FakeAssemblyAI(
+        response=SimpleNamespace(
+            id="tx-retry",
+            status="completed",
+            utterances=(SimpleNamespace(speaker="Speaker A", start=0, text="Recovered."),),
+        ),
+        failures=(TimeoutError("temporary timeout"),),
+    )
+    sleeps: list[float] = []
+    monkeypatch.setattr(transcription, "_load_assemblyai", lambda: fake_aai)
+
+    result = AssemblyAITranscriptionClient(
+        api_key="assembly-key",
+        retry_delays=(0.25,),
+        sleeper=sleeps.append,
+    ).transcribe(tmp_path / "recording.m4a")
+
+    assert result.assemblyai_id == "tx-retry"
+    assert sleeps == [0.25]
+    assert fake_aai.last_transcriber.attempts == 2
 
 
 def test_assemblyai_client_from_settings() -> None:
@@ -66,21 +96,32 @@ class FakeConfig:
 
 
 class FakeTranscriber:
-    def __init__(self, response):
+    def __init__(self, response, failures=()):
         self.response = response
+        self.failures = list(failures)
+        self.attempts = 0
         self.audio_path: str | None = None
         self.config = None
 
     def transcribe(self, audio_path: str, *, config):
+        self.attempts += 1
         self.audio_path = audio_path
         self.config = config
+        if self.failures:
+            raise self.failures.pop(0)
         return self.response
 
 
 class FakeAssemblyAI:
-    def __init__(self, response):
+    def __init__(self, response, failures=()):
         self.response = response
-        self.settings = SimpleNamespace(api_key=None)
+        self.failures = failures
+        self.settings = SimpleNamespace(
+            api_key=None,
+            polling_interval=3.0,
+            sync_http_timeout=60.0,
+            http_timeout=30.0,
+        )
         self.last_config = None
         self.last_transcriber = None
 
@@ -89,5 +130,5 @@ class FakeAssemblyAI:
         return self.last_config
 
     def Transcriber(self):
-        self.last_transcriber = FakeTranscriber(self.response)
+        self.last_transcriber = FakeTranscriber(self.response, self.failures)
         return self.last_transcriber

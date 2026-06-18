@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -54,13 +54,22 @@ class Pipeline:
     summarizer_client: SummarizerClient | None = None
     b2_client: B2Client | None = None
     event_sink: EventSink | None = None
+    speaker_mapping: Mapping[str, str] | None = None
 
     def run(self, audio_source: Path, meta: MeetingMeta) -> PipelineResult:
         files = create_meeting_dir(self.meetings_dir, meta, audio_source)
+        return self.process_files(files)
+
+    def process_files(self, files: MeetingFiles) -> PipelineResult:
         transcript = self._transcribe(files.audio_path)
         summary = self._summarize(transcript)
 
-        write_meeting_markdown(files, transcript, summary)
+        write_meeting_markdown(
+            files,
+            transcript,
+            summary,
+            speaker_mapping=self.speaker_mapping,
+        )
         self._emit_completion(files, transcript, summary)
 
         b2_uploaded, b2_error = self._upload_to_b2(files)

@@ -54,12 +54,16 @@ Pass criteria:
 
 ## 3. Calendar Detection
 
-1. Create a Google Calendar event starting within the next 5 minutes.
-2. Put a Google Meet link or Zoom `/j/` link in `description` or `location`.
-3. Start the app:
+1. Keep `GOOGLE_CALENDAR_ID=all`, or set it to the specific calendar you want
+   to validate.
+2. Create a Google Calendar event starting within the next 5 minutes on any
+   watched calendar.
+3. Put a Google Meet link or Zoom `/j/` or `/s/` link in `description`,
+   `location`, or the event's native conferencing field.
+4. Start the app:
 
 ```bash
-meeting-memory
+make PYTHON=.venv/bin/python open-macos-app
 ```
 
 Pass criteria:
@@ -81,6 +85,8 @@ Pass criteria:
 
 - The tray menu changes between start and stop states.
 - The status bar title shows the live recording duration while recording.
+- If no nearby calendar event exists, the app prompts for a recording title
+  before starting.
 - A new meeting directory appears under `MEETINGS_DIR`.
 - `recording.m4a` exists and is playable.
 - If the recording maps to a calendar event with an end time, a stop reminder
@@ -94,7 +100,9 @@ Pass criteria after stopping recording:
 - YAML frontmatter exists at the top.
 - `assemblyai_id` is present.
 - `## Transcript` exists.
-- Speaker labels are preserved, for example `Speaker A`.
+- Speaker labels are preserved by default, for example `Speaker A`.
+- If `SPEAKER_MAPPING_FILE` points to a JSON mapping, mapped names appear in
+  participants and transcript speaker labels.
 
 ## 6. Summarization
 
@@ -112,6 +120,7 @@ If Claude fails:
 
 - `meeting.md` is still written.
 - Completion notification still appears.
+- The completion notification's `Open` action opens the meeting directory.
 
 ## 7. B2 Upload
 
@@ -127,6 +136,8 @@ If upload fails:
 
 - `b2_status: upload_failed` is written.
 - `Sync to B2` retries pending or failed meetings.
+- `Retry Failed Processing` retries meetings with `assemblyai_id:
+  transcription-failed` or `summary_status: failed`.
 
 ## 8. Recent Meeting Browsing
 
@@ -156,12 +167,90 @@ Pass criteria:
 - `.env` is updated.
 - The app uses the new setting after restart.
 
+## 10. Auto-Stop, Recovery, Diagnostics, and Search
+
+Auto-stop:
+
+1. Temporarily set `MAX_RECORDING_MINUTES=1` in `.env`.
+2. Restart the app.
+3. Start a short test recording and do not click stop.
+
+Pass criteria:
+
+- After roughly one minute, the app sends `Recording limit reached`.
+- Recording stops and the normal pipeline starts.
+
+Recovery:
+
+1. Start a short recording.
+2. Force quit the app process before stopping.
+3. Reopen the app.
+
+Pass criteria:
+
+- The tray menu shows `Recovered Recordings`.
+- Clicking a recovered item converts and processes it.
+
+Diagnostics:
+
+- `Send Test Notification` shows a local notification.
+- `Run Diagnostics` reports either `All checks passed.` or actionable setup
+  failures.
+
+Search:
+
+```bash
+meeting-memory search "decision"
+```
+
+Pass criteria:
+
+- Matching meetings print date, title, path, and excerpt.
+- A no-match query prints `No matching meetings found.`
+
+## 11. Local App and Login Item
+
+Run:
+
+```bash
+make PYTHON=.venv/bin/python install-macos-app
+make PYTHON=.venv/bin/python reload-macos-app
+```
+
+Pass criteria:
+
+- `~/Applications/Meeting Memory.app` exists.
+- Launching the app shows only a menu-bar item, not a Dock icon.
+- `make PYTHON=.venv/bin/python quit-macos-app` quits the running app.
+
+Then run:
+
+```bash
+make PYTHON=.venv/bin/python install-launch-agent
+```
+
+Pass criteria:
+
+- `~/Library/LaunchAgents/com.meeting-memory.app.plist` exists.
+- The background app starts without a terminal window.
+- Logs are written under `~/Library/Logs/meeting-memory/`.
+
+Remove it after validation if you do not want Meeting Memory to start at login:
+
+```bash
+make PYTHON=.venv/bin/python uninstall-launch-agent
+```
+
 ## Known Limitations During Validation
 
-- The app is run as a Python process, not as a signed packaged `.app`.
-- Recording is manual only.
-- Real participant names are not resolved.
+- The `.app` is a local wrapper around this checkout and virtualenv, not a
+  signed/notarized/standalone binary.
+- Recording requires an explicit user start; fully automatic recording is out of
+  scope.
+- Speaker names are not inferred automatically; only the optional
+  `SPEAKER_MAPPING_FILE` is applied.
 - Calendar watching uses all accessible calendars unless `GOOGLE_CALENDAR_ID`
   is set to a specific calendar ID.
-- Offline retry queueing is not implemented in v1.
+- Failed work is retryable from the tray, but retries are not yet automatically
+  triggered by connectivity changes.
 - The preferences window writes `.env` and requires restart.

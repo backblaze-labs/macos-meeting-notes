@@ -45,6 +45,7 @@ def test_recorder_start_stop_writes_wav_and_converts_to_m4a(tmp_path: Path) -> N
     assert result.meta.duration_minutes == 3
     assert result.audio_path.suffix == ".m4a"
     assert result.audio_path.exists()
+    assert not result.wav_path.exists()
     assert converted == [(result.wav_path, result.audio_path)]
     assert stream_holder["stream"].device_index == 7
     assert stream_holder["stream"].channels == 2

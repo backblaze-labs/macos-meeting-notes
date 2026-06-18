@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 
@@ -22,9 +23,10 @@ def write_meeting_dir(
     audio_source: Path,
     transcript: TranscriptResult,
     summary: SummaryResult,
+    speaker_mapping: Mapping[str, str] | None = None,
 ) -> MeetingFiles:
     files = create_meeting_dir(meetings_dir, meta, audio_source)
-    write_meeting_markdown(files, transcript, summary)
+    write_meeting_markdown(files, transcript, summary, speaker_mapping=speaker_mapping)
     return files
 
 
@@ -52,9 +54,16 @@ def write_meeting_markdown(
     files: MeetingFiles,
     transcript: TranscriptResult,
     summary: SummaryResult,
+    *,
+    speaker_mapping: Mapping[str, str] | None = None,
 ) -> None:
     files.markdown_path.write_text(
-        render_meeting_markdown(files.meta, transcript, summary),
+        render_meeting_markdown(
+            files.meta,
+            transcript,
+            summary,
+            speaker_mapping=speaker_mapping,
+        ),
         encoding="utf-8",
     )
 

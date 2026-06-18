@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from meeting_memory.types.meeting import RecentMeeting
 
-TRAY_IDLE_TITLE = "●"
-
 APP_TITLE = "● Meeting Memory"
 RECENT_HEADER = "Recent Meetings"
 NO_MEETINGS_LABEL = "No meetings yet"
+RECOVERED_HEADER = "Recovered Recordings"
+NO_RECOVERED_LABEL = "No recovered recordings"
 OPEN_MEETINGS_LABEL = "Open Meetings Folder"
 SYNC_LABEL = "Sync to B2"
+RETRY_PROCESSING_LABEL = "Retry Failed Processing"
+RUN_DIAGNOSTICS_LABEL = "Run Diagnostics"
+TEST_NOTIFICATION_LABEL = "Send Test Notification"
 PREFERENCES_LABEL = "Preferences..."
 QUIT_LABEL = "Quit"
 
@@ -23,8 +26,8 @@ def recording_label(*, is_recording: bool, duration_seconds: int = 0) -> str:
 
 def tray_title(*, is_recording: bool, duration_seconds: int = 0) -> str | None:
     if not is_recording:
-        return TRAY_IDLE_TITLE
-    return f"{TRAY_IDLE_TITLE} {_format_duration(duration_seconds)}"
+        return None
+    return _format_duration(duration_seconds)
 
 
 def recent_meeting_label(meeting: RecentMeeting) -> str:
@@ -35,6 +38,10 @@ def recent_meeting_labels(meetings: list[RecentMeeting]) -> list[str]:
     if not meetings:
         return [NO_MEETINGS_LABEL]
     return [recent_meeting_label(meeting) for meeting in meetings[:5]]
+
+
+def recovered_recording_label(slug: str) -> str:
+    return f"Recover {slug}"
 
 
 def _format_duration(duration_seconds: int) -> str:

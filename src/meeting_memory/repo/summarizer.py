@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from meeting_memory.config.defaults import DEFAULT_ANTHROPIC_MODEL, DEFAULT_SUMMARY_PROMPT_FILE
 from meeting_memory.config.settings import Settings
+from meeting_memory.repo.retry import DEFAULT_RETRY_DELAYS, RetryPolicy, is_likely_transient_error
 from meeting_memory.types.summary import ActionItem, SummaryResult
 
 MAX_TRANSCRIPT_CHARS = 60_000
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 60.0
 DEFAULT_PROMPT_TEMPLATE = """Summarize this meeting transcript as strict JSON.
 Return exactly these keys: summary, decisions, action_items.
 action_items must be objects with task, owner, and due_date keys.
@@ -33,6 +37,9 @@ class ClaudeSummarizer:
     model: str = DEFAULT_ANTHROPIC_MODEL
     prompt_template: str = DEFAULT_PROMPT_TEMPLATE
     max_transcript_chars: int = MAX_TRANSCRIPT_CHARS
+    request_timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS
+    retry_delays: tuple[float, ...] = DEFAULT_RETRY_DELAYS
+    sleeper: Callable[[float], None] = field(default=time.sleep, repr=False, compare=False)
 
     @classmethod
     def from_settings(cls, settings: Settings) -> ClaudeSummarizer:
@@ -46,12 +53,18 @@ class ClaudeSummarizer:
         if not self.api_key:
             return SummaryResult.skipped()
 
-        client = _anthropic_client(self.api_key)
-        response = client.messages.create(
-            model=self.model,
-            max_tokens=1200,
-            temperature=0,
-            messages=[{"role": "user", "content": self._prompt(transcript_text)}],
+        client = _anthropic_client(
+            self.api_key,
+            timeout_seconds=self.request_timeout_seconds,
+        )
+        response = RetryPolicy(delays=self.retry_delays, sleeper=self.sleeper).call(
+            lambda: client.messages.create(
+                model=self.model,
+                max_tokens=1200,
+                temperature=0,
+                messages=[{"role": "user", "content": self._prompt(transcript_text)}],
+            ),
+            is_retryable=_is_retryable_anthropic_error,
         )
         return summary_result_from_json(_response_text(response))
 
@@ -111,7 +124,26 @@ def _response_text(response) -> str:
     return "\n".join(str(getattr(block, "text", "")) for block in blocks).strip()
 
 
-def _anthropic_client(api_key: str):
+def _is_retryable_anthropic_error(exc: BaseException) -> bool:
+    if _is_anthropic_transient_error(exc):
+        return True
+    return is_likely_transient_error(exc)
+
+
+def _is_anthropic_transient_error(exc: BaseException) -> bool:
+    try:
+        import anthropic
+    except Exception:
+        return False
+
+    names = ("APIConnectionError", "APITimeoutError", "RateLimitError", "InternalServerError")
+    classes = tuple(
+        cls for name in names if isinstance((cls := getattr(anthropic, name, None)), type)
+    )
+    return bool(classes) and isinstance(exc, classes)
+
+
+def _anthropic_client(api_key: str, *, timeout_seconds: float):
     import anthropic
 
-    return anthropic.Anthropic(api_key=api_key)
+    return anthropic.Anthropic(api_key=api_key, timeout=timeout_seconds, max_retries=0)

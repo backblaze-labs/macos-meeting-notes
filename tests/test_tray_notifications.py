@@ -82,6 +82,9 @@ class FakeController:
     def recent_meetings(self) -> list[RecentMeeting]:
         return self.recent
 
+    def recovered_recordings(self) -> list[object]:
+        return []
+
     def recording_duration_seconds(self) -> int:
         return 0
 
@@ -92,6 +95,12 @@ class FakeController:
         pass
 
     def sync_to_b2(self) -> None:
+        pass
+
+    def retry_failed_processing(self) -> None:
+        pass
+
+    def process_recovered_recording(self, recording) -> None:
         pass
 
     def start_recording(self, calendar_title: str = "Untitled", *, ends_at=None) -> None:

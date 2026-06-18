@@ -67,12 +67,35 @@ To remove the login item:
 make PYTHON=.venv/bin/python uninstall-launch-agent
 ```
 
+## Using the App
+
+Meeting Memory runs as a menu-bar app. Use `Start Recording` for ad-hoc calls,
+or click `Record` from a pre-meeting notification when the calendar watcher
+detects an upcoming Meet or Zoom event. If no nearby calendar event is found,
+the app asks for a title before starting.
+
+While recording, the status bar shows a live timer and the tray menu switches to
+`Stop Recording`. When a calendar-backed recording reaches the event end time,
+the app sends a `Stop` reminder action. After transcription finishes, the
+completion notification includes an `Open` action that opens the meeting
+directory in Finder.
+
+If the app crashes during recording, restart it and check the tray for
+`Recovered Recordings`. Failed B2 uploads can be retried with `Sync to B2`, and
+failed transcription or summarization states can be retried with
+`Retry Failed Processing`.
+
+By default, the calendar watcher scans all non-deleted calendars accessible to
+the authenticated Google account. Set `GOOGLE_CALENDAR_ID=primary` or a
+specific calendar ID to narrow the watcher.
+
 ## Setup Guides
 
 - [BlackHole setup](docs/blackhole-setup.md)
 - [Google Calendar auth](docs/google-calendar-auth.md)
 - [Manual validation checklist](docs/manual-validation.md)
 - [Development workflows](docs/dev-workflows.md)
+- [Deferred work and product notes](docs/deferred-work.md)
 
 ## Configuration
 
@@ -93,6 +116,7 @@ Optional:
 - `ANTHROPIC_API_KEY`
 - `ANTHROPIC_MODEL`
 - `SUMMARY_PROMPT_FILE`
+- `SPEAKER_MAPPING_FILE`
 - `GOOGLE_CALENDAR_ID`
 - `MEETINGS_DIR`
 - `AUDIO_DEVICE`
@@ -126,15 +150,37 @@ Set `SUMMARY_PROMPT_FILE` to point at another prompt file. If the file contains
 `{transcript}`, the app replaces that placeholder with the clipped transcript;
 otherwise it appends the transcript below the prompt.
 
+## Speaker Mapping
+
+Set `SPEAKER_MAPPING_FILE` to an optional JSON file such as:
+
+```json
+{"Speaker A": "Alex", "Speaker B": "Customer"}
+```
+
+The mapping is applied when rendering participants and transcript speaker
+labels in `meeting.md`.
+
+## Local Search
+
+Search saved meeting markdown from the terminal:
+
+```bash
+meeting-memory search "launch risks"
+```
+
 ## Known Limitations
 
 - The `.app` bundle is a local wrapper around this repo and its Python virtual
-  environment, not a standalone signed binary.
-- Recording requires manual start/stop.
-- Speaker labels are preserved as AssemblyAI labels; the app does not map them
-  to real attendee names.
+  environment, not a standalone signed/notarized binary.
+- Recording requires an explicit user start. The app can remind the user to
+  stop at the calendar event end time, but fully automatic recording is out of
+  scope.
+- Speaker labels are preserved by default; set `SPEAKER_MAPPING_FILE` to render
+  friendlier names in local notes.
 - Calendar watching uses all accessible calendars by default; set
   `GOOGLE_CALENDAR_ID` to a specific ID to narrow it.
-- Failed offline/network work is surfaced through local status and manual retry;
-  a durable offline queue is future work.
+- Failed B2 uploads can be retried with `Sync to B2`. Failed transcription or
+  summarization can be retried with `Retry Failed Processing`; fully automatic
+  connectivity-aware background queueing is future work.
 - The preferences window edits `.env`; restart the app after saving changes.

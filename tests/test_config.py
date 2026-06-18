@@ -14,6 +14,7 @@ OPTIONAL_ENV_VARS = (
     "ANTHROPIC_API_KEY",
     "ANTHROPIC_MODEL",
     "SUMMARY_PROMPT_FILE",
+    "SPEAKER_MAPPING_FILE",
     "GOOGLE_CALENDAR_CREDENTIALS_FILE",
     "GOOGLE_CALENDAR_ID",
     "MEETINGS_DIR",
@@ -43,6 +44,7 @@ def test_load_settings_from_env_file(tmp_path: Path) -> None:
                 "ASSEMBLYAI_API_KEY=assembly-key",
                 "ANTHROPIC_API_KEY=",
                 "SUMMARY_PROMPT_FILE=prompts/custom-summary.md",
+                "SPEAKER_MAPPING_FILE=speakers.json",
                 "MEETINGS_DIR=~/Meeting Archive",
                 "NOTIFY_MINUTES_BEFORE=7",
             ]
@@ -56,6 +58,8 @@ def test_load_settings_from_env_file(tmp_path: Path) -> None:
     assert settings.anthropic_api_key is None
     assert settings.anthropic_model == "claude-haiku-4-5"
     assert settings.summary_prompt_file == Path("prompts/custom-summary.md")
+    assert settings.speaker_mapping_file == Path("speakers.json")
+    assert settings.speaker_mapping_path == Path("speakers.json")
     assert settings.google_calendar_id == "all"
     assert settings.notify_minutes_before == 7
     assert settings.meetings_dir_path == Path("~/Meeting Archive").expanduser()

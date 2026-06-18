@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 from meeting_memory.service.macos_app import (
+    APP_ICON_FILE,
     APP_NAME,
     BUNDLE_IDENTIFIER,
     install_macos_app,
@@ -35,13 +36,17 @@ def test_install_macos_app_writes_bundle(tmp_path: Path) -> None:
 
     plist = plistlib.loads((app_path / "Contents" / "Info.plist").read_bytes())
     executable = app_path / "Contents" / "MacOS" / APP_NAME
+    icon = app_path / "Contents" / "Resources" / APP_ICON_FILE
 
     assert result == app_path
     assert plist["CFBundleName"] == APP_NAME
+    assert plist["CFBundleIconFile"] == APP_ICON_FILE
     assert plist["CFBundleIdentifier"] == BUNDLE_IDENTIFIER
     assert plist["LSUIElement"] is True
     assert plist["NSPrincipalClass"] == "NSApplication"
     assert executable.exists()
+    assert icon.exists()
+    assert icon.read_bytes()[:4] == b"icns"
     assert executable.stat().st_mode & 0o111
     assert f"cd {project_dir}" in executable.read_text(encoding="utf-8")
     if calls:

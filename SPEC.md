@@ -3,11 +3,13 @@
 
 **Status:** Draft  
 **Author:** Eduardo Pavez  
-**Date:** 2026-06-10  
-**Version:** 0.2  
+**Date:** 2026-06-18
+**Version:** 0.3
 **Methodology:** RFC-inspired SRS (requirement language per RFC 2119: MUST / SHOULD / MAY / MUST NOT)
 
 **Revision note (v0.2):** Added a second, first-class design goal — **the repository must be easy for AI coding agents to read and modify** — and the conventions that deliver it, ported from the *portable* (non-web-specific) patterns of the team's `agent-friendly reference project`: an `AGENTS.md` control surface, import-enforced module layering, mechanical structural tests, a doctor preflight, and fail-fast config. §7 was restructured into enforced layers (§7.1, §7.5, §7.6) and all v0.1 Open Questions were resolved (§11). This app is deliberately **not** built on the reference project web template (Next.js + FastAPI) — see §1.2 and §2.1.
+
+**Revision note (v0.3):** Aligned the spec with the implemented macOS app wrapper, LaunchAgent workflow, all-calendar default (`GOOGLE_CALENDAR_ID=all`), notification actions (`Record`, `Open`, `Stop`), status-bar recording timer, calendar-context recording titles, configurable summary prompt, recording auto-stop, temp-recording recovery, retry/backoff, failed-processing retry, local search, and optional speaker mapping. Remaining product limitations are called out in §10.
 
 ---
 
@@ -109,6 +111,8 @@ A **second, explicit design goal** sits alongside the user-facing app: the repos
 - F7: B2 backup — upload meeting artifacts to Backblaze B2 after local write
 - F8: Tray menu — control recording, browse recent meetings, trigger sync
 - F9: Completion notification — alert user when transcript is ready
+- F10: Local macOS app wrapper — install, reload, launch, quit, and optionally start at login
+- F11: Local search and retry tools — search stored meetings and retry failed processing
 
 ### 2.3 User Characteristics
 
@@ -124,6 +128,7 @@ Technical profile: comfortable with terminal setup (installing Python packages, 
 - Recording requires the user to explicitly trigger start/stop (no fully automatic recording)
 - Transcription and summarization require internet access
 - Google Calendar OAuth credentials file must be obtained from Google Cloud Console
+- The installed `.app` is a local wrapper around this repo and Python environment; it is not a signed, notarized, standalone distribution artifact.
 
 ---
 
@@ -194,9 +199,9 @@ B2_BUCKET_NAME
 
 **REQ-F1-02** The watcher MUST poll the Google Calendar API every 120 seconds (configurable via `CALENDAR_POLL_INTERVAL`).
 
-**REQ-F1-03** The watcher MUST fetch all events from all calendars accessible to the authenticated account that start within the next `NOTIFY_MINUTES_BEFORE + 2` minutes (lookahead window).
+**REQ-F1-03** The watcher MUST fetch events that start within the next `NOTIFY_MINUTES_BEFORE + 2` minutes (lookahead window) from the calendar scope configured by `GOOGLE_CALENDAR_ID`. The default value `all` means every non-deleted calendar accessible to the authenticated account; `primary` or a specific calendar ID narrows the scope.
 
-**REQ-F1-04** An event is considered a "meeting" if its `description` or `location` fields contain at least one of:
+**REQ-F1-04** An event is considered a "meeting" if its `description`, `location`, or Google Calendar `hangoutLink` fields contain at least one of:
 - `meet.google.com`
 - `zoom.us/j/`
 - `zoom.us/s/`
@@ -218,19 +223,19 @@ B2_BUCKET_NAME
 
 ### F3: Recording Control
 
-**REQ-F3-01** The tray menu MUST expose a **Start Recording** item when no recording is active, and a **Stop Recording** item (with recording duration) when a session is active.
+**REQ-F3-01** The tray menu MUST expose a **Start Recording** item when no recording is active, and a **Stop Recording** item (with recording duration) when a session is active. While recording, the status-bar title MUST show a live duration timer.
 
 **REQ-F3-02** The application MUST NOT allow more than one recording session to be active at a time. If **Start Recording** is triggered while a session is active, it MUST be ignored.
 
-**REQ-F3-03** The tray icon MUST change appearance (e.g., filled red circle) while a recording is active.
+**REQ-F3-03** The tray MUST expose visible recording state through the status-bar timer and the **Stop Recording** menu label.
 
-**REQ-F3-04** The application MUST accept start-recording input from two sources: (a) the tray menu item, (b) the "Record" action in a pre-meeting notification.
+**REQ-F3-04** The application MUST accept start-recording input from two sources: (a) the tray menu item, (b) the "Record" action in a pre-meeting notification. It MUST accept stop-recording input from the tray menu and from a "Stop" notification action.
 
-**REQ-F3-05** When recording starts, the application MUST immediately create the meeting directory using the current timestamp and calendar title (if a matching event is found within ±5 minutes) or `"untitled"` otherwise.
+**REQ-F3-05** When recording starts, the application MUST resolve a title from the matched calendar event within ±5 minutes when available. If no matching event is available, manual tray starts SHOULD prompt for an ad-hoc title before falling back to `"Untitled"`.
 
 **REQ-F3-06** The recording MUST be written incrementally to a temporary file to prevent data loss if the application crashes.
 
-**REQ-F3-07** A configurable maximum recording duration (`MAX_RECORDING_MINUTES`, default: 180) MUST exist. If this limit is reached, the application MUST automatically stop recording and begin the pipeline (with a notification informing the user).
+**REQ-F3-07** A configurable maximum recording duration (`MAX_RECORDING_MINUTES`, default: 180) MUST exist in settings and preferences. If this limit is reached, the application MUST automatically stop recording, enqueue the post-recording pipeline, and notify the user.
 
 ### F4: Transcription
 
@@ -240,7 +245,7 @@ B2_BUCKET_NAME
 
 **REQ-F4-03** Transcript segments MUST be formatted as `**<Speaker Label>** (<HH:MM:SS>): <text>` in the `meeting.md` output.
 
-**REQ-F4-04** Speaker labels returned by AssemblyAI (e.g. "Speaker A", "Speaker B") MUST be preserved as-is in the transcript. The application MUST NOT attempt to resolve speaker labels to real names in v1.
+**REQ-F4-04** Speaker labels returned by AssemblyAI (e.g. "Speaker A", "Speaker B") MUST be preserved as-is unless `SPEAKER_MAPPING_FILE` maps a label to a user-provided display name. The application MUST NOT infer real attendee names automatically.
 
 **REQ-F4-05** The application MUST record the AssemblyAI transcript ID in the meeting's YAML frontmatter (`assemblyai_id` field) for future retrieval.
 
@@ -255,6 +260,8 @@ B2_BUCKET_NAME
 **REQ-F5-04** Action items MUST be formatted as GitHub Flavored Markdown task list items: `- [ ] <owner>: <task>` or `- [ ] <task>` when no owner is identifiable.
 
 **REQ-F5-05** The summarization step MUST be skipped (with a warning in the frontmatter `summary_status: skipped`) if `ANTHROPIC_API_KEY` is not set, so the app is usable for transcription-only without an Anthropic account.
+
+**REQ-F5-06** The summarization prompt MUST be configurable through `SUMMARY_PROMPT_FILE`. If the file contains `{transcript}`, the app MUST replace that placeholder with the clipped transcript; otherwise it MUST append the transcript below the prompt text.
 
 ### F6: Local Storage
 
@@ -282,7 +289,7 @@ B2_BUCKET_NAME
 
 **REQ-F7-02** The B2 object key MUST follow the pattern: `meetings/<slug>/<filename>`.
 
-**REQ-F7-03** B2 upload MUST happen asynchronously — it MUST NOT block the completion notification (REQ-F9-01).
+**REQ-F7-03** B2 upload MUST NOT block the completion notification (REQ-F9-01). The app MUST emit the completion event after local write and before attempting B2 upload.
 
 **REQ-F7-04** If a B2 upload fails, the application MUST retry up to 3 times with exponential backoff (2s, 4s, 8s). After 3 failures, the upload MUST be logged and silently abandoned (with the frontmatter `b2_status: upload_failed` written to `meeting.md`).
 
@@ -304,7 +311,10 @@ Recent Meetings                   (section header, non-interactive)
 ─────────────────
 Open Meetings Folder
 Sync to B2
+Retry Failed Processing
 ─────────────────
+Run Diagnostics
+Send Test Notification
 Preferences…
 Quit
 ```
@@ -319,16 +329,46 @@ Quit
 
 **REQ-F8-06** **Preferences** MUST open a simple settings view where the user can configure: `MEETINGS_DIR`, `NOTIFY_MINUTES_BEFORE`, `MAX_RECORDING_MINUTES`, and `AUDIO_DEVICE`.
 
+**REQ-F8-07** If recoverable temporary recordings are found, the tray menu MUST show a **Recovered Recordings** section with one action per recoverable item.
+
+**REQ-F8-08** **Retry Failed Processing** MUST scan local meeting directories and retry meetings whose frontmatter indicates failed transcription or summarization.
+
+**REQ-F8-09** **Run Diagnostics** MUST rerun doctor-lite checks and surface the result through a notification and tray setup items.
+
+**REQ-F8-10** **Send Test Notification** MUST send a local notification for validating macOS notification behavior.
+
 ### F9: Completion Notification
 
 **REQ-F9-01** After `meeting.md` has been written to disk, the application MUST send a macOS notification with:
-- Title: `"Meeting transcribed"`
+- Title: `"Meeting ready"`
 - Body: `"<meeting-title> · <duration> min"`
 - Action button: `"Open"` — opens the meeting directory in Finder
 
 **REQ-F9-02** The completion notification MUST be sent regardless of whether the B2 upload has completed.
 
 **REQ-F9-03** If transcription or summarization failed, the notification body MUST indicate failure: `"<meeting-title> · transcription failed. Audio saved locally."`.
+
+### F10: Local macOS App Wrapper and Login Item
+
+**REQ-F10-01** The application MUST provide commands to install, reload, open, and quit a clickable local app bundle at `~/Applications/Meeting Memory.app`.
+
+**REQ-F10-02** The local app bundle MUST run the current checkout with the selected Python executable and `PYTHONPATH=src`.
+
+**REQ-F10-03** The local app bundle MUST be configured as a menu-bar/background app (`LSUIElement`) and include the Meeting Memory icon asset.
+
+**REQ-F10-04** The application MUST provide commands to install and uninstall a LaunchAgent at `~/Library/LaunchAgents/com.meeting-memory.app.plist` so the menu-bar app can start at login.
+
+**REQ-F10-05** The LaunchAgent MUST run the current checkout as a background process and write stdout/stderr to `~/Library/Logs/meeting-memory/`.
+
+### F11: Local Search, Recovery, and Retry
+
+**REQ-F11-01** The CLI MUST expose `meeting-memory search <query>` to perform case-insensitive full-text search across Meeting Memory-owned `meeting.md` files.
+
+**REQ-F11-02** Search results MUST include the meeting date, title, markdown path, and a short excerpt.
+
+**REQ-F11-03** The retry-processing flow MUST use durable local frontmatter state (`assemblyai_id` and `summary_status`) to identify failed processing work.
+
+**REQ-F11-04** Recovered recordings MUST be converted from temp WAV to M4A, copied into a normal meeting directory, processed through the same pipeline as stopped recordings, and removed from temp after successful conversion.
 
 ---
 
@@ -344,9 +384,9 @@ Quit
 
 ### 5.2 Reliability
 
-**REQ-NF-04** If the application crashes during recording, the partial audio written to the temp file MUST be recoverable on restart. On startup, if a temp recording file is found, the application MUST offer to process it.
+**REQ-NF-04** If the application crashes during recording, the partial audio written to the temp file MUST be discoverable from the tray on restart. If the user selects a recovered recording, the application MUST process it through the normal pipeline.
 
-**REQ-NF-05** The application MUST handle AssemblyAI and Anthropic API rate limits by implementing exponential backoff and retrying up to 3 times.
+**REQ-NF-05** The application MUST preserve local audio and write a usable `meeting.md` failure state when AssemblyAI or Anthropic calls fail. AssemblyAI and Anthropic adapter calls MUST use explicit retry/backoff for transient failures and rate limits.
 
 ### 5.3 Security and Privacy
 
@@ -364,7 +404,7 @@ Quit
 
 **REQ-NF-11** The application MUST NOT depend on any paid macOS feature or third-party subscription beyond the services listed in Section 3.
 
-**REQ-NF-12** The application MUST be distributable as a `pip install` from a Git URL, with no binary blobs in the repository.
+**REQ-NF-12** The application MUST be distributable as a `pip install` from a Git URL, with no bundled third-party executables or application binaries. Static UI assets such as the app icon MAY be stored in the repository.
 
 ### 5.5 Observability
 
@@ -396,7 +436,7 @@ id: <meeting-slug>               # string, matches directory name
 date: <ISO-8601 datetime>        # recording start time, local timezone
 duration_minutes: <integer>      # rounded to nearest minute
 calendar_title: <string>         # from Google Calendar event, or "Untitled"
-participants: [<string>, ...]    # speaker labels from AssemblyAI (e.g. "Speaker A")
+participants: [<string>, ...]    # speaker labels, or mapped speaker names when configured
 assemblyai_id: <string>          # AssemblyAI transcript job ID
 summary_status: ok | skipped | failed
 b2_audio: <string | null>        # B2 object key, null until upload succeeds
@@ -473,9 +513,9 @@ The codebase is organized into five strictly-ordered layers under `src/meeting_m
 |---|---|---|
 | **types** | `types/` | `meeting.py` (`MeetingMeta`, slug helpers-as-data) · `transcript.py` (`TranscriptResult`, `TranscriptSegment`) · `summary.py` (`SummaryResult` with decisions + action items) · `events.py` (UI events emitted to the tray: `MeetingDetected`, `NotifyEvent`, `RecordingStateChanged`). Pure data — **no SDK imports, no cross-layer imports.** |
 | **config** | `config/` | `settings.py` — `pydantic-settings` `Settings` class (the §8 table) + `validate_or_exit()` fail-fast validation and placeholder detection. Depends only on `types`. |
-| **repo** | `repo/` | `b2_client.py` (boto3 S3 adapter) · `transcription.py` (AssemblyAI adapter; `transcribe(audio_path) -> TranscriptResult`) · `summarizer.py` (Anthropic adapter; `summarize(text) -> SummaryResult`) · `calendar_client.py` (Google Calendar OAuth + Keychain + event list) · `audio_device.py` (sounddevice device lookup). **The only layer permitted to import external SDKs.** |
-| **service** | `service/` | `storage.py` (`write_meeting_dir()`, `list_recent_meetings()`, frontmatter read/update, `is_ours()`) · `markdown.py` (renders `meeting.md`) · `recorder.py` (sounddevice stream → temp WAV → m4a; `start()/stop()`) · `pipeline.py` (orchestrates transcription → summarization → local write → B2 upload) · `calendar_watcher.py` (daemon poll loop; emits `MeetingDetected`) · `sync.py` (Sync-to-B2 rescan). Calls `repo`, returns `types`; **no `rumps`, no SDKs.** |
-| **ui** | `ui/` | `tray.py` (`rumps.App` subclass; menu state, action dispatch, notifications, icon state, `rumps.Timer` draining the event queue) · `menu.py` (menu rebuild helpers) · `preferences.py` (minimal settings window). **The only layer permitted to import `rumps`.** |
+| **repo** | `repo/` | `b2_client.py` (boto3 S3 adapter) · `transcription.py` (AssemblyAI adapter; `transcribe(audio_path) -> TranscriptResult`) · `summarizer.py` (Anthropic adapter; `summarize(text) -> SummaryResult`) · `calendar_client.py` (Google Calendar OAuth + Keychain + event list) · `audio_device.py` (sounddevice device lookup) · `retry.py` (repo-adapter retry policy). **The only layer permitted to import external SDKs.** |
+| **service** | `service/` | `storage.py` (`write_meeting_dir()`, `list_recent_meetings()`, frontmatter read/update, `is_ours()`) · `markdown.py` (renders `meeting.md`) · `recorder.py` (sounddevice stream → temp WAV → m4a; `start()/stop()`) · `pipeline.py` (orchestrates transcription → summarization → local write → B2 upload) · `calendar_watcher.py` (daemon poll loop; emits `MeetingDetected`) · `recording_context.py` (nearby-calendar title lookup) · `recovery.py` (temp-recording discovery/conversion) · `processing_retry.py` (frontmatter-based retry) · `search.py` (local full-text search) · `speaker_mapping.py` (optional speaker label mapping) · `sync.py` (Sync-to-B2 rescan) · `macos_app.py` (local app wrapper commands) · `launch_agent.py` (login item install/uninstall). Calls `repo`, returns `types`; **no `rumps`, no SDKs.** |
+| **ui** | `ui/` | `tray.py` (`rumps.App` subclass; menu state, action dispatch, notifications, status timer, `rumps.Timer` draining the event queue) · `controller.py` (recording/pipeline/sync handoff) · `menu.py` (menu label helpers) · `preferences.py` (minimal settings window) · `notifications.py` (rumps notification wrapper + fallback) · `title_prompt.py` (ad-hoc title prompt) · `macos.py` / `icons.py` (macOS UI helpers). **The only layer permitted to import `rumps`.** |
 | *cross-cutting* | — | `__main__.py` (entrypoint; `auth` subcommand; loads `.env`; logging; doctor-lite; starts tray) · `doctor.py` (preflight, §7.6) · `logging_config.py` (logs → `~/Library/Logs/meeting-memory/app.log`). |
 
 ### 7.2 Processing Sequence (Happy Path)
@@ -494,7 +534,7 @@ Pipeline.run(audio_path, meeting_meta)
   ├── Summarizer.summarize(transcript)
   │       └── Claude API → SummaryResult
   ├── Storage.write_meeting_md(meeting.md)        ← local write
-  ├── TrayApp.notify("Meeting transcribed")       ← notification here
+  ├── TrayApp.notify("Meeting ready")             ← notification event here
   └── Storage.upload_to_b2()                      ← async, after notification
           ├── PutObject meetings/<slug>/recording.m4a
           ├── PutObject meetings/<slug>/meeting.md
@@ -535,6 +575,7 @@ meeting-memory/
         summarizer.py        # Anthropic adapter
         calendar_client.py   # Google Calendar OAuth + Keychain
         audio_device.py      # sounddevice device lookup
+        retry.py             # retry/backoff helper for external adapter calls
       service/               # orchestration; no rumps, no SDKs
         __init__.py
         storage.py
@@ -542,12 +583,26 @@ meeting-memory/
         recorder.py
         pipeline.py
         calendar_watcher.py
+        recording_context.py
+        recovery.py
+        processing_retry.py
+        search.py
+        speaker_mapping.py
         sync.py
+        macos_app.py
+        launch_agent.py
+        assets/
+          MeetingMemory.icns
       ui/                    # the only layer that imports rumps
         __init__.py
         tray.py
+        controller.py
         menu.py
         preferences.py
+        notifications.py
+        title_prompt.py
+        macos.py
+        icons.py
   tests/
     test_structure.py        # mechanical enforcement (§7.6): layering, SDK/UI containment, file size
     test_storage.py
@@ -567,7 +622,7 @@ meeting-memory/
   AGENTS.md                  # authoritative agent control surface
   CLAUDE.md                  # thin pointer to AGENTS.md
   ARCHITECTURE.md            # layering + threading model
-  Makefile                   # install / run / auth / doctor / lint / test / check
+  Makefile                   # install / run / auth / doctor / app / launch-agent / lint / test / check
   README.md
   pyproject.toml             # canonical packaging (PEP 621, src-layout)
   requirements.txt           # convenience: `-e .`
@@ -607,9 +662,9 @@ A first-class design goal (alongside the user-facing app) is that **the reposito
 
 **Preflight — `python -m meeting_memory.doctor`** (zero-dependency where possible; the audio-device check is guarded so doctor can run before deps are installed): verifies Python ≥ 3.11, macOS ≥ 13, `.env` present and filled (no placeholder values), required `B2_*` + `ASSEMBLYAI_API_KEY` set, `ffmpeg` on `PATH`, the configured audio device exists, and the Google OAuth credentials file is present. Each failure prints exactly what is wrong and how to fix it. A doctor-lite subset runs at app startup and surfaces failures via a tray notification + a visible menu item rather than crashing (REQ-EXT-18).
 
-**Tooling & commands** — `ruff` (lint + format; rule `T20` forbids bare `print()` — use std `logging`), `pytest`, `pre-commit`. A `Makefile` exposes the predictable command set: `make install | run | auth | doctor | lint | format | test | check:structure | check`, where `check` = lint + tests + structure (the full gate `AGENTS.md` tells agents to run before finishing).
+**Tooling & commands** — `ruff` (lint + format; rule `T20` forbids bare `print()` — use std `logging`), `pytest`, `pre-commit`. A `Makefile` exposes the predictable command set: `make install | run | auth | doctor | install-macos-app | reload-macos-app | open-macos-app | quit-macos-app | install-launch-agent | uninstall-launch-agent | lint | format | test | check:structure | check`, where `check` = lint + tests + structure (the full gate `AGENTS.md` tells agents to run before finishing). The installed CLI also exposes `meeting-memory search <query>`.
 
-**Packaging** — `pyproject.toml` is canonical (PEP 621, src-layout, console-script entrypoint, `pip install` from a git URL per REQ-NF-12; no binary blobs). A thin `requirements.txt` (`-e .`) supports the plain `python -m venv` + `pip` path; `uv` is documented as an optional faster installer. `ffmpeg` is an external system dependency (doctor-checked, not pip-installed).
+**Packaging** — `pyproject.toml` is canonical (PEP 621, src-layout, console-script entrypoint, `pip install` from a git URL per REQ-NF-12; no bundled third-party executables). A thin `requirements.txt` (`-e .`) supports the plain `python -m venv` + `pip` path; `uv` is documented as an optional faster installer. `ffmpeg` is an external system dependency (doctor-checked, not pip-installed). The local `.app` bundle is a generated wrapper around the checkout and virtualenv, not a signed/notarized standalone app.
 
 ---
 
@@ -627,12 +682,14 @@ All configuration is read from environment variables, with `.env` file support v
 | `ASSEMBLYAI_API_KEY` | ✓ | — | AssemblyAI key |
 | `ANTHROPIC_API_KEY` | — | — | Claude key; if absent, summarization is skipped |
 | `ANTHROPIC_MODEL` | — | `claude-haiku-4-5` | Summarization model override (OQ-5) |
+| `SUMMARY_PROMPT_FILE` | — | `prompts/summary.md` | Prompt template used for Summary, Decisions, and Action Items |
+| `SPEAKER_MAPPING_FILE` | — | — | Optional JSON map from AssemblyAI labels to display names |
 | `GOOGLE_CALENDAR_CREDENTIALS_FILE` | ✓ | `credentials.json` | Path to OAuth client secrets |
-| `GOOGLE_CALENDAR_ID` | — | `primary` | Calendar ID to watch |
+| `GOOGLE_CALENDAR_ID` | — | `all` | Calendar scope to watch: `all`, `primary`, or a specific calendar ID |
 | `MEETINGS_DIR` | — | `~/Meetings` | Local directory for meeting files |
 | `AUDIO_DEVICE` | — | `Meeting Aggregate` | sounddevice device name |
 | `NOTIFY_MINUTES_BEFORE` | — | `5` | Minutes ahead to send pre-meeting notification |
-| `MAX_RECORDING_MINUTES` | — | `180` | Auto-stop recording after this duration |
+| `MAX_RECORDING_MINUTES` | — | `180` | Auto-stop active recordings after this duration |
 | `CALENDAR_POLL_INTERVAL` | — | `120` | Seconds between calendar polls |
 
 ---
@@ -645,11 +702,11 @@ All configuration is read from environment variables, with `.env` file support v
 
 **C3** AssemblyAI transcription for a 1-hour meeting costs approximately $0.72 (at $0.012/min). Users should be aware of this cost. The README MUST state estimated costs per hour.
 
-**C4** Meetings that are not tracked in Google Calendar (ad-hoc calls, manual sessions) can still be recorded manually via the tray menu but will be titled "Untitled" unless the user renames the directory.
+**C4** Meetings that are not tracked in Google Calendar (ad-hoc calls, manual sessions) can still be recorded manually via the tray menu. The UI prompts for a title when no nearby calendar context exists; `"Untitled"` is the fallback.
 
-**C5** The application does not identify speaker names — only AssemblyAI labels (Speaker A, Speaker B). Name resolution is deferred to v2.
+**C5** The application does not infer speaker names. It can apply an optional user-maintained JSON mapping file from AssemblyAI labels (Speaker A, Speaker B) to display names.
 
-**C6** Internet connectivity is required during transcription and summarization. Recording itself works offline; the post-processing pipeline will queue and retry when connectivity is restored (v2 improvement — v1 shows an error and requires manual retry via tray menu).
+**C6** Internet connectivity is required during transcription and summarization. Recording itself works offline. Failed B2 uploads can be retried with **Sync to B2**; failed transcription/summarization states can be retried with **Retry Failed Processing**.
 
 ---
 
@@ -657,15 +714,13 @@ All configuration is read from environment variables, with `.env` file support v
 
 | Feature | Notes |
 |---|---|
-| Speaker name resolution | Map "Speaker A" → real name via a user-defined mapping file |
-| Offline queue | Retry failed pipeline steps automatically when connectivity returns |
 | MCP server | Expose meetings as MCP resources for Claude Code and other clients |
-| Full-text search | Search across all `meeting.md` files locally, no indexing server |
+| Automatic connectivity retry | Automatically run failed-processing retry when connectivity returns, instead of requiring the tray action |
+| Rich diagnostics panel | Add observed calendars, next detected event, B2 object status, and log path to the current doctor/test-notification diagnostics |
 | Auto-recording | Automatically start recording when a meeting app opens (requires macOS accessibility permissions) |
 | Cross-machine sync | Restore local `~/Meetings/` from B2 on a new machine |
 | Meeting calendar enrichment | Write summary bullet points back to the Google Calendar event description |
 | Client-side encryption | Encrypt audio before B2 upload |
-| Multi-calendar watching | Watch several Google calendars simultaneously (v1 watches one configured `GOOGLE_CALENDAR_ID`) — see OQ-3 |
 | Local audio retention policy | Optional purge of `recording.m4a` after a successful B2 upload, after a configurable age — see OQ-1 |
 
 ---
@@ -678,6 +733,6 @@ All v0.1 open questions are resolved as of v0.2 (section retitled from "Open Que
 |---|---|---|
 | OQ-1 | Keep `recording.m4a` locally long-term, or purge after B2 upload? | **Keep locally in v1; no purge.** REQ-F6-07 already forbids deleting meeting directories. A retention/purge policy is deferred to Future Work (§10). |
 | OQ-2 | Expected B2 bucket retention policy for audio? | **No lifecycle policy shipped in v1.** Retention is left to the bucket owner as an ops choice and noted in the README. |
-| OQ-3 | Watch multiple Google calendars, or one configured calendar ID? | **One calendar in v1** (`GOOGLE_CALENDAR_ID`, default `primary`). Multi-calendar watching → Future Work (§10). |
+| OQ-3 | Watch multiple Google calendars, or one configured calendar ID? | **Watch all accessible calendars by default.** `GOOGLE_CALENDAR_ID=all` scans non-deleted calendars visible to the authenticated account; set `primary` or a specific calendar ID to narrow. |
 | OQ-4 | Preferences as a native macOS window, or terminal config editor? | **Minimal `rumps` settings window** exposing the four REQ-F8-06 fields (`MEETINGS_DIR`, `NOTIFY_MINUTES_BEFORE`, `MAX_RECORDING_MINUTES`, `AUDIO_DEVICE`); it writes `.env` and prompts a restart. |
-| OQ-5 | Is `claude-haiku-4-5` right, or should the model be configurable? | **Hardcode `claude-haiku-4-5`** as the default, with an optional `ANTHROPIC_MODEL` env override (§8, REQ-EXT-09). |
+| OQ-5 | Is `claude-haiku-4-5` right, or should the model be configurable? | **Use `claude-haiku-4-5`** as the default, with optional `ANTHROPIC_MODEL` and `SUMMARY_PROMPT_FILE` overrides (§8, REQ-EXT-09, REQ-F5-06). Speaker label display names are handled separately by `SPEAKER_MAPPING_FILE`. |

@@ -141,6 +141,8 @@ class RecorderService:
         )
         m4a_path = session.wav_path.with_suffix(".m4a")
         self.converter(session.wav_path, m4a_path)
+        with suppress(OSError):
+            session.wav_path.unlink()
         return RecordingResult(meta=meta, audio_path=m4a_path, wav_path=session.wav_path)
 
     def _audio_callback(self, indata, frames, time_info, status) -> None:

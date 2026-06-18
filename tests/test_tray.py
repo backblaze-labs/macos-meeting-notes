@@ -149,7 +149,7 @@ def test_rumps_tray_app_updates_recording_duration_label(tmp_path: Path) -> None
     app.drain_events()
 
     assert app.recording_item.title == "■ Stop Recording · 01:05"
-    assert app.app.title == "● 01:05"
+    assert app.app.title == "01:05"
 
 
 def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
@@ -164,9 +164,9 @@ def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
     app = RumpsTrayApp(controller, rumps_module=fake_rumps)
 
     assert app.app.quit_button is None
-    assert app.app.title == "●"
-    assert app.app.icon is None
-    assert app.app.template is None
+    assert app.app.title is None
+    assert app.app.icon.endswith("robot-template.png")
+    assert app.app.template is True
     titles = [item.title for item in app.app.menu.items if item is not None]
     assert titles.count(menu.QUIT_LABEL) == 1
 

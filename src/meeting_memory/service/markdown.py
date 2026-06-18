@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 
 from meeting_memory.service.frontmatter import dump_frontmatter
+from meeting_memory.service.speaker_mapping import apply_speaker_mapping
 from meeting_memory.types.meeting import MeetingMeta
 from meeting_memory.types.summary import ActionItem, SummaryResult
 from meeting_memory.types.transcript import TranscriptResult
@@ -18,7 +20,9 @@ def render_meeting_markdown(
     b2_audio: str | None = None,
     b2_transcript: str | None = None,
     b2_status: str = "pending",
+    speaker_mapping: Mapping[str, str] | None = None,
 ) -> str:
+    transcript = apply_speaker_mapping(transcript, speaker_mapping)
     frontmatter = dump_frontmatter(
         {
             "id": meta.slug,

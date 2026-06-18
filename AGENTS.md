@@ -9,7 +9,9 @@ This is the read-first control surface for coding agents working on
 2. `SPEC.md`
 3. `IMPLEMENTATION_PLAN.md`
 4. `ARCHITECTURE.md`
-5. `docs/features/<feature>.md` when working on a specific feature
+5. `docs/deferred-work.md` when revisiting unresolved or partially implemented
+   behavior
+6. `docs/features/<feature>.md` when working on a specific feature
 
 ## Repository Map
 
@@ -72,7 +74,9 @@ repo, or service modules as needed.
 4. Run the strongest available check, usually `make check`.
 5. After app behavior changes, run `make reload-macos-app` with the project
    virtualenv Python so the official clickable app is updated and restarted.
-6. Commit a passing, reviewable milestone slice.
+6. If requested behavior is not implemented or is only partially implemented,
+   append the reason and future first-check guidance to `docs/deferred-work.md`.
+7. Commit a passing, reviewable milestone slice.
 
 ## Official macOS App
 

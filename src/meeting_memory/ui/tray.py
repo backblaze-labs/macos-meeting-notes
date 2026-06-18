@@ -6,10 +6,11 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from meeting_memory.doctor import CheckResult
+from meeting_memory.doctor import CheckResult, run_checks
 from meeting_memory.types.events import MeetingDetected, NotifyEvent
 from meeting_memory.ui import menu
 from meeting_memory.ui.controller import TrayController
+from meeting_memory.ui.icons import tray_icon_path
 from meeting_memory.ui.macos import hide_dock_icon, keep_timer_running_during_menu_tracking
 from meeting_memory.ui.notifications import send_notification
 from meeting_memory.ui.preferences import open_preferences_window
@@ -35,6 +36,8 @@ class RumpsTrayApp:
         self.app = self.rumps.App(
             "Meeting Memory",
             title=self.current_tray_title(),
+            icon=tray_icon_path(),
+            template=True,
             quit_button=None,
         )
         self.timer = self.rumps.Timer(self.drain_events, 1)
@@ -69,12 +72,32 @@ class RumpsTrayApp:
         if not self.controller.recent_meetings():
             self.app.menu.add(self.rumps.MenuItem(menu.NO_MEETINGS_LABEL, callback=None))
         self.app.menu.add(None)
+        recovered_recordings = self.controller.recovered_recordings()
+        if recovered_recordings:
+            self.app.menu.add(self.rumps.MenuItem(menu.RECOVERED_HEADER, callback=None))
+            for recovered in recovered_recordings:
+                self.app.menu.add(
+                    self.rumps.MenuItem(
+                        menu.recovered_recording_label(recovered.meta.slug),
+                        callback=lambda _sender, item=recovered: (
+                            self.controller.process_recovered_recording(item)
+                        ),
+                    )
+                )
+            self.app.menu.add(None)
         self.app.menu.add(self.rumps.MenuItem(menu.OPEN_MEETINGS_LABEL, self.open_meetings_folder))
         self.app.menu.add(self.rumps.MenuItem(menu.SYNC_LABEL, self.sync_to_b2))
+        self.app.menu.add(
+            self.rumps.MenuItem(menu.RETRY_PROCESSING_LABEL, self.retry_failed_processing)
+        )
         self.app.menu.add(None)
         for result in self.doctor_results:
             if not result.ok or result.warning:
                 self.app.menu.add(self.rumps.MenuItem(f"Setup: {result.name}", callback=None))
+        self.app.menu.add(self.rumps.MenuItem(menu.RUN_DIAGNOSTICS_LABEL, self.run_diagnostics))
+        self.app.menu.add(
+            self.rumps.MenuItem(menu.TEST_NOTIFICATION_LABEL, self.send_test_notification)
+        )
         self.app.menu.add(self.rumps.MenuItem(menu.PREFERENCES_LABEL, self.open_preferences))
         self.app.menu.add(self.rumps.MenuItem(menu.QUIT_LABEL, self.rumps.quit_application))
 
@@ -98,8 +121,30 @@ class RumpsTrayApp:
     def sync_to_b2(self, _sender=None) -> None:
         self.controller.sync_to_b2()
 
+    def retry_failed_processing(self, _sender=None) -> None:
+        self.controller.retry_failed_processing()
+
     def open_preferences(self, _sender=None) -> None:
         open_preferences_window(self.controller.settings)
+
+    def run_diagnostics(self, _sender=None) -> None:
+        self.doctor_results = run_checks()
+        failures = [result for result in self.doctor_results if not result.ok or result.warning]
+        if failures:
+            body = "; ".join(f"{result.name}: {result.message}" for result in failures[:3])
+            if len(failures) > 3:
+                body = f"{body}; {len(failures) - 3} more"
+        else:
+            body = "All checks passed."
+        self._send_notification("Meeting Memory diagnostics", "", body)
+        self.rebuild_menu()
+
+    def send_test_notification(self, _sender=None) -> None:
+        self._send_notification(
+            "Meeting Memory test",
+            "",
+            "Notifications are working.",
+        )
 
     def drain_events(self, _timer=None) -> None:
         for event in self.controller.drain_events():

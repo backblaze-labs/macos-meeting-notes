@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model: str = DEFAULT_ANTHROPIC_MODEL
     summary_prompt_file: Path | None = Path(DEFAULT_SUMMARY_PROMPT_FILE)
+    speaker_mapping_file: Path | None = None
     google_calendar_credentials_file: Path = Path(DEFAULT_GOOGLE_CALENDAR_CREDENTIALS_FILE)
     google_calendar_id: str = DEFAULT_GOOGLE_CALENDAR_ID
     meetings_dir: Path = Path(DEFAULT_MEETINGS_DIR)
@@ -75,7 +76,7 @@ class Settings(BaseSettings):
         text = str(value).strip()
         return text or None
 
-    @field_validator("summary_prompt_file", mode="before")
+    @field_validator("summary_prompt_file", "speaker_mapping_file", mode="before")
     @classmethod
     def blank_optional_path_to_none(cls, value: Any) -> Path | None:
         if value is None:
@@ -104,6 +105,12 @@ class Settings(BaseSettings):
         if self.summary_prompt_file is None:
             return None
         return self.summary_prompt_file.expanduser()
+
+    @property
+    def speaker_mapping_path(self) -> Path | None:
+        if self.speaker_mapping_file is None:
+            return None
+        return self.speaker_mapping_file.expanduser()
 
 
 def looks_placeholder(value: str) -> bool:

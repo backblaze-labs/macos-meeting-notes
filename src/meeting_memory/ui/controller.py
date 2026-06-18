@@ -13,8 +13,14 @@ from pathlib import Path
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.pipeline import Pipeline
+from meeting_memory.service.processing_retry import retry_failed_processing
 from meeting_memory.service.recorder import RecorderService
 from meeting_memory.service.recording_context import context_from_meetings
+from meeting_memory.service.recovery import (
+    RecoveredRecording,
+    convert_recovered_recording,
+    find_recovered_recordings,
+)
 from meeting_memory.service.storage import list_recent_meetings
 from meeting_memory.types.events import MeetingDetected, NotifyEvent
 from meeting_memory.types.meeting import (
@@ -39,7 +45,9 @@ class TrayController:
     event_queue: EventQueue = field(default_factory=queue.Queue)
     opener: Callable[[Path], None] = field(default_factory=lambda: open_in_finder)
     sync_runner: Callable[[], object] | None = None
+    processing_retry_runner: Callable[[], object] | None = None
     thread_factory: ThreadFactory = threading.Thread
+    timer_thread_factory: ThreadFactory = threading.Thread
     now: Callable[[], datetime] = field(default_factory=lambda: lambda: datetime.now().astimezone())
     recording_context_provider: RecordingContextProvider | None = None
     sleeper: Callable[[float], None] = time.sleep
@@ -65,7 +73,9 @@ class TrayController:
             return
         if session is not None:
             self._recording_token = object()
-            self._schedule_stop_reminder(title, reminder_end, self._recording_token)
+            token = self._recording_token
+            self._schedule_auto_stop(title, token)
+            self._schedule_stop_reminder(title, reminder_end, token)
 
     def stop_recording(self) -> None:
         try:
@@ -106,8 +116,27 @@ class TrayController:
             return
         self.thread_factory(target=self.sync_runner, daemon=True).start()
 
+    def retry_failed_processing(self) -> None:
+        runner = self.processing_retry_runner or (
+            lambda: retry_failed_processing(self.settings.meetings_dir_path, self.pipeline)
+        )
+        self.thread_factory(target=runner, daemon=True).start()
+
     def recent_meetings(self) -> list[RecentMeeting]:
         return list_recent_meetings(self.settings.meetings_dir_path)
+
+    def recovered_recordings(self) -> list[RecoveredRecording]:
+        temp_dir = getattr(self.recorder, "temp_dir", None)
+        if temp_dir is None:
+            return []
+        return find_recovered_recordings(temp_dir)
+
+    def process_recovered_recording(self, recording: RecoveredRecording) -> None:
+        self.thread_factory(
+            target=self._process_recovered_recording,
+            args=(recording,),
+            daemon=True,
+        ).start()
 
     def remember_meeting(self, event: MeetingDetected) -> None:
         self._known_meetings[event.event_id] = CalendarMeeting(
@@ -173,6 +202,45 @@ class TrayController:
                     action="stop_recording",
                 )
             )
+
+    def _schedule_auto_stop(self, calendar_title: str, token: object) -> None:
+        self.timer_thread_factory(
+            target=self._auto_stop_recording,
+            args=(calendar_title, token),
+            daemon=True,
+        ).start()
+
+    def _auto_stop_recording(self, calendar_title: str, token: object) -> None:
+        self.sleeper(self.settings.max_recording_minutes * 60)
+        if self._recording_token is token and self.recorder.is_recording:
+            self.event_queue.put(
+                NotifyEvent(
+                    title="Recording limit reached",
+                    body=f"{calendar_title} reached {self.settings.max_recording_minutes} min.",
+                )
+            )
+            self.stop_recording()
+
+    def _process_recovered_recording(self, recording: RecoveredRecording) -> None:
+        try:
+            audio_path = convert_recovered_recording(recording)
+        except Exception as exc:
+            LOGGER.exception("Recovered recording could not be converted")
+            self.event_queue.put(
+                NotifyEvent(
+                    title="Recovered recording failed",
+                    body=_format_exception(exc),
+                )
+            )
+            return
+
+        self.event_queue.put(
+            NotifyEvent(
+                title="Recovered recording queued",
+                body=f"{recording.meta.calendar_title} · transcribing now",
+            )
+        )
+        self.run_pipeline(audio_path, recording.meta)
 
 
 def _format_exception(exc: Exception) -> str:

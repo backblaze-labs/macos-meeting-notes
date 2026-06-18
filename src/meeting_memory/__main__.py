@@ -25,6 +25,9 @@ def build_parser() -> argparse.ArgumentParser:
     subcommands.add_parser("quit-macos-app", help="quit the installed macOS app")
     subcommands.add_parser("install-launch-agent", help="start at login in the background")
     subcommands.add_parser("uninstall-launch-agent", help="remove the login LaunchAgent")
+    search_parser = subcommands.add_parser("search", help="search local meeting markdown")
+    search_parser.add_argument("query", nargs="+", help="terms to search for")
+    search_parser.add_argument("--limit", type=int, default=10, help="maximum results to show")
     return parser
 
 
@@ -47,6 +50,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return install_launch_agent()
     if args.command == "uninstall-launch-agent":
         return uninstall_launch_agent()
+    if args.command == "search":
+        return run_search(" ".join(args.query), limit=args.limit)
 
     return run_app()
 
@@ -107,6 +112,25 @@ def uninstall_launch_agent() -> int:
     return 0
 
 
+def run_search(query: str, *, limit: int) -> int:
+    from meeting_memory.config.settings import validate_or_exit
+    from meeting_memory.service.search import search_meetings
+
+    settings = validate_or_exit()
+    results = search_meetings(settings.meetings_dir_path, query, limit=limit)
+    if not results:
+        sys.stdout.write("No matching meetings found.\n")
+        return 1
+
+    for result in results:
+        sys.stdout.write(
+            f"{result.started_at:%Y-%m-%d %H:%M} · {result.title}\n"
+            f"  {result.path}\n"
+            f"  {result.excerpt}\n"
+        )
+    return 0
+
+
 def run_app() -> int:
     from meeting_memory.config.settings import validate_or_exit
     from meeting_memory.doctor import run_checks
@@ -117,8 +141,10 @@ def run_app() -> int:
     from meeting_memory.repo.transcription import AssemblyAITranscriptionClient
     from meeting_memory.service.calendar_watcher import CalendarWatcher
     from meeting_memory.service.pipeline import Pipeline
+    from meeting_memory.service.processing_retry import retry_failed_processing
     from meeting_memory.service.recorder import RecorderService
     from meeting_memory.service.recording_context import current_recording_context
+    from meeting_memory.service.speaker_mapping import load_speaker_mapping
     from meeting_memory.service.sync import sync_pending_meetings
     from meeting_memory.ui.tray import RumpsTrayApp, TrayController
 
@@ -127,12 +153,14 @@ def run_app() -> int:
     event_queue: queue.Queue[object] = queue.Queue()
     b2_client = B2S3Client.from_settings(settings)
     calendar_client = GoogleCalendarClient.from_settings(settings)
+    speaker_mapping = load_speaker_mapping(settings.speaker_mapping_path)
     pipeline = Pipeline(
         meetings_dir=settings.meetings_dir_path,
         transcription_client=AssemblyAITranscriptionClient.from_settings(settings),
         summarizer_client=ClaudeSummarizer.from_settings(settings),
         b2_client=b2_client,
         event_sink=event_queue.put,
+        speaker_mapping=speaker_mapping,
     )
     recorder = RecorderService(audio_device=settings.audio_device)
     controller = TrayController(
@@ -141,6 +169,10 @@ def run_app() -> int:
         pipeline=pipeline,
         event_queue=event_queue,
         sync_runner=lambda: sync_pending_meetings(settings.meetings_dir_path, b2_client),
+        processing_retry_runner=lambda: retry_failed_processing(
+            settings.meetings_dir_path,
+            pipeline,
+        ),
         recording_context_provider=lambda: current_recording_context(
             calendar_client,
             now=recorder.now(),
