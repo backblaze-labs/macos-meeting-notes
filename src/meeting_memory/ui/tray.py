@@ -13,6 +13,7 @@ from meeting_memory.ui.controller import TrayController
 from meeting_memory.ui.icons import tray_icon_path
 from meeting_memory.ui.macos import (
     allow_foreground_notifications,
+    configure_modern_notifications,
     hide_dock_icon,
     keep_timer_running_during_menu_tracking,
 )
@@ -37,6 +38,7 @@ class RumpsTrayApp:
         if rumps_module is None:
             hide_dock_icon(LOGGER)
             allow_foreground_notifications(LOGGER)
+            configure_modern_notifications(self.handle_notification, LOGGER)
         self._register_notification_handler()
         self.app = self.rumps.App(
             "Meeting Memory",
@@ -145,6 +147,7 @@ class RumpsTrayApp:
         self.rebuild_menu()
 
     def send_test_notification(self, _sender=None) -> None:
+        LOGGER.info("Send Test Notification selected")
         self._send_notification(
             "Meeting Memory test",
             "",

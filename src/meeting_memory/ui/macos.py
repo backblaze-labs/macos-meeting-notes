@@ -4,8 +4,14 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import uuid
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+UN_PRESENTATION_OPTIONS = 2 | 8 | 16
+_UN_DELEGATE: Any | None = None
+_UN_RESPONSE_HANDLER: Callable[[dict[str, Any]], None] | None = None
 
 
 def hide_dock_icon(logger: logging.Logger) -> None:
@@ -60,6 +66,55 @@ def allow_foreground_notifications(logger: logging.Logger) -> None:
         logger.debug("Could not enable foreground notification banners", exc_info=True)
 
 
+def configure_modern_notifications(
+    handler: Callable[[dict[str, Any]], None],
+    logger: logging.Logger,
+) -> None:
+    """Configure the modern notification center and retain its delegate."""
+    global _UN_DELEGATE, _UN_RESPONSE_HANDLER
+    try:
+        classes = _load_user_notifications()
+        delegate_class = _modern_notification_delegate_class()
+        _UN_RESPONSE_HANDLER = handler
+        _UN_DELEGATE = delegate_class.alloc().init()
+        center = classes["UNUserNotificationCenter"].currentNotificationCenter()
+        center.setDelegate_(_UN_DELEGATE)
+    except Exception:
+        logger.debug("Could not configure modern notifications", exc_info=True)
+
+
+def deliver_modern_notification(
+    title: str,
+    subtitle: str,
+    message: str,
+    **kwargs,
+) -> None:
+    classes = _load_user_notifications()
+    center = classes["UNUserNotificationCenter"].currentNotificationCenter()
+    content = classes["UNMutableNotificationContent"].alloc().init()
+    content.setTitle_(title)
+    content.setSubtitle_(subtitle)
+    content.setBody_(message)
+    if kwargs.get("sound", True):
+        content.setSound_(classes["UNNotificationSound"].defaultSound())
+
+    data = _notification_data(kwargs.get("data"))
+    if data:
+        content.setUserInfo_(data)
+
+    action_button = kwargs.get("action_button")
+    if action_button:
+        category_id = _set_modern_action_category(center, classes, str(action_button), data)
+        content.setCategoryIdentifier_(category_id)
+
+    request = classes["UNNotificationRequest"].requestWithIdentifier_content_trigger_(
+        str(uuid.uuid4()),
+        content,
+        None,
+    )
+    center.addNotificationRequest_(request)
+
+
 def deliver_notification(
     rumps_module: Any,
     title: str,
@@ -67,6 +122,12 @@ def deliver_notification(
     message: str,
     **kwargs,
 ) -> None:
+    try:
+        deliver_modern_notification(title, subtitle, message, **kwargs)
+        return
+    except Exception:
+        pass
+
     from Foundation import NSMutableDictionary
     from rumps import _internal
     from rumps.notifications import NSUserNotification, _default_user_notification_center
@@ -100,6 +161,77 @@ def deliver_notification(
         notification.set_ignoresDoNotDisturb_(True)
 
     _default_user_notification_center().deliverNotification_(notification)
+
+
+def _load_user_notifications() -> dict[str, Any]:
+    import objc
+
+    namespace: dict[str, Any] = {}
+    objc.loadBundle(
+        "UserNotifications",
+        namespace,
+        bundle_path="/System/Library/Frameworks/UserNotifications.framework",
+    )
+    return namespace
+
+
+def _modern_notification_delegate_class():
+    from Foundation import NSObject
+
+    class ModernNotificationDelegate(NSObject):
+        def userNotificationCenter_willPresentNotification_withCompletionHandler_(
+            self,
+            center,
+            notification,
+            completion_handler,
+        ) -> None:
+            del self, center, notification
+            completion_handler(UN_PRESENTATION_OPTIONS)
+
+        def userNotificationCenter_didReceiveNotificationResponse_withCompletionHandler_(
+            self,
+            center,
+            response,
+            completion_handler,
+        ) -> None:
+            del self, center
+            try:
+                user_info = response.notification().request().content().userInfo()
+                data = dict(user_info) if user_info is not None else {}
+                handler = _UN_RESPONSE_HANDLER
+                if handler is not None:
+                    handler(data)
+            finally:
+                completion_handler()
+
+    return ModernNotificationDelegate
+
+
+def _notification_data(data: object) -> dict[str, Any]:
+    if isinstance(data, dict):
+        return {str(key): value for key, value in data.items() if value is not None}
+    return {}
+
+
+def _set_modern_action_category(
+    center: Any,
+    classes: dict[str, Any],
+    action_button: str,
+    data: dict[str, Any],
+) -> str:
+    action_id = str(data.get("action") or "default")
+    category_id = f"meeting-memory-{action_id}"
+    action = classes["UNNotificationAction"].actionWithIdentifier_title_options_(
+        action_id,
+        action_button,
+        0,
+    )
+    category_factory = classes[
+        "UNNotificationCategory"
+    ].categoryWithIdentifier_actions_intentIdentifiers_options_
+    category = category_factory(category_id, [action], [], 0)
+    center.setNotificationCategories_({category})
+    return category_id
 
 
 def open_in_finder(path: Path) -> None:

@@ -19,8 +19,10 @@ def send_notification(
     kwargs.setdefault("ignoreDnD", True)
     try:
         if getattr(rumps_module, "__name__", "") == "rumps":
+            logger.info("Sending notification through UserNotifications: %s", title)
             deliver_notification(rumps_module, title, subtitle, message, **kwargs)
         else:
+            logger.info("Sending notification through rumps: %s", title)
             rumps_module.notification(title, subtitle, message, **kwargs)
     except Exception:
         logger.exception("Failed to send notification through rumps")
