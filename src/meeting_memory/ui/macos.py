@@ -60,6 +60,48 @@ def allow_foreground_notifications(logger: logging.Logger) -> None:
         logger.debug("Could not enable foreground notification banners", exc_info=True)
 
 
+def deliver_notification(
+    rumps_module: Any,
+    title: str,
+    subtitle: str,
+    message: str,
+    **kwargs,
+) -> None:
+    from Foundation import NSMutableDictionary
+    from rumps import _internal
+    from rumps.notifications import NSUserNotification, _default_user_notification_center
+
+    notification = NSUserNotification.alloc().init()
+    notification.setTitle_(title)
+    notification.setSubtitle_(subtitle)
+    notification.setInformativeText_(message)
+
+    data = kwargs.get("data")
+    if data is not None:
+        app = getattr(rumps_module.App, "*app_instance", rumps_module.App)
+        dumped = app.serializer.dumps(data)
+        user_info = NSMutableDictionary.alloc().init()
+        user_info.setDictionary_({"value": _internal.string_to_objc(dumped)})
+        notification.setUserInfo_(user_info)
+
+    if kwargs.get("sound", True):
+        notification.setSoundName_("NSUserNotificationDefaultSoundName")
+    if action_button := kwargs.get("action_button"):
+        notification.setActionButtonTitle_(action_button)
+        notification.set_showsButtons_(True)
+    if other_button := kwargs.get("other_button"):
+        notification.setOtherButtonTitle_(other_button)
+        notification.set_showsButtons_(True)
+    if kwargs.get("has_reply_button"):
+        notification.setHasReplyButton_(True)
+    if icon := kwargs.get("icon"):
+        notification.set_identityImage_(rumps_module._nsimage_from_file(icon))
+    if kwargs.get("ignoreDnD"):
+        notification.set_ignoresDoNotDisturb_(True)
+
+    _default_user_notification_center().deliverNotification_(notification)
+
+
 def open_in_finder(path: Path) -> None:
     subprocess.run(["open", str(path)], check=False)
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from meeting_memory.ui.macos import display_notification
+from meeting_memory.ui.macos import deliver_notification, display_notification
 
 
 def send_notification(
@@ -18,7 +18,10 @@ def send_notification(
 ) -> None:
     kwargs.setdefault("ignoreDnD", True)
     try:
-        rumps_module.notification(title, subtitle, message, **kwargs)
+        if getattr(rumps_module, "__name__", "") == "rumps":
+            deliver_notification(rumps_module, title, subtitle, message, **kwargs)
+        else:
+            rumps_module.notification(title, subtitle, message, **kwargs)
     except Exception:
         logger.exception("Failed to send notification through rumps")
         display_notification(title, subtitle, message, logger)

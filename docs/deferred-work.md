@@ -143,13 +143,15 @@ to open itself automatically; dismissing the notification should not start
 recording, while clicking `Record` should.
 
 Reason deferred: notification visibility can still be blocked by macOS state
-outside the app, including notification permissions, Focus/Do Not Disturb,
-running from an unexpected host process, or calendar configuration that prevents
-the watcher from detecting the event.
+outside the app, including notification permissions, Focus/Do Not Disturb, the
+global Notifications setting for mirroring/sharing the display, running from an
+unexpected host process, or calendar configuration that prevents the watcher
+from detecting the event.
 
 First thing to check if this comes up again: before changing code, ask the user
 to check macOS System Settings > Notifications for Meeting Memory/Python and
-Focus/Do Not Disturb. Then verify the app was launched through the official
-`Meeting Memory.app`, Google Calendar auth is valid, `GOOGLE_CALENDAR_ID=all`
-unless intentionally narrowed, and the calendar event has a Meet/Zoom URL within
-the notification window.
+Focus/Do Not Disturb, plus System Settings > Notifications > Show
+Notifications: `when mirroring or sharing the display`. Then verify the app was
+launched through the official `Meeting Memory.app`, Google Calendar auth is
+valid, `GOOGLE_CALENDAR_ID=all` unless intentionally narrowed, and the calendar
+event has a Meet/Zoom URL within the notification window.
