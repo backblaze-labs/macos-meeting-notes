@@ -11,7 +11,11 @@ from meeting_memory.types.events import MeetingDetected, NotifyEvent
 from meeting_memory.ui import menu
 from meeting_memory.ui.controller import TrayController
 from meeting_memory.ui.icons import tray_icon_path
-from meeting_memory.ui.macos import hide_dock_icon, keep_timer_running_during_menu_tracking
+from meeting_memory.ui.macos import (
+    allow_foreground_notifications,
+    hide_dock_icon,
+    keep_timer_running_during_menu_tracking,
+)
 from meeting_memory.ui.notifications import send_notification
 from meeting_memory.ui.preferences import open_preferences_window
 from meeting_memory.ui.title_prompt import ask_recording_title
@@ -32,6 +36,7 @@ class RumpsTrayApp:
         self.doctor_results = doctor_results or []
         if rumps_module is None:
             hide_dock_icon(LOGGER)
+            allow_foreground_notifications(LOGGER)
         self._register_notification_handler()
         self.app = self.rumps.App(
             "Meeting Memory",

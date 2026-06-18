@@ -136,9 +136,11 @@ Request: explain/fix why no pre-meeting notification popup appeared.
 
 Outcome: improved but not fully guaranteed by code. The app sends a macOS user
 notification with a `Record` action, sets `ignoreDnD`, passes action data, and
-falls back to an AppleScript `display notification` if `rumps.notification`
-throws. The app is not supposed to open itself automatically; dismissing the
-notification should not start recording, while clicking `Record` should.
+installs a `NSUserNotificationCenter` delegate method so notifications can show
+as banners even while the menu-bar app is active. It falls back to an AppleScript
+`display notification` if `rumps.notification` throws. The app is not supposed
+to open itself automatically; dismissing the notification should not start
+recording, while clicking `Record` should.
 
 Reason deferred: notification visibility can still be blocked by macOS state
 outside the app, including notification permissions, Focus/Do Not Disturb,
