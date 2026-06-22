@@ -259,7 +259,9 @@ fields contain at least one of:
 
 ### F5: Summarization
 
-**REQ-F5-01** Summarization MUST be triggered by `meeting-memory summarize <meeting-folder>` after `speaker_status` is confirmed.
+**REQ-F5-01** Summarization MUST start automatically after UI speaker review confirms
+`speaker_status`. `meeting-memory summarize <meeting-folder>` MUST remain available
+as a manual backfill/retry command for confirmed transcripts.
 
 **REQ-F5-02** The Claude prompt MUST instruct the model to produce output in a structured format parseable into three distinct sections: Summary, Decisions, and Action Items.
 
@@ -533,7 +535,7 @@ The codebase is organized into five strictly-ordered layers under `src/meeting_m
 | **types** | `types/` | `meeting.py` (`MeetingMeta`, slug helpers-as-data) · `transcript.py` (`TranscriptResult`, `TranscriptSegment`) · `summary.py` (`SummaryResult` with decisions + action items) · `events.py` (UI events emitted to the tray: `MeetingDetected`, `NotifyEvent`, `RecordingStateChanged`). Pure data — **no SDK imports, no cross-layer imports.** |
 | **config** | `config/` | `settings.py` — `pydantic-settings` `Settings` class (the §8 table) + `validate_or_exit()` fail-fast validation and placeholder detection. Depends only on `types`. |
 | **repo** | `repo/` | `b2_client.py` (boto3 S3 adapter) · `transcription.py` (AssemblyAI adapter; `transcribe(audio_path) -> TranscriptResult`) · `summarizer.py` (Anthropic adapter; `summarize(text) -> SummaryResult`) · `calendar_client.py` (Google Calendar OAuth + Keychain + event list) · `audio_device.py` (sounddevice device lookup) · `retry.py` (repo-adapter retry policy). **The only layer permitted to import external SDKs.** |
-| **service** | `service/` | `storage.py` (`write_meeting_dir()`, `list_recent_meetings()`, frontmatter read/update, `is_ours()`) · `markdown.py` (renders `transcript.md` and `notes.md`) · `transcript_review.py` (local relabel + derived notes generation) · `recorder.py` (sounddevice stream → temp WAV → m4a; `start()/stop()`) · `pipeline.py` (orchestrates transcription → local transcript write → B2 upload) · `calendar_watcher.py` (daemon poll loop; emits `MeetingDetected`) · `recording_context.py` (nearby-calendar title lookup) · `recovery.py` (temp-recording discovery/conversion) · `processing_retry.py` (frontmatter-based retry) · `search.py` (local full-text search) · `speaker_mapping.py` (optional speaker label mapping) · `sync.py` (Sync-to-B2 rescan) · `macos_app.py` (local app wrapper commands) · `launch_agent.py` (login item install/uninstall). Calls `repo`, returns `types`; **no `rumps`, no SDKs.** |
+| **service** | `service/` | `storage.py` (`write_meeting_dir()`, `list_recent_meetings()`, frontmatter read/update, `is_ours()`) · `markdown.py` (renders `transcript.md` and `notes.md`) · `transcript_review.py` (local relabel + derived notes generation) · `processing_state.py` (resumable post-processing task detection) · `recorder.py` (sounddevice stream → temp WAV → m4a; `start()/stop()`) · `pipeline.py` (orchestrates transcription → local transcript write → B2 upload) · `calendar_watcher.py` (daemon poll loop; emits `MeetingDetected`) · `recording_context.py` (nearby-calendar title lookup) · `recovery.py` (temp-recording discovery/conversion) · `processing_retry.py` (frontmatter-based retry) · `search.py` (local full-text search) · `speaker_mapping.py` (optional speaker label mapping) · `sync.py` (Sync-to-B2 rescan) · `macos_app.py` (local app wrapper commands) · `launch_agent.py` (login item install/uninstall). Calls `repo`, returns `types`; **no `rumps`, no SDKs.** |
 | **ui** | `ui/` | `tray.py` (`rumps.App` subclass; menu state, action dispatch, notifications, status timer, `rumps.Timer` draining the event queue) · `controller.py` (recording/pipeline/sync handoff) · `menu.py` (menu label helpers) · `preferences.py` (minimal settings window) · `notifications.py` (rumps notification wrapper + fallback) · `title_prompt.py` (ad-hoc title prompt) · `macos.py` / `icons.py` (macOS UI helpers). **The only layer permitted to import `rumps`.** |
 | *cross-cutting* | — | `__main__.py` (entrypoint; `auth` subcommand; loads `.env`; logging; doctor-lite; starts tray) · `doctor.py` (preflight, §7.6) · `logging_config.py` (logs → `~/Library/Logs/meeting-memory/app.log`). |
 
@@ -560,13 +562,16 @@ Pipeline.run(audio_path, meeting_meta)
 [User confirms speaker_aliases]
         │
         ▼
-meeting-memory relabel <meeting-folder>          ← local deterministic rewrite
+Tray speaker review relabels transcript.md       ← local deterministic rewrite
         │
         ▼
-meeting-memory summarize <meeting-folder>
+Tray starts notes generation automatically
   ├── Summarizer.summarize(transcript)
   │       └── Claude API → SummaryResult
   └── Storage.write_notes_md(notes.md)
+
+meeting-memory summarize <meeting-folder> remains available for manual
+backfill/retry after speaker_status is confirmed.
 ```
 
 ### 7.3 Threading Model

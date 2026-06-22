@@ -24,6 +24,7 @@ from meeting_memory.ui.notifications import (
     send_notification,
 )
 from meeting_memory.ui.preferences import open_preferences_window
+from meeting_memory.ui.processing_actions import run_processing_task
 from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
 from meeting_memory.ui.title_prompt import ask_recording_title
 
@@ -85,16 +86,18 @@ class RumpsTrayApp:
             )
         if not recent_meetings:
             self.app.menu.add(self.rumps.MenuItem(menu.NO_MEETINGS_LABEL, callback=None))
-        review_meetings = self.controller.speaker_review_meetings()
-        if review_meetings:
+        processing_tasks = self.controller.pending_processing_tasks()
+        if processing_tasks:
             self.app.menu.add(None)
-            self.app.menu.add(self.rumps.MenuItem(menu.REVIEW_SPEAKERS_HEADER, callback=None))
-            for recent in review_meetings:
+            self.app.menu.add(self.rumps.MenuItem(menu.PROCESSING_HEADER, callback=None))
+            for task in processing_tasks:
                 self.app.menu.add(
                     self.rumps.MenuItem(
-                        menu.review_speakers_label(recent),
-                        callback=lambda _sender, item=recent: self.open_speaker_review(
-                            item.directory
+                        menu.processing_task_label(task),
+                        callback=lambda _sender, item=task: run_processing_task(
+                            item,
+                            review_speakers=self.open_speaker_review,
+                            generate_notes=self.controller.generate_notes,
                         ),
                     )
                 )

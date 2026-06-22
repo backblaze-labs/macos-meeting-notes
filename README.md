@@ -164,21 +164,25 @@ speaker_aliases: {"Speaker A": "Alex", "Speaker B": "Ada Lovelace"}
 speaker_status: "needs_review"
 ```
 
-After editing `speaker_aliases`, apply the local deterministic relabel step:
+After reviewing speakers from the tray UI, the app applies aliases locally and
+starts notes generation automatically. For CLI backfill or repair, edit
+`speaker_aliases` and apply the deterministic relabel step:
 
 ```bash
 meeting-memory relabel ~/Meetings/<meeting-folder>
 ```
 
 That updates `transcript.md` so the transcript itself says who said what.
-Then generate derived notes:
+Then generate or retry derived notes:
 
 ```bash
 meeting-memory summarize ~/Meetings/<meeting-folder>
 ```
 
-This writes `notes.md` with Summary, Decisions, and Action Items. No LLM is used
-for relabeling; Anthropic is only used by `summarize`.
+This writes `notes.md` with Summary, Decisions, and Action Items. If notes are
+missing, skipped, or failed after speakers are confirmed, the tray shows a
+`Continue Processing` item. No LLM is used for relabeling; Anthropic is used for
+notes generation.
 
 `SPEAKER_MAPPING_FILE` remains available as an optional global JSON mapping:
 

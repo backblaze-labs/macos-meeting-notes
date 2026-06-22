@@ -121,14 +121,17 @@ Pass criteria:
 
 With `ANTHROPIC_API_KEY` set:
 
-- Run `meeting-memory summarize <meeting-folder>`.
+- Confirm speakers from the tray review flow.
 - `notes.md` is written.
 - `summary_status: ok`
 - `## Summary`, `## Decisions`, and `## Action Items` are present.
+- If notes are missing or failed after speakers were confirmed, use the tray's
+  `Continue Processing` item or run `meeting-memory summarize <meeting-folder>`.
 
 Without `ANTHROPIC_API_KEY`:
 
-- `meeting-memory summarize <meeting-folder>` still writes `notes.md`.
+- confirmed speaker review or `meeting-memory summarize <meeting-folder>` still
+  writes `notes.md`.
 - `summary_status: skipped`
 - `## Summary` contains `_Summarization skipped._`
 

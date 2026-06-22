@@ -12,7 +12,8 @@ diarized transcript to `transcript.md`.
 - Optional `KNOWN_SPEAKERS`, used to alias configured team attendees in Calendar
   speaker suggestions
 - Optional `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, and `SUMMARY_PROMPT_FILE` for
-  the later `meeting-memory summarize` step
+  automatic notes after speaker review or the `meeting-memory summarize` retry
+  command
 
 ## Outputs
 
@@ -23,13 +24,15 @@ diarized transcript to `transcript.md`.
   - editable `speaker_aliases`
   - `speaker_status`
   - diarized transcript lines
-- `notes.md` only after `meeting-memory summarize` runs
+- `notes.md` after confirmed speaker review starts notes generation, or after
+  `meeting-memory summarize` is run manually
 
 ## Threading
 
 Transcription runs inside the background pipeline worker. It must not run on the
-tray UI thread. The speaker relabel and summarize CLI commands are local
-commands invoked after the transcript exists.
+tray UI thread. Speaker review relabeling is local deterministic code. Notes
+generation runs in a background thread from the tray, or through the local
+`meeting-memory summarize` command.
 
 ## Behavior Notes
 
@@ -40,12 +43,13 @@ commands invoked after the transcript exists.
 - Google Calendar attendees populate `speaker_candidates`. Attendees are shown
   by Calendar full name, except configured team aliases such as Alex,
   Blair, Casey, and Drew. This is a local hint, not automatic identification.
-- The user edits `speaker_aliases` in `transcript.md`, then runs
-  `meeting-memory relabel <meeting-folder>`. Relabeling is deterministic code,
-  not an LLM step.
+- The user confirms speaker aliases in the tray UI. Relabeling is deterministic
+  code, not an LLM step.
+- Confirmed speaker review starts notes generation automatically. If notes are
+  missing, skipped, or failed, the tray shows a `Continue Processing` action.
 - `meeting-memory summarize <meeting-folder>` requires
-  `speaker_status: confirmed` and writes `notes.md` with Summary, Decisions,
-  and Action Items.
+  `speaker_status: confirmed` and remains available as a backfill/retry command
+  for `notes.md`.
 - If AssemblyAI fails, the pipeline still writes a non-empty `transcript.md`
   with a transcription failure state.
 - Failed transcription states can be retried later with `Retry Failed

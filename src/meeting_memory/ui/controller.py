@@ -14,6 +14,7 @@ from pathlib import Path
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.pipeline import Pipeline
 from meeting_memory.service.processing_retry import retry_failed_processing
+from meeting_memory.service.processing_state import list_pending_processing_tasks
 from meeting_memory.service.recorder import RecorderService
 from meeting_memory.service.recording_context import context_from_meetings
 from meeting_memory.service.recovery import (
@@ -25,7 +26,6 @@ from meeting_memory.service.storage import list_recent_meetings
 from meeting_memory.service.transcript_review import (
     confirm_speaker_aliases,
     generate_notes_from_transcript,
-    list_speaker_review_meetings,
     load_speaker_review,
 )
 from meeting_memory.types.events import MeetingDetected, NotifyEvent, RecordingTitleNeeded
@@ -35,6 +35,7 @@ from meeting_memory.types.meeting import (
     RecentMeeting,
     RecordingContext,
 )
+from meeting_memory.types.processing import ProcessingTask
 from meeting_memory.types.transcript import SpeakerReviewState
 from meeting_memory.ui.macos import open_in_finder
 
@@ -143,8 +144,8 @@ class TrayController:
     def recent_meetings(self) -> list[RecentMeeting]:
         return list_recent_meetings(self.settings.meetings_dir_path)
 
-    def speaker_review_meetings(self) -> list[RecentMeeting]:
-        return list_speaker_review_meetings(self.settings.meetings_dir_path)
+    def pending_processing_tasks(self) -> list[ProcessingTask]:
+        return list_pending_processing_tasks(self.settings.meetings_dir_path)
 
     def load_speaker_review(self, path: Path) -> SpeakerReviewState:
         return load_speaker_review(path)

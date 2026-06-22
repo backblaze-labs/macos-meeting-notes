@@ -16,6 +16,7 @@ from meeting_memory.types.meeting import (
     build_meeting_slug,
     slugify_title,
 )
+from meeting_memory.types.processing import ProcessingTask
 from meeting_memory.types.summary import ActionItem, SummaryResult
 from meeting_memory.types.transcript import SpeakerReviewState, TranscriptResult, TranscriptSegment
 
@@ -27,6 +28,7 @@ __all__ = [
     "MeetingFiles",
     "MeetingMeta",
     "NotifyEvent",
+    "ProcessingTask",
     "RecentMeeting",
     "RecordingContext",
     "RecordingStateChanged",

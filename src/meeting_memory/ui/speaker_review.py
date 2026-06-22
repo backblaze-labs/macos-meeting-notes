@@ -58,13 +58,12 @@ def open_speaker_review_window(
         _alert(rumps, "Review Speakers", _format_exception(exc))
         return False
 
-    if _ask_generate_notes(rumps):
-        try:
-            actions.generate_notes(meeting_path)
-        except Exception as exc:
-            _alert(rumps, "Generate Notes", _format_exception(exc))
-            return False
-        _alert(rumps, "Generate Notes", "Notes generation started.")
+    try:
+        actions.generate_notes(meeting_path)
+    except Exception as exc:
+        _alert(rumps, "Generate Notes", _format_exception(exc))
+        return False
+    _alert(rumps, "Generate Notes", "Notes generation started.")
     return True
 
 
@@ -144,17 +143,6 @@ def _prompt_aliases_text(state: SpeakerReviewState, rumps: Any) -> dict[str, str
     if not getattr(response, "clicked", False):
         return None
     return _parse_alias_text(str(response.text))
-
-
-def _ask_generate_notes(rumps: Any) -> bool:
-    response = _alert(
-        rumps,
-        "Speakers confirmed",
-        "speaker_status is confirmed in transcript.md.",
-        ok="Generate Notes",
-        cancel="Later",
-    )
-    return _is_ok_response(response)
 
 
 def _alert(

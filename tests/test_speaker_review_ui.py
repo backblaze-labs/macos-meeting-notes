@@ -14,7 +14,7 @@ from meeting_memory.ui.speaker_review import (
 
 
 def test_speaker_review_window_confirms_aliases_and_offers_notes(tmp_path: Path) -> None:
-    rumps = FakeRumps(alert_responses=[1000, 1000])
+    rumps = FakeRumps()
     actions = FakeActions(_state(tmp_path))
 
     opened = open_speaker_review_window(
@@ -35,8 +35,7 @@ def test_speaker_review_window_confirms_aliases_and_offers_notes(tmp_path: Path)
     assert rumps.alerts[-1]["title"] == "Generate Notes"
 
 
-def test_speaker_review_window_can_skip_notes_generation(tmp_path: Path) -> None:
-    rumps = FakeRumps(alert_responses=[1001])
+def test_speaker_review_window_generates_notes_without_second_prompt(tmp_path: Path) -> None:
     actions = FakeActions(_state(tmp_path))
 
     opened = open_speaker_review_window(
@@ -46,12 +45,12 @@ def test_speaker_review_window_can_skip_notes_generation(tmp_path: Path) -> None
             confirm_aliases=actions.confirm_aliases,
             generate_notes=actions.generate_notes,
         ),
-        rumps_module=rumps,
+        rumps_module=FakeRumps(),
         prompt_aliases=lambda _state: {"Speaker A": "Alex", "Speaker B": "Casey"},
     )
 
     assert opened is True
-    assert actions.notes == []
+    assert actions.notes == [tmp_path]
 
 
 def test_speaker_review_window_stops_when_cancelled(tmp_path: Path) -> None:

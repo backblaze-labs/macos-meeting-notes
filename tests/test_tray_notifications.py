@@ -8,6 +8,7 @@ from pathlib import Path
 
 from meeting_memory.types.events import MeetingDetected, NotifyEvent
 from meeting_memory.types.meeting import RecentMeeting
+from meeting_memory.types.processing import ProcessingTask
 from meeting_memory.ui import menu
 from meeting_memory.ui.tray import RumpsTrayApp
 
@@ -97,16 +98,24 @@ def test_completion_notification_uses_review_speakers_action(tmp_path: Path) -> 
     }
 
 
-def test_review_speakers_menu_lists_pending_meetings(tmp_path: Path) -> None:
+def test_continue_processing_menu_lists_pending_tasks(tmp_path: Path) -> None:
     fake_rumps = FakeRumps()
     controller = FakeController(tmp_path)
-    controller.review = [_recent(tmp_path)]
+    controller.pending = [
+        ProcessingTask(
+            meeting=_recent(tmp_path),
+            stage="notes",
+            action="generate_notes",
+            status="waiting",
+            label="Generate notes",
+        )
+    ]
 
     app = RumpsTrayApp(controller, rumps_module=fake_rumps)
 
     titles = _menu_titles(app)
-    assert menu.REVIEW_SPEAKERS_HEADER in titles
-    assert menu.review_speakers_label(controller.review[0]) in titles
+    assert menu.PROCESSING_HEADER in titles
+    assert menu.processing_task_label(controller.pending[0]) in titles
 
 
 def _menu_titles(app: RumpsTrayApp) -> list[str]:
@@ -137,7 +146,7 @@ class FakeController:
     started_title: str | None = None
     started_candidates: tuple[str, ...] = ()
     remembered: list[MeetingDetected] = field(default_factory=list)
-    review: list[RecentMeeting] = field(default_factory=list)
+    pending: list[ProcessingTask] = field(default_factory=list)
 
     def recent_meetings(self) -> list[RecentMeeting]:
         return self.recent
@@ -145,8 +154,8 @@ class FakeController:
     def recovered_recordings(self) -> list[object]:
         return []
 
-    def speaker_review_meetings(self) -> list[RecentMeeting]:
-        return self.review
+    def pending_processing_tasks(self) -> list[ProcessingTask]:
+        return self.pending
 
     def recording_duration_seconds(self) -> int:
         return 0
