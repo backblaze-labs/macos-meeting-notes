@@ -29,7 +29,8 @@ def hide_dock_icon(logger: logging.Logger) -> None:
 def keep_timer_running_during_menu_tracking(timer: Any, logger: logging.Logger) -> None:
     """Let the recording timer keep ticking while the menu is open."""
     try:
-        from Foundation import NSEventTrackingRunLoopMode, NSRunLoop, NSRunLoopCommonModes
+        from AppKit import NSEventTrackingRunLoopMode
+        from Foundation import NSRunLoop, NSRunLoopCommonModes
 
         ns_timer = timer._nstimer
         run_loop = NSRunLoop.currentRunLoop()
