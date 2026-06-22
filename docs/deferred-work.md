@@ -43,13 +43,13 @@ conversion/pipeline handoff in service/controller boundaries.
 
 ### Failed Processing Retry
 
-Request: retry failed transcription, summarization, and backup work when
+Request: retry failed transcription and backup work when
 connectivity returns.
 
 Outcome: partially implemented. B2 has retry behavior plus manual `Sync to B2`.
-Failed transcription/summarization can be retried through `Retry Failed
-Processing`, using existing meeting frontmatter as durable state. What remains
-deferred is automatic connectivity-triggered retry.
+Failed transcription can be retried through `Retry Failed Processing`, using
+existing transcript frontmatter as durable state. What remains deferred is
+automatic connectivity-triggered retry.
 
 First thing to check if this comes up again: inspect
 `service/processing_retry.py` before adding a new state format. Prefer extending
@@ -79,18 +79,18 @@ event, B2 object state, and direct log-path display remain future work.
 First thing to check if this comes up again: reuse existing doctor checks and
 avoid network calls on the UI thread.
 
-### Search, MCP, and Speaker Mapping
+### Search, MCP, and Speaker Review
 
 Request: make the completed meeting library easier to query and make speaker
 labels easier to interpret.
 
 Outcome: local full-text search is implemented as `meeting-memory search`, and
-optional JSON speaker mapping is implemented through `SPEAKER_MAPPING_FILE`.
-MCP resources remain future work.
+speaker review is implemented through per-meeting `speaker_aliases` plus
+`meeting-memory relabel`. MCP resources remain future work.
 
 First thing to check if this comes up again: keep local search/indexing separate
-from the recording pipeline, and prefer an optional mapping file over modifying
-historical transcripts in place.
+from the recording pipeline, and keep speaker alias edits deterministic and
+local.
 
 ## 2026-06-17 Feedback Follow-Up
 

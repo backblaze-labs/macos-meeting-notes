@@ -86,7 +86,7 @@ Pass criteria:
 - The tray menu changes between start and stop states.
 - The status bar title shows the live recording duration while recording.
 - If no nearby calendar event exists, the app prompts for a recording title
-  before starting.
+  after stopping.
 - A new meeting directory appears under `MEETINGS_DIR`.
 - `recording.m4a` exists and is playable.
 - If the recording maps to a calendar event with an end time, a stop reminder
@@ -96,39 +96,54 @@ Pass criteria:
 
 Pass criteria after stopping recording:
 
-- `meeting.md` appears in the same meeting directory.
+- `transcript.md` appears in the same meeting directory.
 - YAML frontmatter exists at the top.
 - `assemblyai_id` is present.
-- `## Transcript` exists.
+- `# Transcript` exists.
 - Speaker labels are preserved by default, for example `Speaker A`.
-- If `SPEAKER_MAPPING_FILE` points to a JSON mapping, mapped names appear in
-  participants and transcript speaker labels.
+- Calendar-backed recordings include `speaker_candidates` from event attendees.
+  Team members matching `KNOWN_SPEAKERS` use aliases such as Alex, Blair,
+  Casey, and Drew.
 
-## 6. Summarization
+## 6. Speaker Review
+
+1. Edit `speaker_aliases` in `transcript.md`, for example
+   `{"Speaker A": "Alex"}`.
+2. Run `meeting-memory relabel <meeting-folder>`.
+
+Pass criteria:
+
+- `speaker_status: confirmed` appears in `transcript.md`.
+- The participants line uses confirmed names.
+- Transcript lines use confirmed names, for example `**Alex**`.
+
+## 7. Summarization
 
 With `ANTHROPIC_API_KEY` set:
 
+- Run `meeting-memory summarize <meeting-folder>`.
+- `notes.md` is written.
 - `summary_status: ok`
 - `## Summary`, `## Decisions`, and `## Action Items` are present.
 
 Without `ANTHROPIC_API_KEY`:
 
+- `meeting-memory summarize <meeting-folder>` still writes `notes.md`.
 - `summary_status: skipped`
 - `## Summary` contains `_Summarization skipped._`
 
 If Claude fails:
 
-- `meeting.md` is still written.
-- Completion notification still appears.
-- The completion notification's `Open` action opens the meeting directory.
+- `transcript.md` remains unchanged.
+- `notes.md` records the failed summary state.
 
-## 7. B2 Upload
+## 8. B2 Upload
 
 Pass criteria:
 
-- `meeting.md` frontmatter eventually shows `b2_status: ok`.
+- `transcript.md` frontmatter eventually shows `b2_status: ok`.
 - `b2_audio` is `meetings/<slug>/recording.m4a`.
-- `b2_transcript` is `meetings/<slug>/meeting.md`.
+- `b2_transcript` is `meetings/<slug>/transcript.md`.
 - B2 contains both objects under the same key paths.
 - Objects are not public.
 
@@ -136,10 +151,10 @@ If upload fails:
 
 - `b2_status: upload_failed` is written.
 - `Sync to B2` retries pending or failed meetings.
-- `Retry Failed Processing` retries meetings with `assemblyai_id:
-  transcription-failed` or `summary_status: failed`.
+- `Retry Failed Processing` retries meetings with
+  `assemblyai_id: transcription-failed`.
 
-## 8. Recent Meeting Browsing
+## 9. Recent Meeting Browsing
 
 1. Open the tray menu.
 2. Check `Recent Meetings`.
@@ -149,9 +164,9 @@ Pass criteria:
 
 - At most five meetings are shown.
 - The meeting directory opens in Finder.
-- Both `meeting.md` and `recording.m4a` are visible.
+- `transcript.md`, `recording.m4a`, and any generated `notes.md` are visible.
 
-## 9. Preferences
+## 10. Preferences
 
 1. Open `Preferences...`.
 2. Change one of:
@@ -247,8 +262,8 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
   signed/notarized/standalone binary.
 - Recording requires an explicit user start; fully automatic recording is out of
   scope.
-- Speaker names are not inferred automatically; only the optional
-  `SPEAKER_MAPPING_FILE` is applied.
+- Speaker names are not inferred automatically; Calendar attendee candidates
+  are hints, and aliases are confirmed manually.
 - Calendar watching uses all accessible calendars unless `GOOGLE_CALENDAR_ID`
   is set to a specific calendar ID.
 - Failed work is retryable from the tray, but retries are not yet automatically

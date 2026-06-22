@@ -35,6 +35,9 @@ def test_write_meeting_dir_copies_audio_and_avoids_slug_collisions(tmp_path: Pat
     assert second.meta.slug == "2026-06-10_09-00_product-sync-2"
     assert first.audio_path.read_bytes() == b"fake audio"
     assert first.markdown_path.exists()
+    assert first.markdown_path.name == "transcript.md"
+    assert first.notes_path is not None
+    assert first.notes_path.exists()
     assert is_ours(first.directory)
 
     frontmatter = read_frontmatter(first.markdown_path)
@@ -49,16 +52,16 @@ def test_update_b2_frontmatter_preserves_markdown_body(tmp_path: Path) -> None:
     update_b2_frontmatter(
         stored.markdown_path,
         b2_audio="meetings/example/recording.m4a",
-        b2_transcript="meetings/example/meeting.md",
+        b2_transcript="meetings/example/transcript.md",
         b2_status="ok",
     )
 
     markdown = stored.markdown_path.read_text(encoding="utf-8")
     frontmatter = read_frontmatter(stored.markdown_path)
     assert frontmatter["b2_audio"] == "meetings/example/recording.m4a"
-    assert frontmatter["b2_transcript"] == "meetings/example/meeting.md"
+    assert frontmatter["b2_transcript"] == "meetings/example/transcript.md"
     assert frontmatter["b2_status"] == "ok"
-    assert "## Transcript" in markdown
+    assert "# Transcript" in markdown
     assert "**Speaker A**" in markdown
 
 

@@ -8,14 +8,16 @@ from datetime import datetime
 from pathlib import Path
 
 TITLE_SLUG_MAX_LENGTH = 40
+DEFAULT_MEETING_TITLE = "Untitled"
 
 
 @dataclass(frozen=True)
 class MeetingMeta:
     slug: str
     started_at: datetime
-    calendar_title: str = "Untitled"
+    calendar_title: str = DEFAULT_MEETING_TITLE
     duration_minutes: int = 0
+    speaker_candidates: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.slug:
@@ -26,6 +28,21 @@ class MeetingMeta:
     def with_slug(self, slug: str) -> MeetingMeta:
         return replace(self, slug=slug)
 
+    def with_title(self, title: str | None) -> MeetingMeta:
+        clean_title = normalized_title(title)
+        return replace(
+            self,
+            slug=build_meeting_slug(self.started_at, clean_title),
+            calendar_title=clean_title,
+        )
+
+    def with_speaker_candidates(self, speaker_candidates: tuple[str, ...]) -> MeetingMeta:
+        return replace(self, speaker_candidates=speaker_candidates)
+
+    @property
+    def needs_title_prompt(self) -> bool:
+        return normalized_title(self.calendar_title).casefold() == DEFAULT_MEETING_TITLE.casefold()
+
 
 @dataclass(frozen=True)
 class MeetingFiles:
@@ -33,6 +50,11 @@ class MeetingFiles:
     directory: Path
     audio_path: Path
     markdown_path: Path
+    notes_path: Path | None = None
+
+    @property
+    def transcript_path(self) -> Path:
+        return self.markdown_path
 
 
 @dataclass(frozen=True)
@@ -48,6 +70,7 @@ class CalendarMeeting:
     starts_at: datetime
     meeting_url: str
     ends_at: datetime | None = None
+    speaker_candidates: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -55,6 +78,7 @@ class RecordingContext:
     calendar_title: str
     ends_at: datetime | None = None
     event_id: str | None = None
+    speaker_candidates: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -75,3 +99,9 @@ def slugify_title(title: str, max_length: int = TITLE_SLUG_MAX_LENGTH) -> str:
 
 def build_meeting_slug(started_at: datetime, title: str) -> str:
     return f"{started_at:%Y-%m-%d_%H-%M}_{slugify_title(title)}"
+
+
+def normalized_title(title: str | None) -> str:
+    if title is None:
+        return DEFAULT_MEETING_TITLE
+    return title.strip() or DEFAULT_MEETING_TITLE

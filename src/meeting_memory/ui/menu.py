@@ -7,6 +7,7 @@ from meeting_memory.types.meeting import RecentMeeting
 APP_TITLE = "● Meeting Memory"
 RECENT_HEADER = "Recent Meetings"
 NO_MEETINGS_LABEL = "No meetings yet"
+REVIEW_SPEAKERS_HEADER = "Review Speakers"
 RECOVERED_HEADER = "Recovered Recordings"
 NO_RECOVERED_LABEL = "No recovered recordings"
 OPEN_MEETINGS_LABEL = "Open Meetings Folder"
@@ -32,6 +33,10 @@ def tray_title(*, is_recording: bool, duration_seconds: int = 0) -> str | None:
 
 def recent_meeting_label(meeting: RecentMeeting) -> str:
     return f"{meeting.started_at:%Y-%m-%d %H:%M} · {meeting.calendar_title}"
+
+
+def review_speakers_label(meeting: RecentMeeting) -> str:
+    return f"{meeting.started_at:%Y-%m-%d %H:%M} · Review speakers · {meeting.calendar_title}"
 
 
 def recent_meeting_labels(meetings: list[RecentMeeting]) -> list[str]:

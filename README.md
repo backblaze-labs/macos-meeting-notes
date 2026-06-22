@@ -8,7 +8,8 @@ The app is local-first: each completed recording creates a directory under
 `MEETINGS_DIR` containing:
 
 - `recording.m4a`
-- `meeting.md`
+- `transcript.md`
+- `notes.md` after you confirm speaker aliases and generate derived notes
 
 B2 is the durable backup layer. The local files remain the user's readable
 meeting archive.
@@ -76,14 +77,13 @@ the app asks for a title before starting.
 
 While recording, the status bar shows a live timer and the tray menu switches to
 `Stop Recording`. When a calendar-backed recording reaches the event end time,
-the app sends a `Stop` reminder action. After transcription finishes, the
-completion notification includes an `Open` action that opens the meeting
-directory in Finder.
+the app sends a `Stop` reminder action. After transcription finishes, the app
+writes `transcript.md`; the completion notification opens the meeting directory
+so you can review speaker aliases.
 
 If the app crashes during recording, restart it and check the tray for
 `Recovered Recordings`. Failed B2 uploads can be retried with `Sync to B2`, and
-failed transcription or summarization states can be retried with
-`Retry Failed Processing`.
+failed transcription states can be retried with `Retry Failed Processing`.
 
 By default, the calendar watcher scans all non-deleted calendars accessible to
 the authenticated Google account. Set `GOOGLE_CALENDAR_ID=primary` or a
@@ -118,6 +118,7 @@ Optional:
 - `SUMMARY_PROMPT_FILE`
 - `SPEAKER_MAPPING_FILE`
 - `GOOGLE_CALENDAR_ID`
+- `KNOWN_SPEAKERS`
 - `MEETINGS_DIR`
 - `AUDIO_DEVICE`
 - `NOTIFY_MINUTES_BEFORE`
@@ -150,16 +151,42 @@ Set `SUMMARY_PROMPT_FILE` to point at another prompt file. If the file contains
 `{transcript}`, the app replaces that placeholder with the clipped transcript;
 otherwise it appends the transcript below the prompt.
 
-## Speaker Mapping
+## Speaker Review
 
-Set `SPEAKER_MAPPING_FILE` to an optional JSON file such as:
+`transcript.md` is the source-of-truth transcript. It includes candidate
+speaker names from Google Calendar attendees. Attendees are shown by their
+Calendar full name, except the team aliases from `KNOWN_SPEAKERS`, plus editable
+aliases:
+
+```yaml
+speaker_candidates: ["Alex", "Ada Lovelace", "Casey"]
+speaker_aliases: {"Speaker A": "Alex", "Speaker B": "Ada Lovelace"}
+speaker_status: "needs_review"
+```
+
+After editing `speaker_aliases`, apply the local deterministic relabel step:
+
+```bash
+meeting-memory relabel ~/Meetings/<meeting-folder>
+```
+
+That updates `transcript.md` so the transcript itself says who said what.
+Then generate derived notes:
+
+```bash
+meeting-memory summarize ~/Meetings/<meeting-folder>
+```
+
+This writes `notes.md` with Summary, Decisions, and Action Items. No LLM is used
+for relabeling; Anthropic is only used by `summarize`.
+
+`SPEAKER_MAPPING_FILE` remains available as an optional global JSON mapping:
 
 ```json
 {"Speaker A": "Alex", "Speaker B": "Customer"}
 ```
 
-The mapping is applied when rendering participants and transcript speaker
-labels in `meeting.md`.
+Prefer per-meeting `speaker_aliases` when reviewing real meetings.
 
 ## Local Search
 
@@ -176,11 +203,11 @@ meeting-memory search "launch risks"
 - Recording requires an explicit user start. The app can remind the user to
   stop at the calendar event end time, but fully automatic recording is out of
   scope.
-- Speaker labels are preserved by default; set `SPEAKER_MAPPING_FILE` to render
-  friendlier names in local notes.
+- Speaker labels are preserved by default until you confirm aliases in
+  `transcript.md`.
 - Calendar watching uses all accessible calendars by default; set
   `GOOGLE_CALENDAR_ID` to a specific ID to narrow it.
-- Failed B2 uploads can be retried with `Sync to B2`. Failed transcription or
-  summarization can be retried with `Retry Failed Processing`; fully automatic
+- Failed B2 uploads can be retried with `Sync to B2`. Failed transcription can
+  be retried with `Retry Failed Processing`; fully automatic
   connectivity-aware background queueing is future work.
 - The preferences window edits `.env`; restart the app after saving changes.

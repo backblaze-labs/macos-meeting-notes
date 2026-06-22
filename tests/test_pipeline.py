@@ -34,28 +34,29 @@ def test_pipeline_happy_path_writes_files_emits_event_and_updates_b2(tmp_path: P
     assert result.files.audio_path.read_bytes() == b"fake audio"
     assert result.files.markdown_path.exists()
     assert transcriber.audio_path == result.files.audio_path
-    assert summarizer.transcript_text == "Hello from the meeting."
+    assert summarizer.transcript_text is None
     assert b2.files == result.files
     assert b2.event_count_at_upload == 1
 
     assert events == [
         NotifyEvent(
             title="Meeting ready",
-            body="Product Sync · 15 min · ready",
-            action_label="Open",
+            body="Product Sync · transcript ready · review speakers",
+            action_label="Review Speakers",
+            action="review_speakers",
             meeting_directory=result.files.directory,
         )
     ]
 
     frontmatter = read_frontmatter(result.files.markdown_path)
     assert frontmatter["assemblyai_id"] == "tx-123"
-    assert frontmatter["summary_status"] == "ok"
+    assert frontmatter["speaker_status"] == "needs_review"
     assert frontmatter["b2_audio"] == f"meetings/{result.files.meta.slug}/recording.m4a"
-    assert frontmatter["b2_transcript"] == f"meetings/{result.files.meta.slug}/meeting.md"
+    assert frontmatter["b2_transcript"] == f"meetings/{result.files.meta.slug}/transcript.md"
     assert frontmatter["b2_status"] == "ok"
 
 
-def test_pipeline_summarization_failure_does_not_block_completion(tmp_path: Path) -> None:
+def test_pipeline_does_not_summarize_after_recording_stop(tmp_path: Path) -> None:
     events: list[NotifyEvent] = []
     pipeline = Pipeline(
         meetings_dir=tmp_path / "meetings",
@@ -68,12 +69,12 @@ def test_pipeline_summarization_failure_does_not_block_completion(tmp_path: Path
     markdown = result.files.markdown_path.read_text(encoding="utf-8")
     frontmatter = read_frontmatter(result.files.markdown_path)
 
-    assert result.summary.status == "failed"
+    assert result.summary.status == "skipped"
     assert result.b2_uploaded is False
-    assert events[0].body == "Product Sync · 15 min · summary failed"
-    assert frontmatter["summary_status"] == "failed"
+    assert events[0].body == "Product Sync · transcript ready · review speakers"
+    assert frontmatter["speaker_status"] == "needs_review"
     assert frontmatter["b2_status"] == "pending"
-    assert "_Summarization failed._" in markdown
+    assert "## Summary" not in markdown
     assert "**Speaker A** (0:00:05): Hello from the meeting." in markdown
 
 
@@ -92,12 +93,11 @@ def test_pipeline_transcription_failure_writes_non_empty_meeting_md(tmp_path: Pa
     frontmatter = read_frontmatter(result.files.markdown_path)
 
     assert result.transcript.error == "transcription unavailable"
-    assert result.summary.status == "failed"
+    assert result.summary.status == "skipped"
     assert summarizer.transcript_text is None
     assert result.files.audio_path.exists()
     assert result.files.markdown_path.stat().st_size > 0
     assert frontmatter["assemblyai_id"] == "transcription-failed"
-    assert frontmatter["summary_status"] == "failed"
     assert "_Transcription failed: transcription unavailable_" in markdown
     assert events[0].body == "Product Sync · transcription failed. Audio saved locally."
 
@@ -136,7 +136,7 @@ def test_pipeline_applies_speaker_mapping_when_rendering_markdown(tmp_path: Path
     markdown = result.files.markdown_path.read_text(encoding="utf-8")
     frontmatter = read_frontmatter(result.files.markdown_path)
 
-    assert summarizer.transcript_text == "Hello from the meeting."
+    assert summarizer.transcript_text is None
     assert frontmatter["participants"] == ["Alex"]
     assert "**Alex** (0:00:05): Hello from the meeting." in markdown
 
@@ -182,7 +182,7 @@ class FakeB2:
         self.event_count_at_upload = len(self.events)
         return B2UploadResult(
             audio_key=f"meetings/{files.meta.slug}/recording.m4a",
-            transcript_key=f"meetings/{files.meta.slug}/meeting.md",
+            transcript_key=f"meetings/{files.meta.slug}/transcript.md",
         )
 
 

@@ -10,6 +10,7 @@ from meeting_memory.ui.menu import (
     NO_MEETINGS_LABEL,
     recent_meeting_labels,
     recording_label,
+    review_speakers_label,
     tray_title,
 )
 
@@ -40,3 +41,15 @@ def test_recent_meeting_labels() -> None:
 
     assert labels == ["2026-06-11 09:00 · Product Sync"]
     assert recent_meeting_labels([]) == [NO_MEETINGS_LABEL]
+
+
+def test_review_speakers_label() -> None:
+    meeting = RecentMeeting(
+        slug="slug",
+        calendar_title="Product Sync",
+        started_at=datetime(2026, 6, 11, 9, 0, tzinfo=UTC),
+        directory=Path("/tmp/meeting"),
+        markdown_path=Path("/tmp/meeting/transcript.md"),
+    )
+
+    assert review_speakers_label(meeting) == "2026-06-11 09:00 · Review speakers · Product Sync"

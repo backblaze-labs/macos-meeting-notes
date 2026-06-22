@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,17 @@ class TranscriptResult:
     @property
     def text(self) -> str:
         return "\n".join(segment.text for segment in self.segments)
+
+
+@dataclass(frozen=True)
+class SpeakerReviewState:
+    meeting_directory: Path
+    transcript_path: Path
+    speaker_labels: tuple[str, ...]
+    speaker_candidates: tuple[str, ...]
+    speaker_aliases: dict[str, str]
+    speaker_status: str
+    speaker_longest_lines: dict[str, str]
 
 
 def format_timestamp(seconds: float) -> str:

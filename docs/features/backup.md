@@ -7,7 +7,7 @@ Upload local meeting artifacts to Backblaze B2 through the S3-compatible API.
 ## Inputs
 
 - `recording.m4a`
-- `meeting.md`
+- `transcript.md`
 - `B2_APPLICATION_KEY_ID`
 - `B2_APPLICATION_KEY`
 - `B2_ENDPOINT`
@@ -17,7 +17,7 @@ Upload local meeting artifacts to Backblaze B2 through the S3-compatible API.
 ## Outputs
 
 - `meetings/<slug>/recording.m4a`
-- `meetings/<slug>/meeting.md`
+- `meetings/<slug>/transcript.md`
 - Updated `b2_*` frontmatter fields
 - `b2_status: ok` or `b2_status: upload_failed`
 
@@ -34,8 +34,8 @@ B2 upload runs after the local files and completion event are written. The tray
   meeting as failed.
 - `Sync to B2` scans local meeting directories and retries missing, pending, or
   failed uploads that belong to Meeting Memory.
-- Failed transcription or summarization is retried through `Retry Failed
-  Processing`, not `Sync to B2`.
+- Failed transcription is retried through `Retry Failed Processing`, not
+  `Sync to B2`.
 
 ## Related Files
 

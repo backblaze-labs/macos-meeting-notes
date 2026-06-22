@@ -12,7 +12,7 @@ macOS aggregate input device.
 - Calendar notification `Record` action
 - Manual tray `Stop Recording`
 - Meeting-end notification `Stop` action
-- Nearby calendar context or ad-hoc title prompt
+- Nearby calendar context or post-recording ad-hoc title prompt
 
 ## Outputs
 
@@ -33,8 +33,8 @@ started on a background thread.
   input channels to mono.
 - Manual starts use a nearby calendar event title when one is available within
   the recording-context window.
-- If no calendar context is available, the tray UI prompts for a title before
-  starting.
+- If no calendar context is available, recording starts with a provisional
+  title and the tray UI prompts for the final title after recording stops.
 - A calendar-backed recording can emit a `Stop` reminder at the event end time;
   it does not fully auto-record meetings.
 - `MAX_RECORDING_MINUTES` is enforced as a hard safety limit. When reached, the

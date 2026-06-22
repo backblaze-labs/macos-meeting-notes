@@ -31,7 +31,7 @@ def test_b2_client_uses_s3_endpoint_user_agent_and_object_keys(
     result = client.upload_meeting(_files(tmp_path))
 
     assert result.audio_key == "meetings/2026-06-10_09-00_product-sync/recording.m4a"
-    assert result.transcript_key == "meetings/2026-06-10_09-00_product-sync/meeting.md"
+    assert result.transcript_key == "meetings/2026-06-10_09-00_product-sync/transcript.md"
     assert fake_boto3.client_kwargs["service_name"] == "s3"
     assert fake_boto3.client_kwargs["endpoint_url"] == "https://s3.us-west-004.backblazeb2.com"
     assert fake_boto3.client_kwargs["config"].user_agent_extra == USER_AGENT_EXTRA
@@ -42,9 +42,9 @@ def test_b2_client_uses_s3_endpoint_user_agent_and_object_keys(
             "meetings/2026-06-10_09-00_product-sync/recording.m4a",
         ),
         (
-            str(tmp_path / "meeting.md"),
+            str(tmp_path / "transcript.md"),
             "bucket",
-            "meetings/2026-06-10_09-00_product-sync/meeting.md",
+            "meetings/2026-06-10_09-00_product-sync/transcript.md",
         ),
     ]
 
@@ -123,7 +123,7 @@ class FakeBoto3:
 
 def _files(tmp_path: Path) -> MeetingFiles:
     audio = tmp_path / "recording.m4a"
-    markdown = tmp_path / "meeting.md"
+    markdown = tmp_path / "transcript.md"
     audio.write_bytes(b"audio")
     markdown.write_text("# Meeting\n", encoding="utf-8")
     return MeetingFiles(

@@ -9,6 +9,7 @@ from typing import Protocol
 
 from meeting_memory.service.storage import (
     MEETING_MARKDOWN,
+    NOTES_MARKDOWN,
     RECORDING_AUDIO,
     is_ours,
     read_frontmatter,
@@ -54,10 +55,7 @@ def retry_failed_processing(
 
 
 def should_retry_processing(frontmatter: dict[str, object]) -> bool:
-    return (
-        frontmatter.get("assemblyai_id") == "transcription-failed"
-        or frontmatter.get("summary_status") == "failed"
-    )
+    return frontmatter.get("assemblyai_id") == "transcription-failed"
 
 
 def _files_from_frontmatter(meeting_dir: Path, frontmatter: dict[str, object]) -> MeetingFiles:
@@ -72,4 +70,5 @@ def _files_from_frontmatter(meeting_dir: Path, frontmatter: dict[str, object]) -
         directory=meeting_dir,
         audio_path=meeting_dir / RECORDING_AUDIO,
         markdown_path=meeting_dir / MEETING_MARKDOWN,
+        notes_path=meeting_dir / NOTES_MARKDOWN,
     )

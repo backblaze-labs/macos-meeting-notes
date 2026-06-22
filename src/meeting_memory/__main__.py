@@ -28,6 +28,13 @@ def build_parser() -> argparse.ArgumentParser:
     search_parser = subcommands.add_parser("search", help="search local meeting markdown")
     search_parser.add_argument("query", nargs="+", help="terms to search for")
     search_parser.add_argument("--limit", type=int, default=10, help="maximum results to show")
+    relabel_parser = subcommands.add_parser("relabel", help="apply transcript speaker aliases")
+    relabel_parser.add_argument("path", type=Path, help="meeting folder or transcript.md path")
+    summarize_parser = subcommands.add_parser(
+        "summarize",
+        help="generate notes.md from reviewed transcript.md",
+    )
+    summarize_parser.add_argument("path", type=Path, help="meeting folder or transcript.md path")
     return parser
 
 
@@ -52,6 +59,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return uninstall_launch_agent()
     if args.command == "search":
         return run_search(" ".join(args.query), limit=args.limit)
+    if args.command == "relabel":
+        return run_relabel(args.path)
+    if args.command == "summarize":
+        return run_summarize(args.path)
 
     return run_app()
 
@@ -128,6 +139,25 @@ def run_search(query: str, *, limit: int) -> int:
             f"  {result.path}\n"
             f"  {result.excerpt}\n"
         )
+    return 0
+
+
+def run_relabel(path: Path) -> int:
+    from meeting_memory.service.transcript_review import relabel_transcript
+
+    transcript_path = relabel_transcript(path)
+    sys.stderr.write(f"Transcript relabeled: {transcript_path}\n")
+    return 0
+
+
+def run_summarize(path: Path) -> int:
+    from meeting_memory.config.settings import validate_or_exit
+    from meeting_memory.repo.summarizer import ClaudeSummarizer
+    from meeting_memory.service.transcript_review import generate_notes_from_transcript
+
+    settings = validate_or_exit()
+    notes_path = generate_notes_from_transcript(path, ClaudeSummarizer.from_settings(settings))
+    sys.stderr.write(f"Notes written: {notes_path}\n")
     return 0
 
 

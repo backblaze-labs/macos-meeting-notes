@@ -10,7 +10,7 @@ def ask_recording_title(rumps_module: Any, *, default_title: str = "Untitled") -
         message="Name this recording.",
         title="Meeting Title",
         default_text=default_title,
-        ok="Start",
+        ok="Save",
         cancel="Cancel",
     )
     response = window.run()

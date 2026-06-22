@@ -85,5 +85,6 @@ class CalendarWatcher:
                     starts_at=meeting.starts_at,
                     meeting_url=meeting.meeting_url,
                     ends_at=meeting.ends_at,
+                    speaker_candidates=meeting.speaker_candidates,
                 )
             )

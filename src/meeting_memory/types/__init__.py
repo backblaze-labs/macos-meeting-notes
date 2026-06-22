@@ -1,6 +1,11 @@
 """Boundary data models."""
 
-from meeting_memory.types.events import MeetingDetected, NotifyEvent, RecordingStateChanged
+from meeting_memory.types.events import (
+    MeetingDetected,
+    NotifyEvent,
+    RecordingStateChanged,
+    RecordingTitleNeeded,
+)
 from meeting_memory.types.meeting import (
     B2UploadResult,
     CalendarMeeting,
@@ -12,7 +17,7 @@ from meeting_memory.types.meeting import (
     slugify_title,
 )
 from meeting_memory.types.summary import ActionItem, SummaryResult
-from meeting_memory.types.transcript import TranscriptResult, TranscriptSegment
+from meeting_memory.types.transcript import SpeakerReviewState, TranscriptResult, TranscriptSegment
 
 __all__ = [
     "ActionItem",
@@ -25,6 +30,8 @@ __all__ = [
     "RecentMeeting",
     "RecordingContext",
     "RecordingStateChanged",
+    "RecordingTitleNeeded",
+    "SpeakerReviewState",
     "SummaryResult",
     "TranscriptResult",
     "TranscriptSegment",

@@ -13,6 +13,9 @@ from typing import Protocol
 from urllib.parse import parse_qs, urlsplit
 
 from meeting_memory.config.settings import Settings
+from meeting_memory.repo.speaker_candidates import (
+    speaker_candidates_from_event as _speaker_candidates,
+)
 from meeting_memory.types.meeting import CalendarMeeting
 
 GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
@@ -26,11 +29,8 @@ ALL_CALENDARS = "all"
 
 
 class TokenStore(Protocol):
-    def read_token(self) -> str | None:
-        """Read serialized OAuth credentials."""
-
-    def write_token(self, token_json: str) -> None:
-        """Persist serialized OAuth credentials."""
+    def read_token(self) -> str | None: ...
+    def write_token(self, token_json: str) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -49,6 +49,7 @@ class KeychainTokenStore:
 class GoogleCalendarClient:
     credentials_file: Path
     calendar_id: str = "primary"
+    known_speakers: tuple[str, ...] = ()
     token_store: TokenStore = field(default_factory=KeychainTokenStore)
     scopes: tuple[str, ...] = (GOOGLE_CALENDAR_SCOPE,)
 
@@ -57,6 +58,7 @@ class GoogleCalendarClient:
         return cls(
             credentials_file=settings.google_credentials_path,
             calendar_id=settings.google_calendar_id,
+            known_speakers=settings.known_speakers,
         )
 
     def authenticate(self):
@@ -73,9 +75,7 @@ class GoogleCalendarClient:
             if getattr(credentials, "valid", False):
                 return credentials
             can_refresh = getattr(credentials, "expired", False) and getattr(
-                credentials,
-                "refresh_token",
-                None,
+                credentials, "refresh_token", None
             )
             if can_refresh:
                 credentials.refresh(_load_request()())
@@ -110,7 +110,7 @@ class GoogleCalendarClient:
             meetings.extend(
                 meeting
                 for item in response.get("items", ())
-                if (meeting := _meeting_from_event(item))
+                if (meeting := _meeting_from_event(item, self.known_speakers))
             )
         return sorted(meetings, key=lambda meeting: meeting.starts_at)
 
@@ -130,16 +130,36 @@ class GoogleCalendarClient:
         ]
 
 
-def _meeting_from_event(item: dict[str, object]) -> CalendarMeeting | None:
+def _meeting_from_event(
+    item: dict[str, object],
+    known_speakers: tuple[str, ...] = (),
+) -> CalendarMeeting | None:
+    if _self_declined_event(item):
+        return None
+
     meeting_url = _extract_meeting_url(item)
     if meeting_url is None:
         return None
     return CalendarMeeting(
         event_id=str(item.get("id") or ""),
         calendar_title=str(item.get("summary") or "Untitled"),
-        starts_at=_parse_start(item),
+        starts_at=_parse_time(item, "start"),
         meeting_url=meeting_url,
         ends_at=_parse_end(item),
+        speaker_candidates=_speaker_candidates(item, known_speakers),
+    )
+
+
+def _self_declined_event(item: dict[str, object]) -> bool:
+    attendees = item.get("attendees")
+    if not isinstance(attendees, list):
+        return False
+
+    return any(
+        isinstance(attendee, dict)
+        and attendee.get("self") is True
+        and str(attendee.get("responseStatus") or "").casefold() == "declined"
+        for attendee in attendees
     )
 
 
@@ -195,10 +215,6 @@ def _clean_meeting_url(raw_url: str) -> str:
     if url.startswith(("http://", "https://")):
         return url
     return f"https://{url}"
-
-
-def _parse_start(item: dict[str, object]) -> datetime:
-    return _parse_time(item, "start")
 
 
 def _parse_end(item: dict[str, object]) -> datetime | None:

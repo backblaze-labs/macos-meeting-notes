@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,7 +10,7 @@ from typing import Protocol
 from meeting_memory.service.storage import (
     create_meeting_dir,
     update_b2_frontmatter,
-    write_meeting_markdown,
+    write_transcript_markdown,
 )
 from meeting_memory.types.events import NotifyEvent
 from meeting_memory.types.meeting import B2UploadResult, MeetingFiles, MeetingMeta
@@ -35,7 +34,6 @@ class B2Client(Protocol):
 
 
 EventSink = Callable[[NotifyEvent], None]
-LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -55,6 +53,7 @@ class Pipeline:
     b2_client: B2Client | None = None
     event_sink: EventSink | None = None
     speaker_mapping: Mapping[str, str] | None = None
+    speaker_candidates: tuple[str, ...] = ()
 
     def run(self, audio_source: Path, meta: MeetingMeta) -> PipelineResult:
         files = create_meeting_dir(self.meetings_dir, meta, audio_source)
@@ -62,13 +61,13 @@ class Pipeline:
 
     def process_files(self, files: MeetingFiles) -> PipelineResult:
         transcript = self._transcribe(files.audio_path)
-        summary = self._summarize(transcript)
+        summary = SummaryResult.skipped()
 
-        write_meeting_markdown(
+        write_transcript_markdown(
             files,
             transcript,
-            summary,
-            speaker_mapping=self.speaker_mapping,
+            speaker_aliases=self.speaker_mapping,
+            speaker_candidates=self.speaker_candidates or files.meta.speaker_candidates,
         )
         self._emit_completion(files, transcript, summary)
 
@@ -91,18 +90,6 @@ class Pipeline:
                 error=str(exc),
             )
 
-    def _summarize(self, transcript: TranscriptResult) -> SummaryResult:
-        if transcript.error:
-            return SummaryResult.failed()
-        if self.summarizer_client is None:
-            return SummaryResult.skipped()
-
-        try:
-            return self.summarizer_client.summarize(transcript.text)
-        except Exception:
-            LOGGER.exception("Summarization failed")
-            return SummaryResult.failed()
-
     def _emit_completion(
         self,
         files: MeetingFiles,
@@ -114,21 +101,18 @@ class Pipeline:
 
         if transcript.error:
             body = f"{files.meta.calendar_title} · transcription failed. Audio saved locally."
-        elif summary.status == "failed":
-            body = (
-                f"{files.meta.calendar_title} · {files.meta.duration_minutes} min · summary failed"
-            )
-        elif summary.status == "skipped":
-            body = (
-                f"{files.meta.calendar_title} · {files.meta.duration_minutes} min · summary skipped"
-            )
+            action_label = "Open"
+            action = None
         else:
-            body = f"{files.meta.calendar_title} · {files.meta.duration_minutes} min · ready"
+            body = f"{files.meta.calendar_title} · transcript ready · review speakers"
+            action_label = "Review Speakers"
+            action = "review_speakers"
         self.event_sink(
             NotifyEvent(
                 title="Meeting ready",
                 body=body,
-                action_label="Open",
+                action_label=action_label,
+                action=action,
                 meeting_directory=files.directory,
             )
         )

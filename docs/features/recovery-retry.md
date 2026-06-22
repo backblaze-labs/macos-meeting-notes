@@ -10,13 +10,12 @@ requiring a new recording.
 - Temporary `meeting-memory-*.wav` files in the recorder temp directory
 - Existing meeting directories with Meeting Memory frontmatter
 - `assemblyai_id: transcription-failed`
-- `summary_status: failed`
 
 ## Outputs
 
 - Converted recovered `recording.m4a`
-- Normal meeting directory and `meeting.md`
-- Retried transcript and summary content
+- Normal meeting directory and `transcript.md`
+- Retried transcript content
 - Updated B2 frontmatter after backup retry
 
 ## Threading
@@ -32,7 +31,7 @@ background threads. UI notifications are emitted through the event queue.
 - `Retry Failed Processing` uses existing frontmatter as durable state instead
   of a separate job database.
 - `Sync to B2` is only for backup retry; processing retry handles failed
-  transcription or summarization.
+  transcription.
 - Retries are user-triggered from the tray; automatic connectivity-triggered
   retry remains future work.
 

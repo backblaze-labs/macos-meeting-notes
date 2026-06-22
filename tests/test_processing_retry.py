@@ -15,9 +15,9 @@ from meeting_memory.types.summary import SummaryResult
 from meeting_memory.types.transcript import TranscriptResult, TranscriptSegment
 
 
-def test_should_retry_processing_detects_transcription_or_summary_failures() -> None:
+def test_should_retry_processing_detects_transcription_failures() -> None:
     assert should_retry_processing({"assemblyai_id": "transcription-failed"})
-    assert should_retry_processing({"summary_status": "failed"})
+    assert not should_retry_processing({"summary_status": "failed"})
     assert not should_retry_processing({"assemblyai_id": "ok", "summary_status": "ok"})
 
 

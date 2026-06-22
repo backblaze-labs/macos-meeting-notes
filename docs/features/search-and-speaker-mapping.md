@@ -1,4 +1,4 @@
-# Feature: Search and Speaker Mapping
+# Feature: Search and Speaker Review
 
 ## Purpose
 
@@ -9,27 +9,32 @@ processed.
 
 - `MEETINGS_DIR`
 - `meeting-memory search <query>`
+- `meeting-memory relabel <meeting-folder>`
 - Optional `SPEAKER_MAPPING_FILE`
-- Meeting Memory-owned `meeting.md` files
+- Meeting Memory-owned `transcript.md` files
 
 ## Outputs
 
 - CLI search results with date, title, path, and excerpt
-- Rendered participants and transcript labels with user-provided speaker names
+- Reviewed `transcript.md` files with user-confirmed speaker aliases
 
 ## Behavior Notes
 
 - Search is local and case-insensitive.
 - A search query must match all terms in the normalized meeting title/body text.
 - Search only reads directories identified as Meeting Memory output.
-- `SPEAKER_MAPPING_FILE` is a JSON object such as
-  `{"Speaker A": "Alex"}`.
-- Speaker mapping is applied when rendering markdown; it does not infer names
-  from the calendar or transcript.
+- `speaker_aliases` in `transcript.md` is the preferred per-meeting source for
+  confirmed names.
+- Calendar attendees populate `speaker_candidates` as hints. Attendees are
+  shown by Calendar full name, except configured team aliases such as Alex,
+  Blair, Casey, and Drew.
+- Relabeling is local deterministic code; it does not infer names from audio or
+  use an LLM.
 
 ## Related Files
 
 - `src/meeting_memory/service/search.py`
+- `src/meeting_memory/service/transcript_review.py`
 - `src/meeting_memory/service/speaker_mapping.py`
 - `src/meeting_memory/service/markdown.py`
 - `src/meeting_memory/__main__.py`
@@ -37,5 +42,6 @@ processed.
 ## Tests
 
 - `tests/test_search.py`
+- `tests/test_transcript_review.py`
 - `tests/test_speaker_mapping.py`
 - `tests/test_markdown.py`

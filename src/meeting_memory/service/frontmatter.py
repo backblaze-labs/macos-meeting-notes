@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 FRONTMATTER_FIELDS = (
     "id",
@@ -19,9 +19,13 @@ FRONTMATTER_FIELDS = (
 )
 
 
-def dump_frontmatter(values: Mapping[str, object]) -> str:
+def dump_frontmatter(
+    values: Mapping[str, object],
+    *,
+    fields: Sequence[str] | None = None,
+) -> str:
     lines = ["---"]
-    for key in FRONTMATTER_FIELDS:
+    for key in _ordered_fields(values, fields):
         lines.append(f"{key}: {_format_value(values.get(key))}")
     lines.append("---")
     return "\n".join(lines)
@@ -56,6 +60,8 @@ def _format_value(value: object) -> str:
         return str(value)
     if isinstance(value, list | tuple):
         return json.dumps(list(value))
+    if isinstance(value, dict):
+        return json.dumps(value)
     return json.dumps(str(value))
 
 
@@ -72,8 +78,22 @@ def _parse_lines(lines: list[str]) -> dict[str, object]:
 def _parse_value(raw_value: str) -> object:
     if raw_value == "null":
         return None
-    if raw_value.startswith(('"', "[")):
+    if raw_value.startswith(('"', "[", "{")):
         return json.loads(raw_value)
     if raw_value.isdigit():
         return int(raw_value)
     return raw_value
+
+
+def _ordered_fields(
+    values: Mapping[str, object],
+    fields: Sequence[str] | None,
+) -> tuple[str, ...]:
+    if fields is not None:
+        return tuple(fields)
+
+    ordered = list(FRONTMATTER_FIELDS)
+    for key in values:
+        if key not in ordered:
+            ordered.append(key)
+    return tuple(key for key in ordered if key in values)

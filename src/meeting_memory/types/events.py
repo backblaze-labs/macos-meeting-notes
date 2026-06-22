@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from meeting_memory.types.meeting import MeetingMeta
+
 
 @dataclass(frozen=True)
 class MeetingDetected:
@@ -14,6 +16,7 @@ class MeetingDetected:
     starts_at: datetime
     meeting_url: str
     ends_at: datetime | None = None
+    speaker_candidates: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -23,6 +26,13 @@ class NotifyEvent:
     action_label: str | None = None
     action: str | None = None
     meeting_directory: Path | None = None
+    show_notification: bool = True
+
+
+@dataclass(frozen=True)
+class RecordingTitleNeeded:
+    audio_path: Path
+    meta: MeetingMeta
 
 
 @dataclass(frozen=True)

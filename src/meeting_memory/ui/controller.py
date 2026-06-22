@@ -22,13 +22,20 @@ from meeting_memory.service.recovery import (
     find_recovered_recordings,
 )
 from meeting_memory.service.storage import list_recent_meetings
-from meeting_memory.types.events import MeetingDetected, NotifyEvent
+from meeting_memory.service.transcript_review import (
+    confirm_speaker_aliases,
+    generate_notes_from_transcript,
+    list_speaker_review_meetings,
+    load_speaker_review,
+)
+from meeting_memory.types.events import MeetingDetected, NotifyEvent, RecordingTitleNeeded
 from meeting_memory.types.meeting import (
     CalendarMeeting,
     MeetingMeta,
     RecentMeeting,
     RecordingContext,
 )
+from meeting_memory.types.transcript import SpeakerReviewState
 from meeting_memory.ui.macos import open_in_finder
 
 EventQueue = queue.Queue[object]
@@ -59,12 +66,14 @@ class TrayController:
         calendar_title: str | None = None,
         *,
         ends_at: datetime | None = None,
+        speaker_candidates: tuple[str, ...] = (),
     ) -> None:
         context = self.recording_context() if calendar_title is None and ends_at is None else None
         title = calendar_title or (context.calendar_title if context else "Untitled")
         reminder_end = ends_at or (context.ends_at if context else None)
+        candidates = speaker_candidates or (context.speaker_candidates if context else ())
         try:
-            session = self.recorder.start(calendar_title=title)
+            session = self.recorder.start(calendar_title=title, speaker_candidates=candidates)
         except Exception as exc:
             LOGGER.exception("Failed to start recording")
             self.event_queue.put(
@@ -89,15 +98,24 @@ class TrayController:
         if result is None:
             return
         self._recording_token = None
+
+        if result.meta.needs_title_prompt:
+            self.event_queue.put(RecordingTitleNeeded(result.audio_path, result.meta))
+            return
+
+        self.process_recording(result.audio_path, result.meta)
+
+    def process_recording(self, audio_path: Path, meta: MeetingMeta) -> None:
         self.event_queue.put(
             NotifyEvent(
                 title="Recording saved",
-                body=f"{result.meta.calendar_title} · transcribing now",
+                body=f"{meta.calendar_title} · transcribing now",
+                show_notification=False,
             )
         )
         thread = self.thread_factory(
             target=self.run_pipeline,
-            args=(result.audio_path, result.meta),
+            args=(audio_path, meta),
             daemon=True,
         )
         thread.start()
@@ -125,6 +143,18 @@ class TrayController:
     def recent_meetings(self) -> list[RecentMeeting]:
         return list_recent_meetings(self.settings.meetings_dir_path)
 
+    def speaker_review_meetings(self) -> list[RecentMeeting]:
+        return list_speaker_review_meetings(self.settings.meetings_dir_path)
+
+    def load_speaker_review(self, path: Path) -> SpeakerReviewState:
+        return load_speaker_review(path)
+
+    def confirm_speaker_aliases(self, path: Path, aliases: dict[str, str]) -> Path:
+        return confirm_speaker_aliases(path, aliases)
+
+    def generate_notes(self, path: Path) -> None:
+        self.thread_factory(target=self._generate_notes, args=(path,), daemon=True).start()
+
     def recovered_recordings(self) -> list[RecoveredRecording]:
         temp_dir = getattr(self.recorder, "temp_dir", None)
         if temp_dir is None:
@@ -145,6 +175,7 @@ class TrayController:
             starts_at=event.starts_at,
             meeting_url=event.meeting_url,
             ends_at=event.ends_at,
+            speaker_candidates=event.speaker_candidates,
         )
 
     def recording_context(self) -> RecordingContext | None:
@@ -241,6 +272,27 @@ class TrayController:
             )
         )
         self.run_pipeline(audio_path, recording.meta)
+
+    def _generate_notes(self, path: Path) -> None:
+        summarizer = self.pipeline.summarizer_client
+        if summarizer is None:
+            event = NotifyEvent("Notes generation failed", "Summarizer not configured")
+            self.event_queue.put(event)
+            return
+        try:
+            notes_path = generate_notes_from_transcript(path, summarizer)
+        except Exception as exc:
+            LOGGER.exception("Notes generation failed")
+            self.event_queue.put(NotifyEvent("Notes generation failed", _format_exception(exc)))
+            return
+        self.event_queue.put(
+            NotifyEvent(
+                title="Notes generated",
+                body=f"{notes_path.parent.name} · notes.md ready",
+                action_label="Open",
+                meeting_directory=notes_path.parent,
+            )
+        )
 
 
 def _format_exception(exc: Exception) -> str:

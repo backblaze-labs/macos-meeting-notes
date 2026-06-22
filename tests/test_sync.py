@@ -55,7 +55,7 @@ class FakeB2:
         self.uploaded.append(files)
         return B2UploadResult(
             audio_key=f"meetings/{files.meta.slug}/recording.m4a",
-            transcript_key=f"meetings/{files.meta.slug}/meeting.md",
+            transcript_key=f"meetings/{files.meta.slug}/transcript.md",
         )
 
 

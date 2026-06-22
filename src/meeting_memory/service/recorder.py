@@ -61,7 +61,12 @@ class RecorderService:
     def active_session(self) -> RecordingSession | None:
         return self._session
 
-    def start(self, calendar_title: str = "Untitled") -> RecordingSession | None:
+    def start(
+        self,
+        calendar_title: str = "Untitled",
+        *,
+        speaker_candidates: tuple[str, ...] = (),
+    ) -> RecordingSession | None:
         with self._lock:
             if self._session is not None:
                 return None
@@ -105,7 +110,12 @@ class RecorderService:
                 raise
 
             session = RecordingSession(
-                meta=MeetingMeta(slug=slug, started_at=started_at, calendar_title=title),
+                meta=MeetingMeta(
+                    slug=slug,
+                    started_at=started_at,
+                    calendar_title=title,
+                    speaker_candidates=speaker_candidates,
+                ),
                 wav_path=wav_path,
             )
             self._session = session
@@ -138,6 +148,7 @@ class RecorderService:
             started_at=session.meta.started_at,
             calendar_title=session.meta.calendar_title,
             duration_minutes=duration_minutes,
+            speaker_candidates=session.meta.speaker_candidates,
         )
         m4a_path = session.wav_path.with_suffix(".m4a")
         self.converter(session.wav_path, m4a_path)

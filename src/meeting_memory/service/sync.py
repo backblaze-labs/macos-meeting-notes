@@ -9,6 +9,7 @@ from typing import Protocol
 
 from meeting_memory.service.storage import (
     MEETING_MARKDOWN,
+    NOTES_MARKDOWN,
     RECORDING_AUDIO,
     is_ours,
     read_frontmatter,
@@ -72,4 +73,5 @@ def _files_from_frontmatter(meeting_dir: Path, frontmatter: dict[str, object]) -
         directory=meeting_dir,
         audio_path=meeting_dir / RECORDING_AUDIO,
         markdown_path=meeting_dir / MEETING_MARKDOWN,
+        notes_path=meeting_dir / NOTES_MARKDOWN,
     )

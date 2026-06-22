@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
+
+from calendar_client_fakes import (
+    FakeCalendarService,
+    FakeCredentials,
+    FakeFlow,
+    FakeRequest,
+    InMemoryTokenStore,
+    ValidCredentials,
+)
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.repo import calendar_client
@@ -15,7 +23,7 @@ from meeting_memory.repo.calendar_client import (
 )
 
 
-def test_calendar_auth_stores_oauth_token(monkeypatch, tmp_path: Path) -> None:
+def test_calendar_auth_stores_oauth_token(monkeypatch, tmp_path: Path):
     token_store = InMemoryTokenStore()
     fake_flow = FakeFlow()
     monkeypatch.setattr(calendar_client, "_load_installed_app_flow", lambda: fake_flow)
@@ -31,7 +39,7 @@ def test_calendar_auth_stores_oauth_token(monkeypatch, tmp_path: Path) -> None:
     assert token_store.token_json == '{"token": "fresh-token"}'
 
 
-def test_calendar_credentials_refresh_expired_token(monkeypatch, tmp_path: Path) -> None:
+def test_calendar_credentials_refresh_expired_token(monkeypatch, tmp_path: Path):
     token_store = InMemoryTokenStore('{"token":"old"}')
     monkeypatch.setattr(calendar_client, "_load_google_credentials", lambda: FakeCredentials)
     monkeypatch.setattr(calendar_client, "_load_request", lambda: FakeRequest)
@@ -45,7 +53,7 @@ def test_calendar_credentials_refresh_expired_token(monkeypatch, tmp_path: Path)
     assert token_store.token_json == '{"token": "refreshed"}'
 
 
-def test_calendar_lists_only_video_meetings(monkeypatch, tmp_path: Path) -> None:
+def test_calendar_lists_only_video_meetings(monkeypatch, tmp_path: Path):
     token_store = InMemoryTokenStore('{"token":"valid"}')
     fake_service = FakeCalendarService()
     monkeypatch.setattr(calendar_client, "_load_google_credentials", lambda: ValidCredentials)
@@ -66,13 +74,14 @@ def test_calendar_lists_only_video_meetings(monkeypatch, tmp_path: Path) -> None
     assert meetings[0].calendar_title == "Daily Standup"
     assert meetings[0].meeting_url == "https://meet.google.com/abc-defg-hij"
     assert meetings[0].ends_at == datetime(2026, 6, 11, 9, 30, tzinfo=UTC)
+    assert meetings[0].speaker_candidates == ()
     assert meetings[1].meeting_url == "https://acme.zoom.us/j/123456789"
     assert fake_service.list_kwargs["calendarId"] == "primary"
     assert fake_service.list_kwargs["singleEvents"] is True
     assert fake_service.list_kwargs["orderBy"] == "startTime"
 
 
-def test_calendar_extracts_conference_data_meeting_urls() -> None:
+def test_calendar_extracts_conference_data_meeting_urls():
     zoom_url = "https://acme.zoom.us/j/123456789?pwd=example&jst=2"
     cases = [
         {
@@ -109,7 +118,49 @@ def test_calendar_extracts_conference_data_meeting_urls() -> None:
         assert meeting.meeting_url == zoom_url
 
 
-def test_calendar_lists_all_accessible_calendars(monkeypatch, tmp_path: Path) -> None:
+def test_calendar_speaker_candidates_include_attendees_with_team_aliases():
+    candidates = calendar_client._speaker_candidates(
+        {
+            "attendees": [
+                {"displayName": "Casey Garcia", "email": "someone@example.com"},
+                {"displayName": "Ada Lovelace", "email": "ada.lovelace@example.com"},
+                {"name": "Unrelated Person", "email": "jd@example.com"},
+                {"displayName": "Not Known", "email": "alex.pavez@example.com"},
+                {"email": "blair+calendar@example.com"},
+                {"displayName": "Jody Example", "email": "jody@example.com"},
+                {"displayName": "Conference Room", "resource": True},
+                {"displayName": "Declined Person", "responseStatus": "declined"},
+            ],
+        },
+        ("Alex", "Casey", "Drew", "Blair"),
+    )
+
+    assert candidates == (
+        "Casey",
+        "Ada Lovelace",
+        "Drew",
+        "Alex",
+        "Blair",
+        "Jody Example",
+    )
+
+
+def test_calendar_suggests_candidates_from_email_initials_when_names_are_missing():
+    candidates = calendar_client._speaker_candidates(
+        {
+            "attendees": [
+                {"email": "blair@backblaze.com"},
+                {"email": "scarreras@backblaze.com"},
+                {"email": "alex@backblaze.com"},
+            ],
+        },
+        ("Alex", "Casey", "Drew", "Blair"),
+    )
+
+    assert candidates == ("Blair", "Casey", "Alex")
+
+
+def test_calendar_lists_all_accessible_calendars(monkeypatch, tmp_path: Path):
     token_store = InMemoryTokenStore('{"token":"valid"}')
     fake_service = FakeCalendarService()
     monkeypatch.setattr(calendar_client, "_load_google_credentials", lambda: ValidCredentials)
@@ -128,14 +179,11 @@ def test_calendar_lists_all_accessible_calendars(monkeypatch, tmp_path: Path) ->
 
     assert [call["calendarId"] for call in fake_service.list_calls] == ["primary", "team"]
     assert [meeting.calendar_title for meeting in meetings] == [
-        "Daily Standup",
-        "Daily Standup",
-        "Customer Call",
-        "Customer Call",
+        "Daily Standup", "Daily Standup", "Customer Call", "Customer Call"
     ]
 
 
-def test_keychain_token_store_uses_keyring(monkeypatch) -> None:
+def test_keychain_token_store_uses_keyring(monkeypatch):
     fake_keyring = FakeKeyring()
     monkeypatch.setattr(calendar_client, "_load_keyring", lambda: fake_keyring)
 
@@ -146,7 +194,7 @@ def test_keychain_token_store_uses_keyring(monkeypatch) -> None:
     assert fake_keyring.values == {("svc", "user"): "token-json"}
 
 
-def test_calendar_client_from_settings(tmp_path: Path) -> None:
+def test_calendar_client_from_settings(tmp_path: Path):
     settings = Settings(
         b2_application_key_id="key-id",
         b2_application_key="secret",
@@ -162,131 +210,9 @@ def test_calendar_client_from_settings(tmp_path: Path) -> None:
 
     assert client.credentials_file == tmp_path / "credentials.json"
     assert client.calendar_id == "primary"
+    assert client.known_speakers == ("Alex", "Blair", "Casey", "Drew")
 
 
-class InMemoryTokenStore:
-    def __init__(self, token_json: str | None = None):
-        self.token_json = token_json
-
-    def read_token(self) -> str | None:
-        return self.token_json
-
-    def write_token(self, token_json: str) -> None:
-        self.token_json = token_json
-
-
-class FakeOAuthCredentials:
-    token = "fresh-token"
-
-    def to_json(self) -> str:
-        return json.dumps({"token": self.token})
-
-
-class FakeFlow:
-    secrets_file: str | None = None
-    scopes: list[str] | None = None
-
-    def from_client_secrets_file(self, secrets_file: str, scopes: list[str]):
-        self.secrets_file = secrets_file
-        self.scopes = scopes
-        return self
-
-    def run_local_server(self, *, port: int) -> FakeOAuthCredentials:
-        assert port == 0
-        return FakeOAuthCredentials()
-
-
-class FakeCredentials:
-    valid = False
-    expired = True
-    refresh_token = "refresh-token"
-
-    def __init__(self):
-        self.refreshed = False
-
-    @classmethod
-    def from_authorized_user_info(cls, info: dict[str, str], scopes: list[str]):
-        assert info == {"token": "old"}
-        assert scopes == [GOOGLE_CALENDAR_SCOPE]
-        return cls()
-
-    def refresh(self, request) -> None:
-        assert isinstance(request, FakeRequest)
-        self.refreshed = True
-
-    def to_json(self) -> str:
-        return json.dumps({"token": "refreshed"})
-
-
-class ValidCredentials:
-    valid = True
-
-    @classmethod
-    def from_authorized_user_info(cls, info: dict[str, str], scopes: list[str]):
-        assert info == {"token": "valid"}
-        assert scopes == [GOOGLE_CALENDAR_SCOPE]
-        return cls()
-
-
-class FakeRequest:
-    pass
-
-
-class FakeCalendarService:
-    def __init__(self):
-        self.list_kwargs = {}
-        self.list_calls = []
-
-    def build(self, service_name: str, version: str, *, credentials):
-        assert service_name == "calendar"
-        assert version == "v3"
-        assert isinstance(credentials, ValidCredentials)
-        return self
-
-    def events(self):
-        return self
-
-    def list(self, **kwargs):
-        self.list_kwargs = kwargs
-        self.list_calls.append(kwargs)
-        return self
-
-    def calendarList(self):
-        return FakeCalendarList()
-
-    def execute(self):
-        return {
-            "items": [
-                {
-                    "id": "meet",
-                    "summary": "Daily Standup",
-                    "description": "Join https://meet.google.com/abc-defg-hij",
-                    "start": {"dateTime": "2026-06-11T09:05:00+00:00"},
-                    "end": {"dateTime": "2026-06-11T09:30:00+00:00"},
-                },
-                {
-                    "id": "zoom",
-                    "summary": "Customer Call",
-                    "location": "https://acme.zoom.us/j/123456789",
-                    "start": {"dateTime": "2026-06-11T09:06:00Z"},
-                    "end": {"dateTime": "2026-06-11T09:45:00Z"},
-                },
-                {
-                    "id": "focus",
-                    "summary": "Focus Time",
-                    "description": "No meeting link",
-                    "start": {"dateTime": "2026-06-11T09:07:00+00:00"},
-                },
-            ]
-        }
-
-
-class FakeCalendarList:
-    def list(self):
-        return self
-
-    def execute(self):
-        return {"items": [{"id": "primary"}, {"id": "team"}, {"id": "deleted", "deleted": True}]}
 
 
 class FakeKeyring:

@@ -2,47 +2,54 @@
 
 ## Purpose
 
-Send completed meeting audio to AssemblyAI and write diarized transcript content
-to `meeting.md`.
+Send completed meeting audio to AssemblyAI and write the source-of-truth
+diarized transcript to `transcript.md`.
 
 ## Inputs
 
 - `recording.m4a`
 - `ASSEMBLYAI_API_KEY`
-- Optional `ANTHROPIC_API_KEY`
-- Optional `ANTHROPIC_MODEL`
-- Optional `SUMMARY_PROMPT_FILE`
-- Optional `SPEAKER_MAPPING_FILE`
+- Optional `KNOWN_SPEAKERS`, used to alias configured team attendees in Calendar
+  speaker suggestions
+- Optional `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, and `SUMMARY_PROMPT_FILE` for
+  the later `meeting-memory summarize` step
 
 ## Outputs
 
 - `TranscriptResult`
-- `SummaryResult`
-- `assemblyai_id` in frontmatter
-- `summary_status` in frontmatter
-- `## Transcript` in `meeting.md`
-- `## Summary`, `## Decisions`, and `## Action Items` in `meeting.md`
+- `transcript.md` with:
+  - `assemblyai_id`
+  - `speaker_candidates`
+  - editable `speaker_aliases`
+  - `speaker_status`
+  - diarized transcript lines
+- `notes.md` only after `meeting-memory summarize` runs
 
 ## Threading
 
 Transcription runs inside the background pipeline worker. It must not run on the
-tray UI thread.
+tray UI thread. The speaker relabel and summarize CLI commands are local
+commands invoked after the transcript exists.
 
 ## Behavior Notes
 
 - AssemblyAI is the transcription source of truth and returns diarized speaker
-  labels.
-- If AssemblyAI fails, the pipeline still writes a local `meeting.md` with a
-  transcription failure state.
-- If Anthropic is not configured, summarization is skipped and transcription
-  still completes.
-- `SUMMARY_PROMPT_FILE` can contain a `{transcript}` placeholder. If it does
-  not, the transcript is appended below the prompt.
-- AssemblyAI and Anthropic calls use retry/backoff for likely transient errors.
-- Failed transcription or summarization states can be retried later with `Retry
-  Failed Processing`, using meeting frontmatter as durable state.
-- `SPEAKER_MAPPING_FILE` can replace AssemblyAI labels in rendered participants
-  and transcript text.
+  labels such as `Speaker A`.
+- The Stop Recording pipeline writes `transcript.md` only. It does not call
+  Anthropic and does not write summaries or decisions.
+- Google Calendar attendees populate `speaker_candidates`. Attendees are shown
+  by Calendar full name, except configured team aliases such as Alex,
+  Blair, Casey, and Drew. This is a local hint, not automatic identification.
+- The user edits `speaker_aliases` in `transcript.md`, then runs
+  `meeting-memory relabel <meeting-folder>`. Relabeling is deterministic code,
+  not an LLM step.
+- `meeting-memory summarize <meeting-folder>` requires
+  `speaker_status: confirmed` and writes `notes.md` with Summary, Decisions,
+  and Action Items.
+- If AssemblyAI fails, the pipeline still writes a non-empty `transcript.md`
+  with a transcription failure state.
+- Failed transcription states can be retried later with `Retry Failed
+  Processing`, using transcript frontmatter as durable state.
 
 ## Related Files
 
@@ -51,6 +58,7 @@ tray UI thread.
 - `src/meeting_memory/repo/retry.py`
 - `src/meeting_memory/service/pipeline.py`
 - `src/meeting_memory/service/markdown.py`
+- `src/meeting_memory/service/transcript_review.py`
 - `src/meeting_memory/service/processing_retry.py`
 - `src/meeting_memory/service/speaker_mapping.py`
 - `prompts/summary.md`
@@ -58,6 +66,7 @@ tray UI thread.
 ## Tests
 
 - `tests/test_transcription.py`
+- `tests/test_transcript_review.py`
 - `tests/test_summarizer.py`
 - `tests/test_pipeline.py`
 - `tests/test_processing_retry.py`

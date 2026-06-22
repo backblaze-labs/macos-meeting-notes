@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from tray_fakes import FakeRumps
+
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.recorder import RecordingResult, RecordingSession
 from meeting_memory.types.events import MeetingDetected, NotifyEvent
@@ -31,7 +33,11 @@ def test_tray_controller_runs_pipeline_after_stop(tmp_path: Path) -> None:
     controller.stop_recording()
 
     assert recorder.started_title == "Product Sync"
+    assert recorder.started_candidates == ()
     assert pipeline.calls == [(recorder.result.audio_path, recorder.result.meta)]
+    assert controller.drain_events() == [
+        NotifyEvent("Recording saved", "Product Sync · transcribing now", show_notification=False)
+    ]
 
 
 def test_tray_controller_drains_events(tmp_path: Path) -> None:
@@ -50,21 +56,17 @@ def test_tray_controller_drains_events(tmp_path: Path) -> None:
 
 def test_tray_controller_reports_start_recording_errors(tmp_path: Path) -> None:
     event_queue: queue.Queue[object] = queue.Queue()
+    message = "Audio device not found: Meeting Aggregate"
     controller = TrayController(
         settings=_settings(tmp_path),
-        recorder=FailingRecorder("Audio device not found: Meeting Aggregate"),
+        recorder=FailingRecorder(message),
         pipeline=FakePipeline(),
         event_queue=event_queue,
     )
 
     controller.start_recording()
 
-    assert controller.drain_events() == [
-        NotifyEvent(
-            title="Recording could not start",
-            body="Audio device not found: Meeting Aggregate",
-        )
-    ]
+    assert controller.drain_events() == [NotifyEvent("Recording could not start", message)]
 
 
 def test_tray_controller_reports_stop_recording_errors(tmp_path: Path) -> None:
@@ -188,6 +190,7 @@ class FakeRecorder:
     tmp_path: Path
     is_recording: bool = False
     started_title: str | None = None
+    started_candidates: tuple[str, ...] = ()
     active_session: RecordingSession | None = None
 
     def __post_init__(self) -> None:
@@ -204,17 +207,29 @@ class FakeRecorder:
             wav_path=self.tmp_path / "recording.wav",
         )
 
-    def start(self, calendar_title: str = "Untitled") -> RecordingSession:
+    def start(
+        self,
+        calendar_title: str = "Untitled",
+        *,
+        speaker_candidates: tuple[str, ...] = (),
+    ) -> RecordingSession:
         self.started_title = calendar_title
+        self.started_candidates = speaker_candidates
         self.is_recording = True
         self.active_session = RecordingSession(
-            meta=self.result.meta,
+            meta=self.result.meta.with_speaker_candidates(speaker_candidates),
             wav_path=self.result.wav_path,
         )
         return self.active_session
 
     def stop(self):
         self.is_recording = False
+        if self.active_session is not None:
+            self.result = RecordingResult(
+                meta=self.active_session.meta,
+                audio_path=self.result.audio_path,
+                wav_path=self.result.wav_path,
+            )
         self.active_session = None
         return self.result
 
@@ -225,8 +240,13 @@ class FailingRecorder:
     is_recording: bool = False
     active_session: RecordingSession | None = None
 
-    def start(self, calendar_title: str = "Untitled") -> None:
-        del calendar_title
+    def start(
+        self,
+        calendar_title: str = "Untitled",
+        *,
+        speaker_candidates: tuple[str, ...] = (),
+    ) -> None:
+        del calendar_title, speaker_candidates
         raise RuntimeError(self.message)
 
     def stop(self):
@@ -249,52 +269,3 @@ class ImmediateThread:
 
     def start(self) -> None:
         self.target(*self.args)
-
-
-class FakeMenu:
-    def __init__(self):
-        self.items = []
-
-    def clear(self) -> None:
-        self.items.clear()
-
-    def add(self, item) -> None:
-        self.items.append(item)
-
-
-class FakeRumps:
-    def __init__(self):
-        self.notifications = []
-        self.notification_options = []
-
-    class MenuItem:
-        def __init__(self, title, callback=None):
-            self.title = title
-            self.callback = callback
-
-    class Timer:
-        def __init__(self, callback, interval):
-            self.callback = callback
-            self.interval = interval
-
-        def start(self) -> None:
-            pass
-
-    class App:
-        def __init__(self, name, title=None, icon=None, template=None, quit_button="Quit"):
-            self.name = name
-            self.title = title
-            self.icon = icon
-            self.template = template
-            self.quit_button = quit_button
-            self.menu = FakeMenu()
-
-        def run(self) -> None:
-            pass
-
-    def notification(self, title, subtitle, message, **kwargs) -> None:
-        self.notifications.append((title, subtitle, message))
-        self.notification_options.append(kwargs)
-
-    def quit_application(self, _sender=None) -> None:
-        pass

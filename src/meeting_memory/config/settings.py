@@ -15,6 +15,7 @@ from meeting_memory.config.defaults import (
     DEFAULT_CALENDAR_POLL_INTERVAL,
     DEFAULT_GOOGLE_CALENDAR_CREDENTIALS_FILE,
     DEFAULT_GOOGLE_CALENDAR_ID,
+    DEFAULT_KNOWN_SPEAKERS,
     DEFAULT_MAX_RECORDING_MINUTES,
     DEFAULT_MEETINGS_DIR,
     DEFAULT_NOTIFY_MINUTES_BEFORE,
@@ -39,6 +40,7 @@ class Settings(BaseSettings):
     speaker_mapping_file: Path | None = None
     google_calendar_credentials_file: Path = Path(DEFAULT_GOOGLE_CALENDAR_CREDENTIALS_FILE)
     google_calendar_id: str = DEFAULT_GOOGLE_CALENDAR_ID
+    known_speakers: tuple[str, ...] = DEFAULT_KNOWN_SPEAKERS
     meetings_dir: Path = Path(DEFAULT_MEETINGS_DIR)
     audio_device: str = DEFAULT_AUDIO_DEVICE
     notify_minutes_before: int = Field(default=DEFAULT_NOTIFY_MINUTES_BEFORE, gt=0)
@@ -50,6 +52,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
+        enable_decoding=False,
     )
 
     @field_validator(
@@ -91,6 +94,15 @@ class Settings(BaseSettings):
         if not text:
             raise ValueError("must not be blank")
         return text
+
+    @field_validator("known_speakers", mode="before")
+    @classmethod
+    def parse_known_speakers(cls, value: Any) -> tuple[str, ...]:
+        if value is None:
+            return DEFAULT_KNOWN_SPEAKERS
+        if isinstance(value, str):
+            return tuple(part.strip() for part in value.split(",") if part.strip())
+        return tuple(str(part).strip() for part in value if str(part).strip())
 
     @property
     def meetings_dir_path(self) -> Path:

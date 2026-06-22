@@ -11,7 +11,7 @@ from meeting_memory.types.meeting import B2UploadResult, MeetingFiles
 
 USER_AGENT_EXTRA = "b2ai-meeting-memory"
 DEFAULT_RETRY_DELAYS = (2.0, 4.0, 8.0)
-MEETING_MARKDOWN = "meeting.md"
+TRANSCRIPT_MARKDOWN = "transcript.md"
 RECORDING_AUDIO = "recording.m4a"
 
 
@@ -38,7 +38,7 @@ class B2S3Client:
     def upload_meeting(self, files: MeetingFiles) -> B2UploadResult:
         client = self._client()
         audio_key = f"meetings/{files.meta.slug}/{RECORDING_AUDIO}"
-        transcript_key = f"meetings/{files.meta.slug}/{MEETING_MARKDOWN}"
+        transcript_key = f"meetings/{files.meta.slug}/{TRANSCRIPT_MARKDOWN}"
 
         self._upload_file(client, str(files.audio_path), audio_key)
         self._upload_file(client, str(files.markdown_path), transcript_key)

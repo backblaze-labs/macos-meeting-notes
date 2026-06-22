@@ -34,6 +34,8 @@ the UI thread.
   watcher.
 - Meeting detection checks event description, location, and native
   `hangoutLink` fields for Meet or Zoom URLs.
+- Events where the authenticated account's self attendee response is
+  `declined` are ignored and do not produce recording notifications.
 - Dismissing `Record` does not start recording.
 - Notification visibility can still be affected by macOS notification
   permissions and Focus settings.

@@ -17,6 +17,7 @@ OPTIONAL_ENV_VARS = (
     "SPEAKER_MAPPING_FILE",
     "GOOGLE_CALENDAR_CREDENTIALS_FILE",
     "GOOGLE_CALENDAR_ID",
+    "KNOWN_SPEAKERS",
     "MEETINGS_DIR",
     "AUDIO_DEVICE",
     "NOTIFY_MINUTES_BEFORE",
@@ -45,6 +46,7 @@ def test_load_settings_from_env_file(tmp_path: Path) -> None:
                 "ANTHROPIC_API_KEY=",
                 "SUMMARY_PROMPT_FILE=prompts/custom-summary.md",
                 "SPEAKER_MAPPING_FILE=speakers.json",
+                "KNOWN_SPEAKERS=Alex, Blair,Casey,,Drew",
                 "MEETINGS_DIR=~/Meeting Archive",
                 "NOTIFY_MINUTES_BEFORE=7",
             ]
@@ -61,6 +63,7 @@ def test_load_settings_from_env_file(tmp_path: Path) -> None:
     assert settings.speaker_mapping_file == Path("speakers.json")
     assert settings.speaker_mapping_path == Path("speakers.json")
     assert settings.google_calendar_id == "all"
+    assert settings.known_speakers == ("Alex", "Blair", "Casey", "Drew")
     assert settings.notify_minutes_before == 7
     assert settings.meetings_dir_path == Path("~/Meeting Archive").expanduser()
 
@@ -71,6 +74,19 @@ def test_settings_reject_missing_required_values(tmp_path: Path) -> None:
 
     assert "b2_application_key_id" in str(exc_info.value)
     assert "assemblyai_api_key" in str(exc_info.value)
+
+
+def test_settings_defaults_known_speakers() -> None:
+    settings = Settings(
+        b2_application_key_id="key-id",
+        b2_application_key="secret-key",
+        b2_endpoint="https://example.com",
+        b2_region="us-west-004",
+        b2_bucket_name="meeting-memory",
+        assemblyai_api_key="assembly-key",
+    )
+
+    assert settings.known_speakers == ("Alex", "Blair", "Casey", "Drew")
 
 
 def test_settings_reject_placeholder_required_values() -> None:

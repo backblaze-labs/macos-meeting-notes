@@ -53,6 +53,7 @@ def context_from_meetings(
         calendar_title=meeting.calendar_title,
         ends_at=meeting.ends_at,
         event_id=meeting.event_id,
+        speaker_candidates=meeting.speaker_candidates,
     )
 
 
