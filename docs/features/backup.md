@@ -28,6 +28,9 @@ B2 upload runs after the local files and completion event are written. The tray
 
 ## Behavior Notes
 
+- Meeting Memory should use a bucket dedicated to this app and an application
+  key restricted to that bucket. Reusing shared sample-app buckets risks mixing
+  personal meeting artifacts with unrelated sample data.
 - Completion notifications are emitted before B2 upload is attempted, so a slow
   or failed upload does not hide the local transcript from the user.
 - The B2 adapter retries uploads with exponential backoff before marking a

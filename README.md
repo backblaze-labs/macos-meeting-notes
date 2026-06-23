@@ -22,7 +22,7 @@ meeting archive.
 - BlackHole 2ch plus a macOS Aggregate Device named `Meeting Aggregate`
 - Google Calendar OAuth desktop credentials
 - AssemblyAI API key
-- Backblaze B2 bucket and S3-compatible application key
+- Dedicated Backblaze B2 bucket and S3-compatible application key
 - Optional Anthropic API key for summaries
 
 ## Quick Start
@@ -110,6 +110,9 @@ Required:
 - `B2_BUCKET_NAME`
 - `ASSEMBLYAI_API_KEY`
 - `GOOGLE_CALENDAR_CREDENTIALS_FILE`
+
+Use a bucket dedicated to Meeting Memory and an application key that can read
+and write only that bucket. Do not reuse sample-app buckets.
 
 Optional:
 
