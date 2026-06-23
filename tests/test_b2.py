@@ -71,6 +71,58 @@ def test_b2_client_retries_failed_upload(tmp_path: Path, monkeypatch) -> None:
     assert fake_boto3.s3_client.attempts == 3
 
 
+def test_b2_client_uploads_extra_audio_parts(tmp_path: Path, monkeypatch) -> None:
+    fake_boto3 = FakeBoto3()
+    monkeypatch.setattr(b2_client, "_load_boto3", lambda: fake_boto3)
+    monkeypatch.setattr(b2_client, "_load_botocore_config", lambda: FakeConfig)
+
+    first = tmp_path / "recording-part-1_17-00.m4a"
+    second = tmp_path / "recording-part-2_17-03.m4a"
+    markdown = tmp_path / "transcript.md"
+    first.write_bytes(b"first")
+    second.write_bytes(b"second")
+    markdown.write_text("# Meeting\n", encoding="utf-8")
+    files = _files(tmp_path)
+    files = MeetingFiles(
+        meta=files.meta,
+        directory=tmp_path,
+        audio_path=first,
+        markdown_path=markdown,
+        extra_audio_paths=(second,),
+    )
+    client = B2S3Client(
+        application_key_id="key-id",
+        application_key="secret",
+        endpoint="https://s3.example.com",
+        region="us-west-004",
+        bucket_name="bucket",
+    )
+
+    result = client.upload_meeting(files)
+
+    assert result.audio_keys == (
+        "meetings/2026-06-10_09-00_product-sync/recording-part-1_17-00.m4a",
+        "meetings/2026-06-10_09-00_product-sync/recording-part-2_17-03.m4a",
+    )
+    assert fake_boto3.s3_client.uploads == [
+        (
+            str(first),
+            "bucket",
+            "meetings/2026-06-10_09-00_product-sync/recording-part-1_17-00.m4a",
+        ),
+        (
+            str(second),
+            "bucket",
+            "meetings/2026-06-10_09-00_product-sync/recording-part-2_17-03.m4a",
+        ),
+        (
+            str(markdown),
+            "bucket",
+            "meetings/2026-06-10_09-00_product-sync/transcript.md",
+        ),
+    ]
+
+
 def test_b2_client_from_settings_uses_required_env_names() -> None:
     settings = Settings(
         b2_application_key_id="key-id",

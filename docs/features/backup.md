@@ -36,7 +36,8 @@ B2 upload runs after the local files and completion event are written. The tray
 - The B2 adapter retries uploads with exponential backoff before marking a
   meeting as failed.
 - `Sync to B2` scans local meeting directories and retries missing, pending, or
-  failed uploads that belong to Meeting Memory.
+  failed uploads that belong to Meeting Memory, including legacy `meeting.md`
+  directories and recordings split across `recording-part-*.m4a` files.
 - Failed transcription is retried through `Retry Failed Processing`, not
   `Sync to B2`.
 

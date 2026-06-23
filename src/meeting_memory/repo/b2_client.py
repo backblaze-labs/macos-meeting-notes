@@ -37,12 +37,18 @@ class B2S3Client:
 
     def upload_meeting(self, files: MeetingFiles) -> B2UploadResult:
         client = self._client()
-        audio_key = f"meetings/{files.meta.slug}/{RECORDING_AUDIO}"
+        audio_paths = (files.audio_path, *files.extra_audio_paths)
+        audio_keys = tuple(f"meetings/{files.meta.slug}/{path.name}" for path in audio_paths)
         transcript_key = f"meetings/{files.meta.slug}/{TRANSCRIPT_MARKDOWN}"
 
-        self._upload_file(client, str(files.audio_path), audio_key)
+        for audio_path, audio_key in zip(audio_paths, audio_keys, strict=True):
+            self._upload_file(client, str(audio_path), audio_key)
         self._upload_file(client, str(files.markdown_path), transcript_key)
-        return B2UploadResult(audio_key=audio_key, transcript_key=transcript_key)
+        return B2UploadResult(
+            audio_key=audio_keys[0],
+            transcript_key=transcript_key,
+            audio_keys=audio_keys,
+        )
 
     def _client(self):
         boto3 = _load_boto3()

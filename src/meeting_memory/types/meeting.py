@@ -51,6 +51,7 @@ class MeetingFiles:
     audio_path: Path
     markdown_path: Path
     notes_path: Path | None = None
+    extra_audio_paths: tuple[Path, ...] = ()
 
     @property
     def transcript_path(self) -> Path:
@@ -61,6 +62,7 @@ class MeetingFiles:
 class B2UploadResult:
     audio_key: str
     transcript_key: str
+    audio_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

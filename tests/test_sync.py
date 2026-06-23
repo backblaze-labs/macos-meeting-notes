@@ -47,6 +47,54 @@ def test_sync_pending_meetings_marks_failures(tmp_path: Path) -> None:
     assert read_frontmatter(stored.markdown_path)["b2_status"] == "upload_failed"
 
 
+def test_sync_pending_meetings_uploads_legacy_meeting_markdown(tmp_path: Path) -> None:
+    meetings_dir = tmp_path / "meetings"
+    stored = _write_meeting(meetings_dir, "legacy")
+    legacy_markdown = stored.directory / "meeting.md"
+    stored.markdown_path.rename(legacy_markdown)
+    update_b2_frontmatter(legacy_markdown, b2_status="upload_failed")
+    b2 = FakeB2()
+
+    result = sync_pending_meetings(meetings_dir, b2)
+
+    assert result.uploaded == 1
+    assert b2.uploaded[0].markdown_path == legacy_markdown
+    assert read_frontmatter(legacy_markdown)["b2_status"] == "ok"
+
+
+def test_sync_pending_meetings_uploads_recording_parts(tmp_path: Path) -> None:
+    meetings_dir = tmp_path / "meetings"
+    meeting_dir = meetings_dir / "multipart"
+    meeting_dir.mkdir(parents=True)
+    (meeting_dir / "recording-part-1_17-00.m4a").write_bytes(b"one")
+    (meeting_dir / "recording-part-2_17-03.m4a").write_bytes(b"two")
+    (meeting_dir / "transcript.md").write_text(
+        "\n".join(
+            [
+                "---",
+                'id: "multipart"',
+                'date: "2026-06-22T17:00:00+00:00"',
+                "duration_minutes: 2",
+                'calendar_title: "Multipart"',
+                'b2_status: "upload_failed"',
+                "---",
+                "# Transcript",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    b2 = FakeB2()
+
+    result = sync_pending_meetings(meetings_dir, b2)
+
+    assert result.uploaded == 1
+    assert b2.uploaded[0].audio_path.name == "recording-part-1_17-00.m4a"
+    assert [path.name for path in b2.uploaded[0].extra_audio_paths] == [
+        "recording-part-2_17-03.m4a"
+    ]
+
+
 class FakeB2:
     def __init__(self):
         self.uploaded: list[MeetingFiles] = []
