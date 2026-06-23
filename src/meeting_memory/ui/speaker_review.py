@@ -4,18 +4,24 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 from meeting_memory.types.transcript import SpeakerReviewState
-from meeting_memory.ui.macos import open_in_finder
+from meeting_memory.ui.transcript_view import (
+    open_markdown_in_vscode,
+    show_transcript_window,
+)
 
 MANUAL_OPTION = "Manual..."
 OK_RESPONSES = {1, 1000}
+OPEN_MARKDOWN_RESPONSE = 1002
+FULL_TRANSCRIPT_RESPONSE = 1003
 
 PromptAliases = Callable[[SpeakerReviewState], dict[str, str] | None]
 OpenConversation = Callable[[Path], None]
+ShowTranscript = Callable[[Path], None]
 
 
 @dataclass(frozen=True)
@@ -31,7 +37,8 @@ def open_speaker_review_window(
     *,
     rumps_module: Any | None = None,
     prompt_aliases: PromptAliases | None = None,
-    open_conversation: OpenConversation = open_in_finder,
+    open_conversation: OpenConversation = open_markdown_in_vscode,
+    show_transcript: ShowTranscript = show_transcript_window,
 ) -> bool:
     rumps = rumps_module or _load_rumps()
     try:
@@ -47,7 +54,7 @@ def open_speaker_review_window(
     aliases = (
         prompt_aliases(state)
         if prompt_aliases is not None
-        else _prompt_aliases(state, open_conversation)
+        else _prompt_aliases(state, open_conversation, show_transcript)
     )
     if aliases is None:
         return False
@@ -67,9 +74,13 @@ def open_speaker_review_window(
     return True
 
 
-def _prompt_aliases(state: SpeakerReviewState, open_conversation: OpenConversation):
+def _prompt_aliases(
+    state: SpeakerReviewState,
+    open_conversation: OpenConversation,
+    show_transcript: ShowTranscript,
+):
     try:
-        return _prompt_aliases_appkit(state, open_conversation)
+        return _prompt_aliases_appkit(state, open_conversation, show_transcript)
     except Exception:
         return _prompt_aliases_text(state, _load_rumps())
 
@@ -77,57 +88,60 @@ def _prompt_aliases(state: SpeakerReviewState, open_conversation: OpenConversati
 def _prompt_aliases_appkit(
     state: SpeakerReviewState,
     open_conversation: OpenConversation,
+    show_transcript: ShowTranscript,
 ) -> dict[str, str] | None:
     from AppKit import NSAlert, NSMakeRect, NSPopUpButton, NSTextField, NSView
 
-    width = 560
-    row_height = 66
-    height = max(140, 62 + len(state.speaker_labels) * row_height)
-    view = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, width, height))
-    rows: list[tuple[str, Any, Any]] = []
+    while True:
+        width = 560
+        row_height = 66
+        height = max(140, 62 + len(state.speaker_labels) * row_height)
+        view = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, width, height))
+        rows: list[tuple[str, Any, Any]] = []
 
-    for index, label in enumerate(state.speaker_labels):
-        y = height - 38 - index * row_height
-        label_field = _label_field(_display_label(label), 0, y, 118, 22)
-        popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
-            NSMakeRect(128, y - 3, 180, 26),
-            False,
-        )
-        options = _options_for(state, label)
-        popup.addItemsWithTitles_(options)
-        popup.selectItemWithTitle_(_selected_option(state, label, options))
+        for index, label in enumerate(state.speaker_labels):
+            y = height - 38 - index * row_height
+            label_field = _label_field(_display_label(label), 0, y, 118, 22)
+            popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
+                NSMakeRect(128, y - 3, 180, 26),
+                False,
+            )
+            options = _options_for(state, label)
+            popup.addItemsWithTitles_(options)
+            popup.selectItemWithTitle_(_selected_option(state, label, options))
 
-        manual_field = NSTextField.alloc().initWithFrame_(NSMakeRect(318, y - 3, 220, 24))
-        manual_field.setPlaceholderString_("Manual name")
-        alias = state.speaker_aliases.get(label, "")
-        if alias and alias not in state.speaker_candidates:
-            manual_field.setStringValue_(alias)
+            manual_field = NSTextField.alloc().initWithFrame_(NSMakeRect(318, y - 3, 220, 24))
+            manual_field.setPlaceholderString_("Manual name")
+            alias = state.speaker_aliases.get(label, "")
+            if alias and alias not in state.speaker_candidates:
+                manual_field.setStringValue_(alias)
 
-        view.addSubview_(label_field)
-        view.addSubview_(popup)
-        view.addSubview_(manual_field)
-        view.addSubview_(_hint_field(_speaker_hint(state, label), 128, y - 36, 410, 30))
-        rows.append((label, popup, manual_field))
+            view.addSubview_(label_field)
+            view.addSubview_(popup)
+            view.addSubview_(manual_field)
+            view.addSubview_(_hint_field(_speaker_hint(state, label), 128, y - 36, 410, 30))
+            rows.append((label, popup, manual_field))
 
-    open_button, open_button_handler = _open_button(state, open_conversation, 0, 12, 154, 28)
-    view.addSubview_(open_button)
-    alert = NSAlert.alloc().init()
-    alert.setMessageText_("Review Speakers")
-    alert.setInformativeText_(_review_message(state))
-    alert.addButtonWithTitle_("Confirm")
-    alert.addButtonWithTitle_("Cancel")
-    alert.setAccessoryView_(view)
-    response = alert.runModal()
-    del open_button_handler
-    if not _is_ok_response(response):
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_("Review Speakers")
+        alert.setInformativeText_(_review_message(state))
+        alert.addButtonWithTitle_("Confirm")
+        alert.addButtonWithTitle_("Cancel")
+        alert.addButtonWithTitle_("Open in VS Code")
+        alert.addButtonWithTitle_("Full Transcript")
+        alert.setAccessoryView_(view)
+        response = alert.runModal()
+        if _is_ok_response(response):
+            return _aliases_from_rows(rows)
+        if int(response) == OPEN_MARKDOWN_RESPONSE:
+            state = replace(state, speaker_aliases=_aliases_from_rows(rows))
+            open_conversation(state.transcript_path)
+            continue
+        if int(response) == FULL_TRANSCRIPT_RESPONSE:
+            state = replace(state, speaker_aliases=_aliases_from_rows(rows))
+            show_transcript(state.transcript_path)
+            continue
         return None
-
-    aliases: dict[str, str] = {}
-    for label, popup, manual_field in rows:
-        selected = str(popup.titleOfSelectedItem())
-        manual = str(manual_field.stringValue()).strip()
-        aliases[label] = manual if selected == MANUAL_OPTION else selected.strip()
-    return aliases
 
 
 def _prompt_aliases_text(state: SpeakerReviewState, rumps: Any) -> dict[str, str] | None:
@@ -208,27 +222,13 @@ def _hint_field(text: str, x: int, y: int, width: int, height: int) -> Any:
     return field
 
 
-def _open_button(
-    state: SpeakerReviewState,
-    open_conversation: OpenConversation,
-    x: int,
-    y: int,
-    width: int,
-    height: int,
-) -> tuple[Any, Any]:
-    from AppKit import NSButton, NSMakeRect
-    from Foundation import NSObject
-
-    class OpenConversationHandler(NSObject):
-        def openConversation_(self, _sender) -> None:
-            open_conversation(state.transcript_path)
-
-    button = NSButton.alloc().initWithFrame_(NSMakeRect(x, y, width, height))
-    handler = OpenConversationHandler.alloc().init()
-    button.setTitle_("Open Conversation")
-    button.setTarget_(handler)
-    button.setAction_("openConversation:")
-    return button, handler
+def _aliases_from_rows(rows: list[tuple[str, Any, Any]]) -> dict[str, str]:
+    aliases: dict[str, str] = {}
+    for label, popup, manual_field in rows:
+        selected = str(popup.titleOfSelectedItem())
+        manual = str(manual_field.stringValue()).strip()
+        aliases[label] = manual if selected == MANUAL_OPTION else selected.strip()
+    return aliases
 
 
 def _speaker_hint(state: SpeakerReviewState, label: str) -> str:
