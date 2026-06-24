@@ -70,7 +70,6 @@ def open_speaker_review_window(
     except Exception as exc:
         _alert(rumps, "Generate Notes", _format_exception(exc))
         return False
-    _alert(rumps, "Generate Notes", "Notes generation started.")
     return True
 
 
@@ -93,24 +92,24 @@ def _prompt_aliases_appkit(
     from AppKit import NSAlert, NSMakeRect, NSPopUpButton, NSTextField, NSView
 
     while True:
-        width = 560
-        row_height = 66
+        width = 640
+        row_height = 82
         height = max(140, 62 + len(state.speaker_labels) * row_height)
         view = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, width, height))
         rows: list[tuple[str, Any, Any]] = []
 
         for index, label in enumerate(state.speaker_labels):
             y = height - 38 - index * row_height
-            label_field = _label_field(_display_label(label), 0, y, 118, 22)
+            label_field = _label_field(_display_label(label), 0, y, 120, 22)
             popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
-                NSMakeRect(128, y - 3, 180, 26),
+                NSMakeRect(132, y - 3, 190, 26),
                 False,
             )
             options = _options_for(state, label)
             popup.addItemsWithTitles_(options)
             popup.selectItemWithTitle_(_selected_option(state, label, options))
 
-            manual_field = NSTextField.alloc().initWithFrame_(NSMakeRect(318, y - 3, 220, 24))
+            manual_field = NSTextField.alloc().initWithFrame_(NSMakeRect(334, y - 3, 286, 24))
             manual_field.setPlaceholderString_("Manual name")
             alias = state.speaker_aliases.get(label, "")
             if alias and alias not in state.speaker_candidates:
@@ -119,7 +118,7 @@ def _prompt_aliases_appkit(
             view.addSubview_(label_field)
             view.addSubview_(popup)
             view.addSubview_(manual_field)
-            view.addSubview_(_hint_field(_speaker_hint(state, label), 128, y - 36, 410, 30))
+            view.addSubview_(_hint_field(_speaker_hint(state, label), 132, y - 52, 488, 46))
             rows.append((label, popup, manual_field))
 
         alert = NSAlert.alloc().init()
@@ -179,13 +178,7 @@ def _alert(
 def _review_message(state: SpeakerReviewState) -> str:
     candidates = ", ".join(state.speaker_candidates) or "No candidates found"
     speakers = ", ".join(_display_label(label) for label in state.speaker_labels)
-    hints = "\n".join(
-        f"{_display_label(label)}: {_speaker_hint(state, label)}"
-        for label in state.speaker_labels
-        if state.speaker_longest_lines.get(label)
-    )
-    hint_text = f"\nLongest lines:\n{hints}" if hints else ""
-    return f"Detected speakers: {speakers}\nCandidates: {candidates}{hint_text}"
+    return f"Detected speakers: {speakers}\nCandidates: {candidates}"
 
 
 def _options_for(state: SpeakerReviewState, label: str) -> list[str]:
@@ -218,7 +211,7 @@ def _hint_field(text: str, x: int, y: int, width: int, height: int) -> Any:
     from AppKit import NSFont
 
     field = _label_field(text, x, y, width, height)
-    field.setFont_(NSFont.systemFontOfSize_(11))
+    field.setFont_(NSFont.systemFontOfSize_(12))
     return field
 
 

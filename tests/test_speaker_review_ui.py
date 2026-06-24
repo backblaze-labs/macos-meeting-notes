@@ -37,7 +37,7 @@ def test_speaker_review_window_confirms_aliases_and_offers_notes(tmp_path: Path)
     assert actions.loaded == [tmp_path]
     assert actions.confirmed == [(tmp_path, {"Speaker A": "Alex", "Speaker B": "Casey"})]
     assert actions.notes == [tmp_path]
-    assert rumps.alerts[-1]["title"] == "Generate Notes"
+    assert rumps.alerts == []
 
 
 def test_speaker_review_window_generates_notes_without_second_prompt(tmp_path: Path) -> None:
@@ -76,11 +76,12 @@ def test_speaker_review_window_stops_when_cancelled(tmp_path: Path) -> None:
     assert actions.confirmed == []
 
 
-def test_speaker_review_message_includes_longest_lines(tmp_path: Path) -> None:
+def test_speaker_review_message_omits_repeated_longest_lines(tmp_path: Path) -> None:
     message = _review_message(_state(tmp_path))
 
-    assert "Speaker A: Longest line: I can own the launch plan." in message
-    assert "Speaker B: Longest line: I will update the deck." in message
+    assert "Detected speakers: Speaker A, Speaker B" in message
+    assert "Candidates: Alex, Casey, Drew, Blair" in message
+    assert "Longest line" not in message
 
 
 def test_appkit_review_actions_return_to_selector(monkeypatch, tmp_path: Path) -> None:
