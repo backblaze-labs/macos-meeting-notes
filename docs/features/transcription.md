@@ -41,8 +41,8 @@ generation runs in a background thread from the tray, or through the local
 - The Stop Recording pipeline writes `transcript.md` only. It does not call
   Anthropic and does not write summaries or decisions.
 - Google Calendar attendees populate `speaker_candidates`. Attendees are shown
-  by Calendar full name, except configured team aliases such as Alex,
-  Blair, Casey, and Drew. This is a local hint, not automatic identification.
+  by Calendar full name, except aliases explicitly configured in
+  `KNOWN_SPEAKERS`. This is a local hint, not automatic identification.
 - The user confirms speaker aliases in the tray UI. Relabeling is deterministic
   code, not an LLM step.
 - Confirmed speaker review starts notes generation automatically. If notes are

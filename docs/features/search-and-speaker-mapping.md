@@ -26,8 +26,8 @@ processed.
 - `speaker_aliases` in `transcript.md` is the preferred per-meeting source for
   confirmed names.
 - Calendar attendees populate `speaker_candidates` as hints. Attendees are
-  shown by Calendar full name, except configured team aliases such as Alex,
-  Blair, Casey, and Drew.
+  shown by Calendar full name, except aliases explicitly configured in
+  `KNOWN_SPEAKERS`.
 - Relabeling is local deterministic code; it does not infer names from audio or
   use an LLM.
 

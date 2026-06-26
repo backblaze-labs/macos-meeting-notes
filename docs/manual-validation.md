@@ -102,8 +102,8 @@ Pass criteria after stopping recording:
 - `# Transcript` exists.
 - Speaker labels are preserved by default, for example `Speaker A`.
 - Calendar-backed recordings include `speaker_candidates` from event attendees.
-  Team members matching `KNOWN_SPEAKERS` use aliases such as Alex, Blair,
-  Casey, and Drew.
+  People matching optional `KNOWN_SPEAKERS` entries use those configured
+  aliases.
 
 ## 6. Speaker Review
 

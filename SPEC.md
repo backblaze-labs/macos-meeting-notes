@@ -2,7 +2,7 @@
 # `meeting-memory` — Personal Meeting Transcription Library
 
 **Status:** Draft  
-**Author:** Eduardo Pavez  
+**Author:** Meeting Memory contributors
 **Date:** 2026-06-18
 **Version:** 0.3
 **Methodology:** RFC-inspired SRS (requirement language per RFC 2119: MUST / SHOULD / MAY / MUST NOT)
@@ -253,7 +253,7 @@ fields contain at least one of:
 
 **REQ-F4-05** The application MUST record the AssemblyAI transcript ID in the meeting's YAML frontmatter (`assemblyai_id` field) for future retrieval.
 
-**REQ-F4-06** Google Calendar attendees MAY populate `speaker_candidates`. Candidates SHOULD use the attendee's Calendar full name, except configured team aliases such as Alex, Blair, Casey, and Drew. These candidates are hints for manual review, not automatic speaker identification.
+**REQ-F4-06** Google Calendar attendees MAY populate `speaker_candidates`. Candidates SHOULD use the attendee's Calendar full name, except aliases explicitly configured in `KNOWN_SPEAKERS`. These candidates are hints for manual review, not automatic speaker identification.
 
 **REQ-F4-07** `meeting-memory relabel <meeting-folder>` MUST apply `speaker_aliases` from `transcript.md` deterministically by code, without using an LLM or re-transcribing audio.
 
@@ -717,7 +717,7 @@ All configuration is read from environment variables, with `.env` file support v
 | `ANTHROPIC_MODEL` | — | `claude-haiku-4-5` | Summarization model override (OQ-5) |
 | `SUMMARY_PROMPT_FILE` | — | `prompts/summary.md` | Prompt template used for Summary, Decisions, and Action Items |
 | `SPEAKER_MAPPING_FILE` | — | — | Optional JSON map from AssemblyAI labels to display names |
-| `KNOWN_SPEAKERS` | — | `Alex,Blair,Casey,Drew` | Team aliases used when Calendar attendee speaker candidates match team members |
+| `KNOWN_SPEAKERS` | — | — | Optional aliases used when Calendar attendee speaker candidates match configured people |
 | `GOOGLE_CALENDAR_CREDENTIALS_FILE` | ✓ | `credentials.json` | Path to OAuth client secrets |
 | `GOOGLE_CALENDAR_ID` | — | `all` | Calendar scope to watch: `all`, `primary`, or a specific calendar ID |
 | `MEETINGS_DIR` | — | `~/Meetings` | Local directory for meeting files |

@@ -76,7 +76,7 @@ def test_settings_reject_missing_required_values(tmp_path: Path) -> None:
     assert "assemblyai_api_key" in str(exc_info.value)
 
 
-def test_settings_defaults_known_speakers() -> None:
+def test_settings_defaults_to_no_known_speakers() -> None:
     settings = Settings(
         b2_application_key_id="key-id",
         b2_application_key="secret-key",
@@ -86,7 +86,7 @@ def test_settings_defaults_known_speakers() -> None:
         assemblyai_api_key="assembly-key",
     )
 
-    assert settings.known_speakers == ("Alex", "Blair", "Casey", "Drew")
+    assert settings.known_speakers == ()
 
 
 def test_settings_reject_placeholder_required_values() -> None:

@@ -27,6 +27,9 @@ meeting archive.
 
 ## Quick Start
 
+For a full fresh-clone walkthrough, follow
+[docs/setup-tutorial.md](docs/setup-tutorial.md).
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -91,10 +94,12 @@ specific calendar ID to narrow the watcher.
 
 ## Setup Guides
 
+- [Full setup tutorial](docs/setup-tutorial.md)
 - [BlackHole setup](docs/blackhole-setup.md)
 - [Google Calendar auth](docs/google-calendar-auth.md)
 - [Manual validation checklist](docs/manual-validation.md)
 - [Development workflows](docs/dev-workflows.md)
+- [Publishing and privacy checklist](docs/publishing-checklist.md)
 - [Deferred work and product notes](docs/deferred-work.md)
 
 ## Configuration
@@ -129,6 +134,15 @@ Optional:
 - `CALENDAR_POLL_INTERVAL`
 
 See [.env.example](.env.example).
+
+## Privacy and Secrets
+
+Real credentials, OAuth files, local recordings, transcripts, generated meeting
+folders, and `.env` are ignored by git. Before publishing or pushing changes,
+run the checks in [docs/publishing-checklist.md](docs/publishing-checklist.md).
+
+`KNOWN_SPEAKERS` is intentionally blank by default. Add your own local aliases
+only in `.env` if you want Calendar speaker candidates normalized.
 
 ## Costs
 

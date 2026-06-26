@@ -9,7 +9,7 @@ description = "Personal macOS meeting transcription library with local markdown 
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Eduardo Pavez" }]
+authors = [{ name = "Meeting Memory contributors" }]
 dependencies = [
   "anthropic>=0.40",
   "assemblyai>=0.35",

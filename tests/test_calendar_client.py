@@ -124,8 +124,8 @@ def test_calendar_speaker_candidates_include_attendees_with_team_aliases():
             "attendees": [
                 {"displayName": "Casey Garcia", "email": "someone@example.com"},
                 {"displayName": "Ada Lovelace", "email": "ada.lovelace@example.com"},
-                {"name": "Unrelated Person", "email": "jd@example.com"},
-                {"displayName": "Not Known", "email": "alex.pavez@example.com"},
+                {"name": "Unrelated Person", "email": "drew@example.com"},
+                {"displayName": "Not Known", "email": "alex.rivera@example.com"},
                 {"email": "blair+calendar@example.com"},
                 {"displayName": "Jody Example", "email": "jody@example.com"},
                 {"displayName": "Conference Room", "resource": True},
@@ -145,13 +145,13 @@ def test_calendar_speaker_candidates_include_attendees_with_team_aliases():
     )
 
 
-def test_calendar_suggests_candidates_from_email_initials_when_names_are_missing():
+def test_calendar_suggests_candidates_from_email_names_when_names_are_missing():
     candidates = calendar_client._speaker_candidates(
         {
             "attendees": [
-                {"email": "blair@backblaze.com"},
-                {"email": "scarreras@backblaze.com"},
-                {"email": "alex@backblaze.com"},
+                {"email": "blair.chen@example.com"},
+                {"email": "casey.jones@example.com"},
+                {"email": "alex.rivera@example.com"},
             ],
         },
         ("Alex", "Casey", "Drew", "Blair"),
@@ -210,7 +210,7 @@ def test_calendar_client_from_settings(tmp_path: Path):
 
     assert client.credentials_file == tmp_path / "credentials.json"
     assert client.calendar_id == "primary"
-    assert client.known_speakers == ("Alex", "Blair", "Casey", "Drew")
+    assert client.known_speakers == ()
 
 
 

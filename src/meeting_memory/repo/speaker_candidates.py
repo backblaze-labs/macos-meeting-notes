@@ -5,14 +5,8 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 
-TEAM_SPEAKER_ALIASES = ("Alex", "Blair", "Casey", "Drew")
-TEAM_ALIAS_KEYS = {
-    "alex": "Alex",
-    "blair": "Blair",
-    "casey": "Casey",
-    "casey": "Casey",
-    "jd": "Drew",
-}
+TEAM_SPEAKER_ALIASES: tuple[str, ...] = ()
+TEAM_ALIAS_KEYS: dict[str, str] = {}
 
 
 def speaker_candidates_from_event(
@@ -37,7 +31,7 @@ def speaker_candidates_from_event(
 def _team_aliases(configured_aliases: Iterable[str]) -> tuple[str, ...]:
     aliases: list[str] = []
     for raw_alias in (*TEAM_SPEAKER_ALIASES, *configured_aliases):
-        alias = TEAM_ALIAS_KEYS.get(_match_key(str(raw_alias)))
+        alias = TEAM_ALIAS_KEYS.get(_match_key(str(raw_alias)), str(raw_alias).strip())
         if alias and alias not in aliases:
             aliases.append(alias)
     return tuple(aliases)
