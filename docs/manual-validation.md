@@ -1,7 +1,7 @@
 # Manual Validation Checklist
 
-This checklist is the Milestone 5 real-world validation path. It requires real
-macOS audio setup and real service credentials.
+This checklist is the real-world validation path. It requires real macOS audio
+setup and real service credentials.
 
 ## Preconditions
 

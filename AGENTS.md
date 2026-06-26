@@ -1,7 +1,7 @@
 # AGENTS.md
 
 This is the read-first control surface for coding agents working on
-`macos-meeting-notes`, the public repository for the **Meeting Memory** macOS
+`macos-meeting-notes`, the repository for the **Meeting Memory** macOS
 app.
 
 Naming boundaries:
@@ -18,11 +18,10 @@ Naming boundaries:
 
 1. `AGENTS.md`
 2. `SPEC.md`
-3. `IMPLEMENTATION_PLAN.md`
-4. `ARCHITECTURE.md`
-5. `docs/deferred-work.md` when revisiting unresolved or partially implemented
+3. `ARCHITECTURE.md`
+4. `docs/deferred-work.md` when revisiting unresolved or partially implemented
    behavior
-6. `docs/features/<feature>.md` when working on a specific feature
+5. `docs/features/<feature>.md` when working on a specific feature
 
 ## Repository Map
 
@@ -71,7 +70,8 @@ repo, or service modules as needed.
 
 ## Quality Bar
 
-- Keep implementation scoped to the current milestone in `IMPLEMENTATION_PLAN.md`.
+- Keep implementation scoped to the relevant requirement, feature document, or
+  deferred-work note.
 - Keep source files at or under 300 lines.
 - Add or update structural tests when adding source modules or changing layer
   boundaries.
@@ -89,7 +89,7 @@ repo, or service modules as needed.
    virtualenv Python so the official clickable app is updated and restarted.
 6. If requested behavior is not implemented or is only partially implemented,
    append the reason and future first-check guidance to `docs/deferred-work.md`.
-7. Commit a passing, reviewable milestone slice.
+7. Commit a passing, reviewable slice.
 
 ## Official macOS App
 

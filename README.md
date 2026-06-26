@@ -1,13 +1,18 @@
 # macos-meeting-notes
 
-`macos-meeting-notes` is the public repository for **Meeting Memory**, a macOS
-menu bar application that records meetings, transcribes them with speaker
-diarization, summarizes them, saves portable markdown files locally, and backs
-up meeting artifacts to Backblaze B2.
+> ⚠️ **Experimental.** This is an experimental
+> sample app, not an officially supported Backblaze product. APIs, setup steps, and
+> behavior may change without notice. Use at your own risk.
 
-The repository name is optimized for discoverability around macOS meeting notes.
-The app visible to users remains **Meeting Memory**, the Python import package
-remains `meeting_memory`, and the installed CLI remains `meeting-memory`.
+`macos-meeting-notes` is the repository for **Meeting Memory**, a local-first
+macOS menu-bar app that records meetings, transcribes them with speaker
+diarization (AssemblyAI), optionally summarizes them (Anthropic Claude), saves
+portable markdown files locally, and backs up each meeting's artifacts to
+Backblaze B2 over the S3-compatible API.
+
+The repository/distribution name is `macos-meeting-notes`; the app visible to
+users remains **Meeting Memory**, the Python import package remains
+`meeting_memory`, and the installed CLI remains `meeting-memory`.
 
 The app is local-first: each completed recording creates a directory under
 `MEETINGS_DIR` containing:
@@ -18,20 +23,6 @@ The app is local-first: each completed recording creates a directory under
 
 B2 is the durable backup layer. The local files remain the user's readable
 meeting archive.
-
-## Repository Metadata
-
-Suggested GitHub description:
-
-> Local-first macOS app for recording meetings, generating speaker-labeled notes,
-> and backing them up to Backblaze B2.
-
-Suggested GitHub topics:
-
-```text
-macos, meeting-notes, meeting-transcripts, transcription, speaker-diarization,
-ai-notes, local-first, menu-bar-app, google-calendar, backblaze-b2, python
-```
 
 ## Requirements
 

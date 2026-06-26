@@ -33,7 +33,7 @@
 
 ### 1.1 Purpose
 
-This document specifies the requirements for **Meeting Memory**, a macOS menu bar application whose public repository is named **macos-meeting-notes**. The app records meetings, transcribes them with speaker diarization, generates AI summaries, and saves everything as portable markdown files backed up to Backblaze B2.
+This document specifies the requirements for **Meeting Memory**, a macOS menu bar application whose repository is named **macos-meeting-notes**. The app records meetings, transcribes them with speaker diarization, generates AI summaries, and saves everything as portable markdown files backed up to Backblaze B2.
 
 ### 1.2 Scope
 
