@@ -3,13 +3,25 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "meeting-memory"
+name = "macos-meeting-notes"
 version = "0.1.0"
-description = "Personal macOS meeting transcription library with local markdown storage and B2 backup."
+description = "Local-first macOS app for Meeting Memory notes, transcription, and B2 backup."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Meeting Memory contributors" }]
+keywords = [
+  "ai-notes",
+  "backblaze-b2",
+  "google-calendar",
+  "local-first",
+  "macos",
+  "meeting-notes",
+  "meeting-transcripts",
+  "menu-bar-app",
+  "speaker-diarization",
+  "transcription",
+]
 dependencies = [
   "anthropic>=0.40",
   "assemblyai>=0.35",

@@ -1,8 +1,13 @@
-# meeting-memory
+# macos-meeting-notes
 
-`meeting-memory` is a macOS menu bar application that records meetings,
-transcribes them with speaker diarization, summarizes them, saves portable
-markdown files locally, and backs up meeting artifacts to Backblaze B2.
+`macos-meeting-notes` is the public repository for **Meeting Memory**, a macOS
+menu bar application that records meetings, transcribes them with speaker
+diarization, summarizes them, saves portable markdown files locally, and backs
+up meeting artifacts to Backblaze B2.
+
+The repository name is optimized for discoverability around macOS meeting notes.
+The app visible to users remains **Meeting Memory**, the Python import package
+remains `meeting_memory`, and the installed CLI remains `meeting-memory`.
 
 The app is local-first: each completed recording creates a directory under
 `MEETINGS_DIR` containing:
@@ -13,6 +18,20 @@ The app is local-first: each completed recording creates a directory under
 
 B2 is the durable backup layer. The local files remain the user's readable
 meeting archive.
+
+## Repository Metadata
+
+Suggested GitHub description:
+
+> Local-first macOS app for recording meetings, generating speaker-labeled notes,
+> and backing them up to Backblaze B2.
+
+Suggested GitHub topics:
+
+```text
+macos, meeting-notes, meeting-transcripts, transcription, speaker-diarization,
+ai-notes, local-first, menu-bar-app, google-calendar, backblaze-b2, python
+```
 
 ## Requirements
 
@@ -31,23 +50,23 @@ For a full fresh-clone walkthrough, follow
 [docs/setup-tutorial.md](docs/setup-tutorial.md).
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-make install
-cp .env.example .env
+make setup
 ```
 
-Fill in `.env`, then run:
+`make setup` creates `.venv`, installs dependencies, creates `.env` if needed,
+installs the local app wrapper, and prints a setup checklist. Fill in `.env`,
+then run:
 
 ```bash
+.venv/bin/meeting-memory auth
 make doctor
-meeting-memory auth
-make PYTHON=.venv/bin/python install-macos-app
 make PYTHON=.venv/bin/python open-macos-app
 ```
 
-`make doctor` checks local setup. It is expected to fail until `.env`,
-credentials, `ffmpeg`, and audio device setup are complete.
+`make doctor` checks local setup. It is expected to report failures until
+`.env`, B2 credentials, AssemblyAI, Google credentials/auth, `ffmpeg`, and audio
+device setup are complete. B2 backup is required before Meeting Memory is ready
+to record.
 
 The clickable app is installed at `~/Applications/Meeting Memory.app` so it can
 be launched from Finder or found with Cmd+Space by searching for

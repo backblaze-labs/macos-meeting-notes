@@ -1,13 +1,18 @@
 """Configuration defaults shared by settings and doctor."""
 
-REQUIRED_ENV_VARS = (
+B2_ENV_VARS = (
     "B2_APPLICATION_KEY_ID",
     "B2_APPLICATION_KEY",
     "B2_ENDPOINT",
     "B2_REGION",
     "B2_BUCKET_NAME",
+)
+
+ASSEMBLYAI_ENV_VARS = (
     "ASSEMBLYAI_API_KEY",
 )
+
+REQUIRED_ENV_VARS = (*B2_ENV_VARS, *ASSEMBLYAI_ENV_VARS)
 
 PLACEHOLDER_MARKERS = ("replace-me", "changeme", "todo", "<", ">")
 

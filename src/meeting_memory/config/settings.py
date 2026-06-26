@@ -125,6 +125,39 @@ class Settings(BaseSettings):
         return self.speaker_mapping_file.expanduser()
 
 
+class GoogleAuthSettings(BaseSettings):
+    """Minimal settings required for the one-time Google OAuth flow."""
+
+    google_calendar_credentials_file: Path = Path(DEFAULT_GOOGLE_CALENDAR_CREDENTIALS_FILE)
+    google_calendar_id: str = DEFAULT_GOOGLE_CALENDAR_ID
+    known_speakers: tuple[str, ...] = DEFAULT_KNOWN_SPEAKERS
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+        enable_decoding=False,
+    )
+
+    @field_validator("google_calendar_id", mode="before")
+    @classmethod
+    def reject_blank_calendar_id(cls, value: Any) -> str:
+        text = str(value or "").strip()
+        if not text:
+            raise ValueError("must not be blank")
+        return text
+
+    @field_validator("known_speakers", mode="before")
+    @classmethod
+    def parse_known_speakers(cls, value: Any) -> tuple[str, ...]:
+        return Settings.parse_known_speakers(value)
+
+    @property
+    def google_credentials_path(self) -> Path:
+        return self.google_calendar_credentials_file.expanduser()
+
+
 def looks_placeholder(value: str) -> bool:
     normalized = value.strip().lower()
     return not normalized or any(marker in normalized for marker in PLACEHOLDER_MARKERS)
@@ -132,6 +165,10 @@ def looks_placeholder(value: str) -> bool:
 
 def load_settings(env_file: str | Path | None = ".env") -> Settings:
     return Settings(_env_file=env_file)
+
+
+def load_google_auth_settings(env_file: str | Path | None = ".env") -> GoogleAuthSettings:
+    return GoogleAuthSettings(_env_file=env_file)
 
 
 def format_settings_error(error: ValidationError) -> str:

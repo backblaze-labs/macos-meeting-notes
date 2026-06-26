@@ -11,12 +11,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from meeting_memory.config.defaults import (
+    ASSEMBLYAI_ENV_VARS,
+    B2_ENV_VARS,
     DEFAULT_AUDIO_DEVICE,
     DEFAULT_GOOGLE_CALENDAR_CREDENTIALS_FILE,
     PLACEHOLDER_MARKERS,
-    REQUIRED_ENV_VARS,
 )
-from meeting_memory.repo.audio_device import AudioDeviceCheckUnavailable, list_audio_device_names
+from meeting_memory.repo.audio_device import (
+    AudioDeviceCheckUnavailable,
+    AudioDeviceInfo,
+    list_audio_devices,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = PROJECT_ROOT / ".env"
@@ -96,21 +101,39 @@ def check_env_file() -> CheckResult:
     )
 
 
-def check_required_env(dotenv_values: dict[str, str]) -> CheckResult:
-    missing_or_placeholder = [
+def _missing_or_placeholder(keys: Iterable[str], dotenv_values: dict[str, str]) -> list[str]:
+    return [
         key
-        for key in REQUIRED_ENV_VARS
+        for key in keys
         if _looks_placeholder(_configured_value(key, dotenv_values) or "")
     ]
+
+
+def check_b2_env(dotenv_values: dict[str, str]) -> CheckResult:
+    missing_or_placeholder = _missing_or_placeholder(B2_ENV_VARS, dotenv_values)
     if not missing_or_placeholder:
-        return CheckResult("required-env", True, "Required environment values are present.")
+        return CheckResult("b2-env", True, "Required B2 values are present.")
 
     missing = ", ".join(missing_or_placeholder)
     return CheckResult(
-        "required-env",
+        "b2-env",
+        False,
+        f"Missing or placeholder B2 values: {missing}.",
+        "Create a dedicated B2 bucket/key and set these keys in .env.",
+    )
+
+
+def check_assemblyai_env(dotenv_values: dict[str, str]) -> CheckResult:
+    missing_or_placeholder = _missing_or_placeholder(ASSEMBLYAI_ENV_VARS, dotenv_values)
+    if not missing_or_placeholder:
+        return CheckResult("assemblyai-env", True, "AssemblyAI API key is present.")
+
+    missing = ", ".join(missing_or_placeholder)
+    return CheckResult(
+        "assemblyai-env",
         False,
         f"Missing or placeholder values: {missing}.",
-        "Set these keys in .env or the process environment.",
+        "Set ASSEMBLYAI_API_KEY in .env.",
     )
 
 
@@ -138,21 +161,95 @@ def check_google_credentials(dotenv_values: dict[str, str]) -> CheckResult:
     )
 
 
+def check_google_token() -> CheckResult:
+    try:
+        token_store_cls = _keychain_token_store_cls()
+    except ModuleNotFoundError as exc:
+        return CheckResult(
+            "google-token",
+            True,
+            f"{exc.name} is not installed; could not verify Google auth token.",
+            "Run make setup, then .venv/bin/meeting-memory auth.",
+            warning=True,
+        )
+
+    try:
+        token = token_store_cls().read_token()
+    except Exception as exc:  # pragma: no cover - keychain availability is local.
+        return CheckResult(
+            "google-token",
+            True,
+            f"Could not read Google token from Keychain: {exc}.",
+            "Run .venv/bin/meeting-memory auth after dependencies are installed.",
+            warning=True,
+        )
+
+    if token:
+        return CheckResult("google-token", True, "Google Calendar token exists in Keychain.")
+    return CheckResult(
+        "google-token",
+        False,
+        "Google Calendar has not been authorized.",
+        "Run .venv/bin/meeting-memory auth.",
+    )
+
+
+def _keychain_token_store_cls():
+    from meeting_memory.repo.calendar_client import KeychainTokenStore
+
+    return KeychainTokenStore
+
+
 def check_audio_device(dotenv_values: dict[str, str]) -> CheckResult:
     configured = _configured_value("AUDIO_DEVICE", dotenv_values) or DEFAULT_AUDIO_DEVICE
     try:
-        device_names = list_audio_device_names()
+        devices = list_audio_devices()
     except AudioDeviceCheckUnavailable as exc:
         return CheckResult("audio-device", True, str(exc), "Install dependencies.", warning=True)
 
-    if configured in device_names:
+    input_devices = [device for device in devices if device.max_input_channels > 0]
+    if not input_devices:
+        return CheckResult(
+            "audio-device",
+            True,
+            (
+                "No audio input devices are visible to this process; "
+                f"could not verify AUDIO_DEVICE={configured}."
+            ),
+            (
+                "Grant microphone access to the terminal or run diagnostics from "
+                "Meeting Memory.app. If the app records successfully, the aggregate "
+                "device is likely OK."
+            ),
+            warning=True,
+        )
+
+    matching_devices = [device for device in input_devices if device.name == configured]
+    if matching_devices:
         return CheckResult("audio-device", True, f"Audio device exists: {configured}.")
+
+    if any(device.name == configured for device in devices):
+        return CheckResult(
+            "audio-device",
+            False,
+            f"Audio device exists but has no input channels: {configured}.",
+            "Use an aggregate/input device that exposes microphone or BlackHole input channels.",
+        )
+
+    visible = _format_audio_devices(input_devices)
     return CheckResult(
         "audio-device",
         False,
-        f"Audio device was not found: {configured}.",
+        f"Audio input device was not found: {configured}. Visible input devices: {visible}.",
         "Create the aggregate device or set AUDIO_DEVICE in .env.",
     )
+
+
+def _format_audio_devices(devices: Sequence[AudioDeviceInfo], limit: int = 8) -> str:
+    visible = [f"{device.name} ({device.max_input_channels} in)" for device in devices[:limit]]
+    if len(devices) > limit:
+        visible.append(f"{len(devices) - limit} more")
+    return ", ".join(visible)
 
 
 def run_checks() -> list[CheckResult]:
@@ -161,9 +258,11 @@ def run_checks() -> list[CheckResult]:
         check_python(),
         check_macos(),
         check_env_file(),
-        check_required_env(dotenv_values),
+        check_b2_env(dotenv_values),
+        check_assemblyai_env(dotenv_values),
         check_ffmpeg(),
         check_google_credentials(dotenv_values),
+        check_google_token(),
         check_audio_device(dotenv_values),
     ]
 

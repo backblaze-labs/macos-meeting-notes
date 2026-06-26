@@ -7,14 +7,14 @@ macOS audio setup and real service credentials.
 
 - macOS 13 or later
 - Python virtualenv active
-- `make install` completed
+- `make setup` completed
 - `.env` exists and contains real values
 - `ffmpeg` installed
 - BlackHole 2ch installed
 - `Meeting Aggregate` audio device exists, or `AUDIO_DEVICE` names the actual
   aggregate device
 - Google Calendar OAuth credentials JSON exists
-- `meeting-memory auth` completed successfully
+- `.venv/bin/meeting-memory auth` completed successfully
 - AssemblyAI account has available credit
 - B2 bucket exists and credentials have S3 write access
 - Optional: Anthropic key set for summaries
@@ -42,7 +42,7 @@ Pass criteria:
 Run:
 
 ```bash
-meeting-memory auth
+.venv/bin/meeting-memory auth
 ```
 
 Pass criteria:

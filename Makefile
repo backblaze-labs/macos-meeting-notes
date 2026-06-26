@@ -1,6 +1,11 @@
 PYTHON ?= python
 
-.PHONY: install run auth doctor install-macos-app reload-macos-app open-macos-app quit-macos-app install-launch-agent uninstall-launch-agent lint format test check check-structure check\:structure
+.PHONY: setup install run auth doctor install-macos-app reload-macos-app open-macos-app quit-macos-app install-launch-agent uninstall-launch-agent lint format test check check-structure check\:structure
+
+setup:
+	python3 -m venv .venv
+	.venv/bin/python -m pip install -e ".[dev]"
+	.venv/bin/python -m meeting_memory setup
 
 install:
 	$(PYTHON) -m pip install -e ".[dev]"

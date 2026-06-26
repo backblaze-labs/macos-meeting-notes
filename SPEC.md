@@ -1,5 +1,5 @@
 # Software Requirements Specification
-# `meeting-memory` — Personal Meeting Transcription Library
+# `macos-meeting-notes` — Meeting Memory macOS Meeting Notes App
 
 **Status:** Draft  
 **Author:** Meeting Memory contributors
@@ -33,11 +33,13 @@
 
 ### 1.1 Purpose
 
-This document specifies the requirements for **meeting-memory**, a macOS menu bar application that records meetings, transcribes them with speaker diarization, generates AI summaries, and saves everything as portable markdown files backed up to Backblaze B2.
+This document specifies the requirements for **Meeting Memory**, a macOS menu bar application whose public repository is named **macos-meeting-notes**. The app records meetings, transcribes them with speaker diarization, generates AI summaries, and saves everything as portable markdown files backed up to Backblaze B2.
 
 ### 1.2 Scope
 
-`meeting-memory` is a Python application targeting macOS. It is designed as a personal productivity tool and as a Backblaze B2 sample demonstrating local-first AI data pipelines with object storage as the durable backup layer.
+`macos-meeting-notes` is a Python application repository targeting macOS. It is designed as a personal productivity tool and as a Backblaze B2 sample demonstrating local-first AI data pipelines with object storage as the durable backup layer.
+
+Naming is intentionally split during the low-risk external rename: the visible app remains **Meeting Memory**, the Python import package remains `meeting_memory`, and the CLI remains `meeting-memory`. The macOS bundle ID, Keychain service, LaunchAgent label, and log paths keep their current `meeting-memory` identifiers until a deliberate migration is planned.
 
 It is the **native, local-first counterpart** to the B2 sample fleet's web meeting app (`web meeting sample`): rather than a browser upload flow, it captures real system + microphone audio on the desktop, watches the calendar, and treats B2 as the durable archive. It is deliberately **not** built on the team's `agent-friendly reference project` (reference project) web template, which is a Next.js + FastAPI stack whose scaffolder only emits web apps and cannot host a macOS menu-bar process.
 
@@ -71,7 +73,7 @@ A **second, explicit design goal** sits alongside the user-facing app: the repos
 
 ### 2.1 Product Perspective
 
-`meeting-memory` is a standalone macOS application with no server-side component. It runs as a menu bar process, interfaces with external services (Google Calendar, AssemblyAI, Anthropic, B2) via HTTPS, and reads/writes to the local filesystem. There is no web UI, no application database, and no always-on server. It is **not** built on the team's `agent-friendly reference project` web template (Next.js + FastAPI); it is a Python desktop app that ports only that template's *portable* repo conventions (§7.6), not its stack.
+**Meeting Memory** is a standalone macOS application with no server-side component, maintained in the `macos-meeting-notes` repository. It runs as a menu bar process, interfaces with external services (Google Calendar, AssemblyAI, Anthropic, B2) via HTTPS, and reads/writes to the local filesystem. There is no web UI, no application database, and no always-on server. It is **not** built on the team's `agent-friendly reference project` web template (Next.js + FastAPI); it is a Python desktop app that ports only that template's *portable* repo conventions (§7.6), not its stack.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -586,7 +588,7 @@ The `TrayApp` communicates with background threads via a thread-safe `queue.Queu
 ### 7.4 Project File Structure
 
 ```
-meeting-memory/
+macos-meeting-notes/
   src/
     meeting_memory/
       __main__.py            # entrypoint; `auth` subcommand; .env + logging + doctor-lite; starts tray
@@ -695,7 +697,7 @@ A first-class design goal (alongside the user-facing app) is that **the reposito
 
 **Preflight — `python -m meeting_memory.doctor`** (zero-dependency where possible; the audio-device check is guarded so doctor can run before deps are installed): verifies Python ≥ 3.11, macOS ≥ 13, `.env` present and filled (no placeholder values), required `B2_*` + `ASSEMBLYAI_API_KEY` set, `ffmpeg` on `PATH`, the configured audio device exists, and the Google OAuth credentials file is present. Each failure prints exactly what is wrong and how to fix it. A doctor-lite subset runs at app startup and surfaces failures via a tray notification + a visible menu item rather than crashing (REQ-EXT-18).
 
-**Tooling & commands** — `ruff` (lint + format; rule `T20` forbids bare `print()` — use std `logging`), `pytest`, `pre-commit`. A `Makefile` exposes the predictable command set: `make install | run | auth | doctor | install-macos-app | reload-macos-app | open-macos-app | quit-macos-app | install-launch-agent | uninstall-launch-agent | lint | format | test | check:structure | check`, where `check` = lint + tests + structure (the full gate `AGENTS.md` tells agents to run before finishing). The installed CLI also exposes `meeting-memory search <query>`.
+**Tooling & commands** — `ruff` (lint + format; rule `T20` forbids bare `print()` — use std `logging`), `pytest`, `pre-commit`. A `Makefile` exposes the predictable command set: `make setup | install | run | auth | doctor | install-macos-app | reload-macos-app | open-macos-app | quit-macos-app | install-launch-agent | uninstall-launch-agent | lint | format | test | check:structure | check`, where `check` = lint + tests + structure (the full gate `AGENTS.md` tells agents to run before finishing). The installed CLI also exposes `meeting-memory setup` and `meeting-memory search <query>`.
 
 **Packaging** — `pyproject.toml` is canonical (PEP 621, src-layout, console-script entrypoint, `pip install` from a git URL per REQ-NF-12; no bundled third-party executables). A thin `requirements.txt` (`-e .`) supports the plain `python -m venv` + `pip` path; `uv` is documented as an optional faster installer. `ffmpeg` is an external system dependency (doctor-checked, not pip-installed). The local `.app` bundle is a generated wrapper around the checkout and virtualenv, not a signed/notarized standalone app.
 

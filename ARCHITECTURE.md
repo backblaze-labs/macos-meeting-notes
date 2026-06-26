@@ -1,7 +1,11 @@
 # Architecture
 
-`meeting-memory` is a Python macOS menu bar application with strict layers under
-`src/meeting_memory/`.
+`macos-meeting-notes` is the public repository for **Meeting Memory**, a Python
+macOS menu bar application with strict layers under `src/meeting_memory/`.
+
+The external repository/distribution name is `macos-meeting-notes`. The app name
+remains `Meeting Memory`, the import package remains `meeting_memory`, and the
+CLI remains `meeting-memory`.
 
 ## Layers
 

@@ -1,6 +1,6 @@
 # Google Calendar Auth
 
-`meeting-memory` watches Google Calendar for Google Meet and Zoom links. It uses
+Meeting Memory watches Google Calendar for Google Meet and Zoom links. It uses
 OAuth with the read-only Calendar scope:
 
 ```text
@@ -56,10 +56,8 @@ settings.
 
 ## Run Auth
 
-With the virtualenv active:
-
 ```bash
-meeting-memory auth
+.venv/bin/meeting-memory auth
 ```
 
 Expected behavior:
@@ -85,6 +83,10 @@ Common fixes:
 - Ensure the OAuth client type is `Desktop app`.
 - Ensure the Google Calendar API is enabled for the same project.
 - Ensure the account you authorize has Calendar enabled.
+
+The auth command only requires the Google credentials settings. B2 and
+AssemblyAI can still be pending while you complete Calendar authorization, but
+`make doctor` will continue reporting them until they are configured.
 
 ## Calendar Detection
 

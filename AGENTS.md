@@ -1,7 +1,18 @@
 # AGENTS.md
 
 This is the read-first control surface for coding agents working on
-`meeting-memory`.
+`macos-meeting-notes`, the public repository for the **Meeting Memory** macOS
+app.
+
+Naming boundaries:
+
+- Repository/distribution metadata: `macos-meeting-notes`
+- Visible macOS app name: `Meeting Memory`
+- Python import package: `meeting_memory`
+- CLI command: `meeting-memory`
+- macOS bundle ID, Keychain service, LaunchAgent label, and log paths keep their
+  existing `meeting-memory` identifiers unless a future migration explicitly
+  changes them.
 
 ## Read Order
 
@@ -42,6 +53,8 @@ repo, or service modules as needed.
 
 ## Commands
 
+- `make setup`: create/update `.venv`, install dependencies, create `.env` if
+  missing, install the local macOS app wrapper, and print setup diagnostics.
 - `make install`: install the package and developer tools.
 - `make run`: run the current application entrypoint.
 - `make auth`: run the future Google Calendar auth flow.

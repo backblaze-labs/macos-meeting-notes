@@ -1,7 +1,7 @@
 # Setup Tutorial
 
 This tutorial gets Meeting Memory running as a local macOS menu-bar app from a
-fresh clone.
+fresh clone of the `macos-meeting-notes` repository.
 
 ## 1. Install System Requirements
 
@@ -30,12 +30,13 @@ device does not appear.
 ```bash
 git clone <repository-url> meeting-memory
 cd meeting-memory
-python3 -m venv .venv
-source .venv/bin/activate
-make install
+make setup
 ```
 
-All Python dependencies install into `.venv`, which is ignored by git.
+`make setup` creates or updates `.venv`, installs Python dependencies, creates
+`.env` from `.env.example` if it is missing, installs the local macOS app
+wrapper, and prints diagnostics. All Python dependencies install into `.venv`,
+which is ignored by git.
 
 ## 3. Configure Audio Capture
 
@@ -90,11 +91,7 @@ not in the repository.
 
 ## 5. Fill Local Configuration
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and set:
+If `make setup` created `.env`, edit it and set:
 
 ```bash
 B2_APPLICATION_KEY_ID=...
@@ -125,16 +122,15 @@ Use `KNOWN_SPEAKERS` only for your own local aliases, for example
 make doctor
 ```
 
-`make doctor` checks configuration, local files, `ffmpeg`, and audio device
-visibility. Some failures are expected until credentials and audio setup are
-complete.
+`make doctor` checks configuration, B2, AssemblyAI, Google credentials/auth,
+local files, `ffmpeg`, and audio device visibility. Some failures are expected
+until credentials and audio setup are complete. B2 is required before Meeting
+Memory is ready to record.
 
 ## 7. Authorize Google Calendar
 
-With the virtualenv active:
-
 ```bash
-meeting-memory auth
+.venv/bin/meeting-memory auth
 ```
 
 A browser opens for Google OAuth. When the flow succeeds, the token is saved to
@@ -143,7 +139,6 @@ Keychain and the command prints a success message.
 ## 8. Install and Open the macOS App
 
 ```bash
-make PYTHON=.venv/bin/python install-macos-app
 make PYTHON=.venv/bin/python open-macos-app
 ```
 

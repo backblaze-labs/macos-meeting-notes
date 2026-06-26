@@ -3,10 +3,7 @@
 ## Local Setup
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-make install
-cp .env.example .env
+make setup
 make doctor
 ```
 
@@ -72,10 +69,11 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
 ## Useful Commands
 
 ```bash
+make setup
 make doctor
-meeting-memory auth
-meeting-memory
-meeting-memory search "launch risks"
+.venv/bin/meeting-memory auth
+.venv/bin/meeting-memory
+.venv/bin/meeting-memory search "launch risks"
 make PYTHON=.venv/bin/python install-macos-app
 make PYTHON=.venv/bin/python reload-macos-app
 make PYTHON=.venv/bin/python install-launch-agent

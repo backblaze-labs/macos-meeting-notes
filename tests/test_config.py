@@ -8,7 +8,12 @@ import pytest
 from pydantic import ValidationError
 
 from meeting_memory.config.defaults import REQUIRED_ENV_VARS
-from meeting_memory.config.settings import Settings, load_settings, validate_or_exit
+from meeting_memory.config.settings import (
+    Settings,
+    load_google_auth_settings,
+    load_settings,
+    validate_or_exit,
+)
 
 OPTIONAL_ENV_VARS = (
     "ANTHROPIC_API_KEY",
@@ -74,6 +79,22 @@ def test_settings_reject_missing_required_values(tmp_path: Path) -> None:
 
     assert "b2_application_key_id" in str(exc_info.value)
     assert "assemblyai_api_key" in str(exc_info.value)
+
+
+def test_google_auth_settings_do_not_require_b2_or_assemblyai(tmp_path: Path) -> None:
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "GOOGLE_CALENDAR_CREDENTIALS_FILE=client.json\n"
+        "GOOGLE_CALENDAR_ID=primary\n"
+        "KNOWN_SPEAKERS=Alex,Blair\n",
+        encoding="utf-8",
+    )
+
+    settings = load_google_auth_settings(env_file)
+
+    assert settings.google_credentials_path == Path("client.json")
+    assert settings.google_calendar_id == "primary"
+    assert settings.known_speakers == ("Alex", "Blair")
 
 
 def test_settings_defaults_to_no_known_speakers() -> None:

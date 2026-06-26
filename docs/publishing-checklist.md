@@ -1,6 +1,7 @@
 # Publishing Checklist
 
-Use this checklist before pushing Meeting Memory to a public GitHub repository.
+Use this checklist before pushing the **macos-meeting-notes** repository for the
+Meeting Memory macOS app to GitHub.
 
 ## Files That Must Stay Local
 
@@ -50,15 +51,29 @@ secret and rewrite history before publishing.
 
 ## Publish to GitHub
 
-Create an empty repository on GitHub, then connect this local repo:
+Create an empty repository named `macos-meeting-notes` on GitHub, then connect
+this local repo:
 
 ```bash
-git remote add origin git@github.com:<owner>/meeting-memory.git
+git remote add origin git@github.com:<owner>/macos-meeting-notes.git
 git push -u origin <branch>
 ```
 
 Replace `<owner>` and `<branch>` with your GitHub owner and current branch. Run
 `git branch --show-current` if you are unsure which branch you are pushing.
+
+Suggested repository description:
+
+```text
+Local-first macOS app for recording meetings, generating speaker-labeled notes, and backing them up to Backblaze B2.
+```
+
+Suggested repository topics:
+
+```text
+macos, meeting-notes, meeting-transcripts, transcription, speaker-diarization,
+ai-notes, local-first, menu-bar-app, google-calendar, backblaze-b2, python
+```
 
 ## After Publishing
 
