@@ -4,37 +4,99 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from dataclasses import dataclass
+
+from meeting_memory.types.speakers import KnownSpeaker
 
 TEAM_SPEAKER_ALIASES: tuple[str, ...] = ()
 TEAM_ALIAS_KEYS: dict[str, str] = {}
+KNOWN_SPEAKER_MATCH_SEPARATORS = re.compile(r"[|;]")
+
+
+@dataclass(frozen=True)
+class _SpeakerMatcher:
+    name: str
+    keys: tuple[str, ...]
+    emails: tuple[str, ...] = ()
 
 
 def speaker_candidates_from_event(
     item: dict[str, object],
-    team_aliases: tuple[str, ...] = (),
+    team_aliases: Iterable[KnownSpeaker | str] = (),
 ) -> tuple[str, ...]:
     attendees = item.get("attendees")
     if not isinstance(attendees, list):
         return ()
 
-    aliases = _team_aliases(team_aliases)
+    known_speakers = _known_speakers(team_aliases)
     candidates: list[str] = []
     for attendee in attendees:
         if not isinstance(attendee, dict) or _skip_attendee(attendee):
             continue
-        candidate = _candidate_for_attendee(attendee, aliases)
+        candidate = _candidate_for_attendee(attendee, known_speakers)
         if candidate and candidate not in candidates:
             candidates.append(candidate)
     return tuple(candidates)
 
 
-def _team_aliases(configured_aliases: Iterable[str]) -> tuple[str, ...]:
-    aliases: list[str] = []
+def _known_speakers(
+    configured_aliases: Iterable[KnownSpeaker | str],
+) -> tuple[_SpeakerMatcher, ...]:
+    known_speakers: list[_SpeakerMatcher] = []
+    seen_names: set[str] = set()
     for raw_alias in (*TEAM_SPEAKER_ALIASES, *configured_aliases):
-        alias = TEAM_ALIAS_KEYS.get(_match_key(str(raw_alias)), str(raw_alias).strip())
-        if alias and alias not in aliases:
-            aliases.append(alias)
-    return tuple(aliases)
+        known_speaker = _known_speaker(raw_alias)
+        if known_speaker and known_speaker.name not in seen_names:
+            known_speakers.append(known_speaker)
+            seen_names.add(known_speaker.name)
+    return tuple(known_speakers)
+
+
+def _known_speaker(raw_alias: KnownSpeaker | str) -> _SpeakerMatcher | None:
+    speaker = raw_alias if isinstance(raw_alias, KnownSpeaker) else _legacy_known_speaker(raw_alias)
+    if speaker is None:
+        return None
+
+    display = TEAM_ALIAS_KEYS.get(_match_key(speaker.name), speaker.name)
+    if not display:
+        return None
+
+    team_keys = [
+        candidate for candidate, canonical in TEAM_ALIAS_KEYS.items() if canonical == display
+    ]
+    keys: list[str] = []
+    emails: list[str] = []
+    for value in (display, *speaker.matches, *team_keys):
+        emails.extend(_email_values(value))
+        keys.extend(_match_keys(value))
+    return _SpeakerMatcher(display, tuple(dict.fromkeys(keys)), tuple(dict.fromkeys(emails)))
+
+
+def _legacy_known_speaker(raw_alias: str) -> KnownSpeaker | None:
+    display, match_values = _split_known_speaker(str(raw_alias))
+    return KnownSpeaker(display, match_values) if display else None
+
+
+def _split_known_speaker(raw_alias: str) -> tuple[str, tuple[str, ...]]:
+    value = raw_alias.strip()
+    if not value:
+        return "", ()
+
+    name, separator, raw_matches = value.partition("=")
+    match_values = _split_match_values(raw_matches) if separator else ()
+    if not match_values:
+        match = re.fullmatch(r"(.+?)\s*<([^>]+)>", name.strip())
+        if match:
+            return match.group(1).strip(), (match.group(2).strip(),)
+    return name.strip(), match_values
+
+
+def _split_match_values(raw_matches: str) -> tuple[str, ...]:
+    return tuple(
+        value.strip()
+        for value in KNOWN_SPEAKER_MATCH_SEPARATORS.split(raw_matches)
+        if value.strip()
+    )
 
 
 def _skip_attendee(attendee: dict[str, object]) -> bool:
@@ -45,27 +107,25 @@ def _skip_attendee(attendee: dict[str, object]) -> bool:
 
 def _candidate_for_attendee(
     attendee: dict[str, object],
-    team_aliases: tuple[str, ...],
+    known_speakers: tuple[_SpeakerMatcher, ...],
 ) -> str | None:
     names = _attendee_names(attendee)
-    for alias in team_aliases:
-        if _attendee_matches_alias(attendee, alias, names):
-            return alias
+    for known_speaker in known_speakers:
+        if _attendee_matches_known_speaker(attendee, known_speaker, names):
+            return known_speaker.name
     return names[0] if names else _name_from_email(str(attendee.get("email") or ""))
 
 
-def _attendee_matches_alias(
+def _attendee_matches_known_speaker(
     attendee: dict[str, object],
-    alias: str,
+    known_speaker: _SpeakerMatcher,
     names: tuple[str, ...],
 ) -> bool:
-    alias_keys = _alias_keys(alias)
-    if any(_name_matches_alias(name, alias_keys) for name in names):
+    if any(_name_matches_alias(name, known_speaker.keys) for name in names):
         return True
-    return _email_matches_alias(
+    return _email_matches_known_speaker(
         str(attendee.get("email") or ""),
-        alias_keys,
-        allow_initial_fallback=not names,
+        known_speaker,
     )
 
 
@@ -85,28 +145,52 @@ def _clean_name(value: str) -> str:
     return name
 
 
-def _name_matches_alias(value: str, alias_keys: set[str]) -> bool:
+def _name_matches_alias(value: str, alias_keys: Iterable[str]) -> bool:
     tokens = [_match_key(token) for token in re.split(r"\W+", value) if token]
     return any(key in tokens or key == _initials(tokens) for key in alias_keys)
 
 
-def _email_matches_alias(
+def _email_matches_known_speaker(
     value: str,
-    alias_keys: set[str],
-    *,
-    allow_initial_fallback: bool,
+    known_speaker: _SpeakerMatcher,
 ) -> bool:
-    local_part = value.split("@", 1)[0].split("+", 1)[0]
-    tokens = [_match_key(token) for token in re.split(r"[._+\-\W]+", local_part) if token]
+    email = value.strip().casefold()
+    if not email:
+        return False
+
+    local_part = email.split("@", 1)[0].split("+", 1)[0]
+    tokens = _email_local_tokens(local_part)
     local_key = _match_key(local_part)
-    for key in alias_keys:
+    if email in known_speaker.emails:
+        return True
+    for key in known_speaker.keys:
         if key in tokens or key == local_key or local_key.startswith(key):
-            return True
-        if allow_initial_fallback and len(key) >= 3 and local_key.startswith(key[0]):
             return True
         if key == _initials(tokens):
             return True
     return False
+
+
+def _match_keys(value: str) -> tuple[str, ...]:
+    text = value.strip()
+    if not text:
+        return ()
+
+    local_part = text.split("@", 1)[0].split("+", 1)[0] if "@" in text else text
+    tokens = [_match_key(token) for token in re.split(r"[._+\-\W]+", local_part) if token]
+    keys = [_match_key(local_part), *tokens]
+    if len(tokens) > 1:
+        keys.append(_initials(tokens))
+    return tuple(key for key in dict.fromkeys(keys) if key)
+
+
+def _email_values(value: str) -> tuple[str, ...]:
+    text = value.strip().casefold()
+    return (text,) if "@" in text else ()
+
+
+def _email_local_tokens(local_part: str) -> tuple[str, ...]:
+    return tuple(_match_key(token) for token in re.split(r"[._+\-\W]+", local_part) if token)
 
 
 def _name_from_email(value: str) -> str | None:
@@ -122,13 +206,6 @@ def _name_from_email(value: str) -> str | None:
 
 def _title_token(value: str) -> str:
     return value[:1].upper() + value[1:].lower()
-
-
-def _alias_keys(alias: str) -> set[str]:
-    key = _match_key(alias)
-    return {
-        candidate for candidate, canonical in TEAM_ALIAS_KEYS.items() if canonical == alias
-    } | {key}
 
 
 def _initials(tokens: Iterable[str]) -> str:

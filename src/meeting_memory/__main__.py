@@ -224,7 +224,6 @@ def run_app() -> int:
     from meeting_memory.service.processing_retry import retry_failed_processing
     from meeting_memory.service.recorder import RecorderService
     from meeting_memory.service.recording_context import current_recording_context
-    from meeting_memory.service.speaker_mapping import load_speaker_mapping
     from meeting_memory.service.sync import sync_pending_meetings
     from meeting_memory.ui.tray import RumpsTrayApp, TrayController
 
@@ -238,14 +237,12 @@ def run_app() -> int:
     event_queue: queue.Queue[object] = queue.Queue()
     b2_client = B2S3Client.from_settings(settings)
     calendar_client = GoogleCalendarClient.from_settings(settings)
-    speaker_mapping = load_speaker_mapping(settings.speaker_mapping_path)
     pipeline = Pipeline(
         meetings_dir=settings.meetings_dir_path,
         transcription_client=AssemblyAITranscriptionClient.from_settings(settings),
         summarizer_client=ClaudeSummarizer.from_settings(settings),
         b2_client=b2_client,
         event_sink=event_queue.put,
-        speaker_mapping=speaker_mapping,
     )
     recorder = RecorderService(audio_device=settings.audio_device)
     controller = TrayController(

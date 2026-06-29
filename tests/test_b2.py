@@ -125,6 +125,7 @@ def test_b2_client_uploads_extra_audio_parts(tmp_path: Path, monkeypatch) -> Non
 
 def test_b2_client_from_settings_uses_required_env_names() -> None:
     settings = Settings(
+        _env_file=None,
         b2_application_key_id="key-id",
         b2_application_key="secret",
         b2_endpoint="https://s3.example.com",

@@ -171,10 +171,12 @@ def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
     assert app.app.template is True
     titles = [item.title for item in app.app.menu.items if item is not None]
     assert titles.count(menu.QUIT_LABEL) == 1
+    assert titles.count(menu.KNOWN_SPEAKERS_LABEL) == 1
 
 
 def _settings(tmp_path: Path) -> Settings:
     return Settings(
+        _env_file=None,
         b2_application_key_id="key-id",
         b2_application_key="secret",
         b2_endpoint="https://s3.example.com",

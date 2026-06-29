@@ -68,6 +68,7 @@ def test_claude_summarizer_retries_transient_errors(monkeypatch) -> None:
 
 def test_claude_summarizer_from_settings() -> None:
     settings = Settings(
+        _env_file=None,
         b2_application_key_id="key-id",
         b2_application_key="secret",
         b2_endpoint="https://s3.example.com",
@@ -88,6 +89,7 @@ def test_claude_summarizer_loads_custom_prompt_from_settings(tmp_path) -> None:
     prompt_file = tmp_path / "summary.md"
     prompt_file.write_text("Custom privacy prompt\n{transcript}", encoding="utf-8")
     settings = Settings(
+        _env_file=None,
         b2_application_key_id="key-id",
         b2_application_key="secret",
         b2_endpoint="https://s3.example.com",

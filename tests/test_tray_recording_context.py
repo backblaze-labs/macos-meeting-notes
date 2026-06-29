@@ -120,6 +120,7 @@ def test_rumps_tray_app_uses_calendar_context_without_prompt(tmp_path: Path) -> 
 
 def _settings(tmp_path: Path, *, max_recording_minutes: int = 180) -> Settings:
     return Settings(
+        _env_file=None,
         b2_application_key_id="key-id",
         b2_application_key="secret",
         b2_endpoint="https://s3.example.com",

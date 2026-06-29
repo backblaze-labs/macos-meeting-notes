@@ -107,14 +107,17 @@ Optional settings:
 
 ```bash
 ANTHROPIC_API_KEY=
-KNOWN_SPEAKERS=
+KNOWN_SPEAKERS={}
 MEETINGS_DIR=~/Meetings
 AUDIO_DEVICE=Meeting Aggregate
 GOOGLE_CALENDAR_ID=all
 ```
 
-Use `KNOWN_SPEAKERS` only for your own local aliases, for example
-`KNOWN_SPEAKERS=Alex,Blair`. Do not commit `.env`.
+Use the tray's **Known Speakers...** item to edit this later. It saves
+`KNOWN_SPEAKERS` as a JSON object that maps display names to attendee names,
+emails, or email local-parts to match, for example
+`KNOWN_SPEAKERS='{"Alex Rivera":["alex@example.com","alex.rivera"]}'`. Do not
+commit `.env`.
 
 ## 6. Run Preflight Checks
 

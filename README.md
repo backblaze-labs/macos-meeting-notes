@@ -134,7 +134,6 @@ Optional:
 - `ANTHROPIC_API_KEY`
 - `ANTHROPIC_MODEL`
 - `SUMMARY_PROMPT_FILE`
-- `SPEAKER_MAPPING_FILE`
 - `GOOGLE_CALENDAR_ID`
 - `KNOWN_SPEAKERS`
 - `MEETINGS_DIR`
@@ -151,8 +150,11 @@ Real credentials, OAuth files, local recordings, transcripts, generated meeting
 folders, and `.env` are ignored by git. Before publishing or pushing changes,
 run the checks in [docs/publishing-checklist.md](docs/publishing-checklist.md).
 
-`KNOWN_SPEAKERS` is intentionally blank by default. Add your own local aliases
-only in `.env` if you want Calendar speaker candidates normalized.
+`KNOWN_SPEAKERS` is intentionally empty by default. Use the tray's
+**Known Speakers...** item to add local aliases for normalizing Calendar speaker
+candidates. The app stores them in `.env` as a JSON object whose keys are
+display names and whose values are attendee names, emails, or email local-parts
+to match, for example `{"Alex Rivera":["alex@example.com","alex.rivera"]}`.
 
 ## Costs
 
@@ -182,8 +184,8 @@ otherwise it appends the transcript below the prompt.
 
 `transcript.md` is the source-of-truth transcript. It includes candidate
 speaker names from Google Calendar attendees. Attendees are shown by their
-Calendar full name, except the team aliases from `KNOWN_SPEAKERS`, plus editable
-aliases:
+Calendar full name, except configured matches from `KNOWN_SPEAKERS`, plus
+editable aliases:
 
 ```yaml
 speaker_candidates: ["Alex", "Ada Lovelace", "Casey"]
@@ -211,13 +213,9 @@ missing, skipped, or failed after speakers are confirmed, the tray shows a
 `Continue Processing` item. No LLM is used for relabeling; Anthropic is used for
 notes generation.
 
-`SPEAKER_MAPPING_FILE` remains available as an optional global JSON mapping:
-
-```json
-{"Speaker A": "Alex", "Speaker B": "Customer"}
-```
-
-Prefer per-meeting `speaker_aliases` when reviewing real meetings.
+Per-meeting `speaker_aliases` are the source of truth for who spoke in a
+specific recording. Global `Speaker A` / `Speaker B` mappings are intentionally
+not supported because AssemblyAI labels can change between transcription jobs.
 
 ## Local Search
 

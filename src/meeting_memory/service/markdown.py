@@ -45,12 +45,12 @@ def render_meeting_markdown(
     b2_audio: str | None = None,
     b2_transcript: str | None = None,
     b2_status: str = "pending",
-    speaker_mapping: Mapping[str, str] | None = None,
+    speaker_aliases: Mapping[str, str] | None = None,
 ) -> str:
     return render_transcript_markdown(
         meta,
         transcript,
-        speaker_aliases=speaker_mapping,
+        speaker_aliases=speaker_aliases,
         b2_audio=b2_audio,
         b2_transcript=b2_transcript,
         b2_status=b2_status,

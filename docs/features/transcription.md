@@ -9,7 +9,7 @@ diarized transcript to `transcript.md`.
 
 - `recording.m4a`
 - `ASSEMBLYAI_API_KEY`
-- Optional `KNOWN_SPEAKERS`, used to alias configured team attendees in Calendar
+- Optional `KNOWN_SPEAKERS`, used to normalize configured people in Calendar
   speaker suggestions
 - Optional `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, and `SUMMARY_PROMPT_FILE` for
   automatic notes after speaker review or the `meeting-memory summarize` retry
@@ -42,7 +42,8 @@ generation runs in a background thread from the tray, or through the local
   Anthropic and does not write summaries or decisions.
 - Google Calendar attendees populate `speaker_candidates`. Attendees are shown
   by Calendar full name, except aliases explicitly configured in
-  `KNOWN_SPEAKERS`. This is a local hint, not automatic identification.
+  `KNOWN_SPEAKERS` through the tray's **Known Speakers...** editor. This is a
+  local hint, not automatic identification.
 - The user confirms speaker aliases in the tray UI. Relabeling is deterministic
   code, not an LLM step.
 - Confirmed speaker review starts notes generation automatically. If notes are

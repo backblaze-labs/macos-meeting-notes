@@ -17,6 +17,7 @@ from meeting_memory.repo.speaker_candidates import (
     speaker_candidates_from_event as _speaker_candidates,
 )
 from meeting_memory.types.meeting import CalendarMeeting
+from meeting_memory.types.speakers import KnownSpeaker
 
 GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
 KEYCHAIN_SERVICE = "meeting-memory.google-calendar"
@@ -49,7 +50,7 @@ class KeychainTokenStore:
 class GoogleCalendarClient:
     credentials_file: Path
     calendar_id: str = "primary"
-    known_speakers: tuple[str, ...] = ()
+    known_speakers: tuple[KnownSpeaker, ...] = ()
     token_store: TokenStore = field(default_factory=KeychainTokenStore)
     scopes: tuple[str, ...] = (GOOGLE_CALENDAR_SCOPE,)
 
@@ -132,7 +133,7 @@ class GoogleCalendarClient:
 
 def _meeting_from_event(
     item: dict[str, object],
-    known_speakers: tuple[str, ...] = (),
+    known_speakers: tuple[KnownSpeaker, ...] = (),
 ) -> CalendarMeeting | None:
     if _self_declined_event(item):
         return None

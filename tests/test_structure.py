@@ -39,6 +39,7 @@ REQUIRED_SOURCE_FILES = (
     "types/transcript.py",
     "types/summary.py",
     "types/events.py",
+    "types/speakers.py",
     "config/__init__.py",
     "config/settings.py",
     "repo/__init__.py",

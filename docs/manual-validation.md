@@ -103,7 +103,7 @@ Pass criteria after stopping recording:
 - Speaker labels are preserved by default, for example `Speaker A`.
 - Calendar-backed recordings include `speaker_candidates` from event attendees.
   People matching optional `KNOWN_SPEAKERS` entries use those configured
-  aliases.
+  display names.
 
 ## 6. Speaker Review
 

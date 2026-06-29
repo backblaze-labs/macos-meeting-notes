@@ -23,7 +23,7 @@ from meeting_memory.ui.notifications import (
     parse_notification_datetime,
     send_notification,
 )
-from meeting_memory.ui.preferences import open_preferences_window
+from meeting_memory.ui.preferences import open_known_speakers_window, open_preferences_window
 from meeting_memory.ui.processing_actions import run_processing_task
 from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
 from meeting_memory.ui.title_prompt import ask_recording_title
@@ -138,6 +138,7 @@ class RumpsTrayApp:
         self.app.menu.add(
             self.rumps.MenuItem(menu.TEST_NOTIFICATION_LABEL, self.send_test_notification)
         )
+        self.app.menu.add(self.rumps.MenuItem(menu.KNOWN_SPEAKERS_LABEL, self.open_known_speakers))
         self.app.menu.add(self.rumps.MenuItem(menu.PREFERENCES_LABEL, self.open_preferences))
         self.app.menu.add(self.rumps.MenuItem(menu.QUIT_LABEL, self.rumps.quit_application))
 
@@ -158,6 +159,9 @@ class RumpsTrayApp:
 
     def open_preferences(self, _sender=None) -> None:
         open_preferences_window(self.controller.settings)
+
+    def open_known_speakers(self, _sender=None) -> None:
+        open_known_speakers_window(self.controller.settings)
 
     def open_speaker_review(self, meeting_path: Path) -> None:
         open_speaker_review_window(
@@ -185,11 +189,7 @@ class RumpsTrayApp:
 
     def send_test_notification(self, _sender=None) -> None:
         LOGGER.info("Send Test Notification selected")
-        self._send_notification(
-            "Meeting Memory test",
-            "",
-            "Notifications are working.",
-        )
+        self._send_notification("Meeting Memory test", "", "Notifications are working.")
 
     def drain_events(self, _timer=None) -> None:
         for event in self.controller.drain_events():

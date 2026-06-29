@@ -17,6 +17,7 @@ SYNC_LABEL = "Sync to B2"
 RETRY_PROCESSING_LABEL = "Retry Failed Processing"
 RUN_DIAGNOSTICS_LABEL = "Run Diagnostics"
 TEST_NOTIFICATION_LABEL = "Send Test Notification"
+KNOWN_SPEAKERS_LABEL = "Known Speakers..."
 PREFERENCES_LABEL = "Preferences..."
 QUIT_LABEL = "Quit"
 

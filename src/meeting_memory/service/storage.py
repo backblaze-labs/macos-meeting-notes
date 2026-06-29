@@ -25,14 +25,14 @@ def write_meeting_dir(
     audio_source: Path,
     transcript: TranscriptResult,
     summary: SummaryResult,
-    speaker_mapping: Mapping[str, str] | None = None,
+    speaker_aliases: Mapping[str, str] | None = None,
     speaker_candidates: tuple[str, ...] = (),
 ) -> MeetingFiles:
     files = create_meeting_dir(meetings_dir, meta, audio_source)
     write_transcript_markdown(
         files,
         transcript,
-        speaker_aliases=speaker_mapping,
+        speaker_aliases=speaker_aliases,
         speaker_candidates=speaker_candidates,
     )
     write_notes_markdown(files, summary)
@@ -65,9 +65,9 @@ def write_meeting_markdown(
     transcript: TranscriptResult,
     summary: SummaryResult,
     *,
-    speaker_mapping: Mapping[str, str] | None = None,
+    speaker_aliases: Mapping[str, str] | None = None,
 ) -> None:
-    write_transcript_markdown(files, transcript, speaker_aliases=speaker_mapping)
+    write_transcript_markdown(files, transcript, speaker_aliases=speaker_aliases)
     write_notes_markdown(files, summary)
 
 

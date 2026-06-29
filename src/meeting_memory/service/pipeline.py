@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -52,7 +52,6 @@ class Pipeline:
     summarizer_client: SummarizerClient | None = None
     b2_client: B2Client | None = None
     event_sink: EventSink | None = None
-    speaker_mapping: Mapping[str, str] | None = None
     speaker_candidates: tuple[str, ...] = ()
 
     def run(self, audio_source: Path, meta: MeetingMeta) -> PipelineResult:
@@ -66,7 +65,6 @@ class Pipeline:
         write_transcript_markdown(
             files,
             transcript,
-            speaker_aliases=self.speaker_mapping,
             speaker_candidates=self.speaker_candidates or files.meta.speaker_candidates,
         )
         self._emit_completion(files, transcript, summary)
