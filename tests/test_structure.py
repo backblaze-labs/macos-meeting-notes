@@ -60,6 +60,7 @@ REQUIRED_SOURCE_FILES = (
     "ui/tray.py",
     "ui/menu.py",
     "ui/preferences.py",
+    "ui/preference_forms.py",
 )
 
 REQUIRED_REPO_FILES = (

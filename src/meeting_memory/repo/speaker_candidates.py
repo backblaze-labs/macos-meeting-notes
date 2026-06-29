@@ -66,7 +66,8 @@ def _known_speaker(raw_alias: KnownSpeaker | str) -> _SpeakerMatcher | None:
     ]
     keys: list[str] = []
     emails: list[str] = []
-    for value in (display, *speaker.matches, *team_keys):
+    match_values = speaker.matches or (display,)
+    for value in (*match_values, *team_keys):
         emails.extend(_email_values(value))
         keys.extend(_match_keys(value))
     return _SpeakerMatcher(display, tuple(dict.fromkeys(keys)), tuple(dict.fromkeys(emails)))

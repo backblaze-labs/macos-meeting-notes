@@ -191,6 +191,20 @@ def test_calendar_known_speakers_can_match_configured_email_aliases():
     assert candidates == ("Alex", "Blair")
 
 
+def test_calendar_known_speaker_sources_do_not_match_display_alias_initials():
+    candidates = calendar_client._speaker_candidates(
+        {
+            "attendees": [
+                {"email": "john.doe@example.com"},
+                {"email": "jdeleon@example.com"},
+            ],
+        },
+        (KnownSpeaker("Drew", ("jdeleon@example.com",)),),
+    )
+
+    assert candidates == ("John Doe", "Drew")
+
+
 def test_calendar_email_matching_does_not_use_first_initial_only():
     candidates = calendar_client._speaker_candidates(
         {
