@@ -108,7 +108,7 @@ def macos_app_executable(project_dir: Path, python_executable: str) -> str:
             f"export PATH={shlex.quote(DEFAULT_PATH)}",
             'export PYTHONUNBUFFERED="1"',
             f'export PYTHONPATH={pythonpath}${{PYTHONPATH:+:$PYTHONPATH}}',
-            f"exec {python} -m meeting_memory",
+            f"{python} -m meeting_memory",
             "",
         ]
     )

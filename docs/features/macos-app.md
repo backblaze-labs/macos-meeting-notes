@@ -33,7 +33,7 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
 - The `.app` is a generated local wrapper around this repo and virtualenv.
 - The app uses `LSUIElement`, so it appears as a menu-bar app rather than a
   regular Dock app.
-- The wrapper sets `PYTHONPATH=src` and execs `python -m meeting_memory`.
+- The wrapper sets `PYTHONPATH=src` and runs `python -m meeting_memory`.
 - The LaunchAgent refreshes and opens the generated app bundle with
   LaunchServices so startup-at-login keeps the menu-bar app identity instead of
   exposing Python in the Dock.
