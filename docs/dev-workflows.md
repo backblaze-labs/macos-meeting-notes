@@ -56,8 +56,10 @@ make PYTHON=.venv/bin/python install-launch-agent
 ```
 
 It writes `~/Library/LaunchAgents/com.meeting-memory.app.plist`, starts the app
-in the background, and sends stdout/stderr to
-`~/Library/Logs/meeting-memory/launch-agent.*.log`.
+in the background by opening `~/Applications/Meeting Memory.app` through
+LaunchServices, and keeps opener stdout/stderr under
+`~/Library/Logs/meeting-memory/launch-agent.*.log`. App logs are written to
+`~/Library/Logs/meeting-memory/app.log`.
 
 Remove it after validation unless you want Meeting Memory to keep starting at
 login:

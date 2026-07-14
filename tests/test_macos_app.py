@@ -85,5 +85,4 @@ def test_macos_app_executable_runs_project_module(tmp_path: Path) -> None:
 
     assert f"cd {tmp_path}" in script
     assert f"export PYTHONPATH={tmp_path / 'src'}" in script
-    assert "/venv/bin/python -m meeting_memory" in script
-    assert "exec /venv/bin/python -m meeting_memory" not in script
+    assert "exec /venv/bin/python -m meeting_memory" in script
