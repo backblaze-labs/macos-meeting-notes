@@ -13,8 +13,8 @@ from meeting_memory.ui.controller import TrayController
 from meeting_memory.ui.icons import tray_icon_path
 from meeting_memory.ui.macos import (
     allow_foreground_notifications,
+    configure_background_app_identity,
     configure_modern_notifications,
-    hide_dock_icon,
     keep_timer_running_during_menu_tracking,
 )
 from meeting_memory.ui.notifications import (
@@ -43,7 +43,7 @@ class RumpsTrayApp:
         self.controller = controller
         self.doctor_results = doctor_results or []
         if rumps_module is None:
-            hide_dock_icon(LOGGER)
+            configure_background_app_identity(LOGGER)
             allow_foreground_notifications(LOGGER)
             configure_modern_notifications(self.handle_notification, LOGGER)
         self._register_notification_handler()
