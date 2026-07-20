@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     known_speakers: tuple[KnownSpeaker, ...] = DEFAULT_KNOWN_SPEAKERS
     meetings_dir: Path = Path(DEFAULT_MEETINGS_DIR)
     audio_device: str = DEFAULT_AUDIO_DEVICE
-    notify_minutes_before: int = Field(default=DEFAULT_NOTIFY_MINUTES_BEFORE, gt=0)
+    notify_minutes_before: int = Field(default=DEFAULT_NOTIFY_MINUTES_BEFORE, ge=0)
     max_recording_minutes: int = Field(default=DEFAULT_MAX_RECORDING_MINUTES, gt=0)
     calendar_poll_interval: int = Field(default=DEFAULT_CALENDAR_POLL_INTERVAL, gt=0)
 

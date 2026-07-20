@@ -145,6 +145,21 @@ def test_settings_defaults_to_no_known_speakers() -> None:
     assert settings.known_speakers == ()
 
 
+def test_settings_allow_zero_minute_notification_window() -> None:
+    settings = Settings(
+        _env_file=None,
+        b2_application_key_id="key-id",
+        b2_application_key="secret-key",
+        b2_endpoint="https://example.com",
+        b2_region="us-west-004",
+        b2_bucket_name="meeting-memory",
+        assemblyai_api_key="assembly-key",
+        notify_minutes_before=0,
+    )
+
+    assert settings.notify_minutes_before == 0
+
+
 def test_settings_reject_placeholder_required_values() -> None:
     with pytest.raises(ValidationError, match="non-placeholder"):
         Settings(
