@@ -80,10 +80,11 @@ class FakeCalendarService:
         self.list_kwargs = {}
         self.list_calls = []
 
-    def build(self, service_name: str, version: str, *, credentials):
+    def build(self, service_name: str, version: str, *, http, cache_discovery: bool):
         assert service_name == "calendar"
         assert version == "v3"
-        assert isinstance(credentials, ValidCredentials)
+        assert isinstance(http.credentials, ValidCredentials)
+        assert cache_discovery is False
         return self
 
     def events(self):

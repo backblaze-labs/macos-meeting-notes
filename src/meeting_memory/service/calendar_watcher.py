@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections.abc import Callable
@@ -11,6 +12,8 @@ from typing import Protocol
 
 from meeting_memory.types.events import MeetingDetected, NotifyEvent
 from meeting_memory.types.meeting import CalendarMeeting
+
+logger = logging.getLogger(__name__)
 
 
 class CalendarClient(Protocol):
@@ -42,6 +45,7 @@ class CalendarWatcher:
 
     def __post_init__(self) -> None:
         self._seen_event_ids: set[str] = set()
+        self._poll_failed = False
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -68,13 +72,18 @@ class CalendarWatcher:
                 lookbehind_minutes=self._lookbehind_minutes(),
             )
         except Exception as exc:
-            self.event_sink(
-                NotifyEvent(
-                    title="Calendar watcher error",
-                    body=str(exc),
+            logger.exception("Calendar watcher poll failed")
+            if not self._poll_failed:
+                self.event_sink(
+                    NotifyEvent(
+                        title="Calendar watcher error",
+                        body=str(exc),
+                    )
                 )
-            )
+            self._poll_failed = True
             return
+
+        self._poll_failed = False
 
         schedule_until = now + timedelta(minutes=2)
         for meeting in meetings:

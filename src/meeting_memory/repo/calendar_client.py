@@ -13,6 +13,7 @@ from typing import Protocol
 from urllib.parse import parse_qs, urlsplit
 
 from meeting_memory.config.settings import Settings
+from meeting_memory.repo.google_http import authorized_google_http
 from meeting_memory.repo.speaker_candidates import (
     speaker_candidates_from_event as _speaker_candidates,
 )
@@ -94,7 +95,12 @@ class GoogleCalendarClient:
         lookahead_minutes: int,
         lookbehind_minutes: int = 0,
     ) -> list[CalendarMeeting]:
-        service = _load_google_build()("calendar", "v3", credentials=self.credentials())
+        service = _load_google_build()(
+            "calendar",
+            "v3",
+            http=authorized_google_http(self.credentials()),
+            cache_discovery=False,
+        )
         meetings: list[CalendarMeeting] = []
         for calendar_id in self._calendar_ids(service):
             response = (

@@ -139,6 +139,30 @@ def test_calendar_watcher_reports_poll_errors_as_events() -> None:
     assert events[0].body == "calendar unavailable"
 
 
+def test_calendar_watcher_notifies_once_per_consecutive_outage() -> None:
+    events: list[object] = []
+    client = RecoveringCalendarClient()
+    watcher = CalendarWatcher(
+        client=client,
+        event_sink=events.append,
+        notify_minutes_before=5,
+        poll_interval_seconds=120,
+        now=lambda: datetime(2026, 6, 11, 9, 0, tzinfo=UTC),
+    )
+
+    watcher.poll_once()
+    watcher.poll_once()
+    client.available = True
+    watcher.poll_once()
+    client.available = False
+    watcher.poll_once()
+
+    assert [event.title for event in events if isinstance(event, NotifyEvent)] == [
+        "Calendar watcher error",
+        "Calendar watcher error",
+    ]
+
+
 class FakeCalendarClient:
     def __init__(
         self,
@@ -176,6 +200,23 @@ class FailingCalendarClient:
     ):
         del now, lookahead_minutes, lookbehind_minutes
         raise RuntimeError("calendar unavailable")
+
+
+class RecoveringCalendarClient:
+    def __init__(self) -> None:
+        self.available = False
+
+    def list_upcoming_meetings(
+        self,
+        *,
+        now: datetime,
+        lookahead_minutes: int,
+        lookbehind_minutes: int = 0,
+    ):
+        del now, lookahead_minutes, lookbehind_minutes
+        if not self.available:
+            raise RuntimeError("calendar unavailable")
+        return []
 
 
 class ImmediateThread:

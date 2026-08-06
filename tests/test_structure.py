@@ -25,6 +25,8 @@ EXTERNAL_SDK_PREFIXES = (
     "google",
     "google_auth_oauthlib",
     "googleapiclient",
+    "google_auth_httplib2",
+    "httplib2",
     "keyring",
     "sounddevice",
 )
@@ -48,6 +50,7 @@ REQUIRED_SOURCE_FILES = (
     "repo/transcription.py",
     "repo/summarizer.py",
     "repo/calendar_client.py",
+    "repo/google_http.py",
     "repo/audio_device.py",
     "service/__init__.py",
     "service/storage.py",
