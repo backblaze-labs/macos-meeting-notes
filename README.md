@@ -192,9 +192,11 @@ Set `SUMMARY_PROMPT_FILE` to point at another prompt file. If the file contains
 otherwise it appends the transcript below the prompt.
 
 Choose **Configuration › Notes Prompt...** in the tray to edit the effective
-prompt in a native multiline editor. Saving updates `SUMMARY_PROMPT_FILE`, and
-the next notes generation uses the new text without restarting the app. The
-editor can also restore the built-in default.
+additional instructions in a native multiline editor. The required JSON output
+contract stays fixed so custom text cannot change the parser-facing schema.
+Saving updates `SUMMARY_PROMPT_FILE`, and the next notes generation uses the new
+text without restarting the app. The editor can also restore the built-in
+default.
 
 ## Speaker Review
 

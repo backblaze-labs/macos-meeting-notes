@@ -51,11 +51,12 @@ def test_tray_controller_auto_stops_at_recording_limit(tmp_path: Path) -> None:
         pipeline=pipeline,
         event_queue=queue.Queue(),
         thread_factory=ImmediateThread,
-        timer_thread_factory=ImmediateThread,
+        timer_thread_factory=PassiveThread,
         sleeper=lambda seconds: sleeps.append(seconds),
     )
 
     controller.start_recording("Long Meeting")
+    controller._auto_stop_recording("Long Meeting", controller._recording_token)
 
     assert sleeps == [60]
     assert recorder.is_recording is False
@@ -103,6 +104,7 @@ def test_rumps_tray_app_uses_calendar_context_without_prompt(tmp_path: Path) -> 
         recorder=recorder,
         pipeline=FakePipeline(),
         event_queue=queue.Queue(),
+        thread_factory=ImmediateThread,
         recording_context_provider=lambda: RecordingContext(
             "Calendar Sync",
             ends_at=ends_at,

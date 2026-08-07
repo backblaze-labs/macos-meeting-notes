@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import io
 import subprocess
+import threading
 from pathlib import Path
+
+import pytest
 
 from meeting_memory.repo import native_audio
 
@@ -56,6 +59,67 @@ def test_start_and_stop_native_capture_waits_for_ready_event(
 
     assert result == output
     assert process.signals == [native_audio.signal.SIGINT]
+
+
+def test_native_capture_rejects_async_error_even_when_helper_exits_zero(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    helper = tmp_path / native_audio.HELPER_NAME
+    helper.write_bytes(b"binary")
+    helper.chmod(0o755)
+    output = tmp_path / "recording.wav"
+    output.write_bytes(b"RIFF" + b"\0" * 64)
+    process = DeferredErrorProcess()
+    monkeypatch.setattr(native_audio, "native_capture_helper_path", lambda: helper)
+    monkeypatch.setattr(native_audio.subprocess, "Popen", lambda *args, **kwargs: process)
+
+    capture = native_audio.start_native_capture("full-meeting", output)
+
+    with pytest.raises(native_audio.NativeAudioCaptureError, match="device disconnected"):
+        capture.stop()
+
+
+def test_native_capture_health_check_surfaces_failure_before_manual_stop(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    helper = tmp_path / native_audio.HELPER_NAME
+    helper.write_bytes(b"binary")
+    helper.chmod(0o755)
+    process = DeferredErrorProcess()
+    monkeypatch.setattr(native_audio, "native_capture_helper_path", lambda: helper)
+    monkeypatch.setattr(native_audio.subprocess, "Popen", lambda *args, **kwargs: process)
+
+    capture = native_audio.start_native_capture("full-meeting", tmp_path / "recording.wav")
+    process.release.set()
+    capture.reader.join(timeout=1)
+
+    with pytest.raises(native_audio.NativeAudioCaptureError, match="device disconnected"):
+        capture.check_health()
+
+
+def test_native_check_rejects_fatal_event_with_zero_exit(monkeypatch, tmp_path: Path) -> None:
+    helper = tmp_path / native_audio.HELPER_NAME
+    helper.write_bytes(b"binary")
+    helper.chmod(0o755)
+    monkeypatch.setattr(native_audio, "native_capture_helper_path", lambda: helper)
+    monkeypatch.setattr(
+        native_audio.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0],
+            0,
+            stdout=(
+                '{"event":"supported","microphone":"AirPods"}\n'
+                '{"event":"fatal","message":"late failure"}\n'
+            ),
+            stderr="",
+        ),
+    )
+
+    with pytest.raises(native_audio.NativeAudioCaptureError, match="late failure"):
+        native_audio.check_native_capture()
 
 
 def test_convert_native_audio_uses_helper_and_validates_output(
@@ -117,3 +181,32 @@ class FakeProcess:
 
     def kill(self):
         self.returncode = -9
+
+
+class DeferredErrorOutput:
+    def __init__(self, release: threading.Event):
+        self.release = release
+
+    def __iter__(self):
+        yield '{"event":"ready","mode":"full-meeting","microphone":"AirPods"}\n'
+        self.release.wait(timeout=2)
+        yield '{"event":"error","message":"device disconnected"}\n'
+
+
+class DeferredErrorProcess(FakeProcess):
+    def __init__(self):
+        super().__init__()
+        self.release = threading.Event()
+        self.stdout = DeferredErrorOutput(self.release)
+
+    def send_signal(self, signal_number):
+        super().send_signal(signal_number)
+        self.release.set()
+
+    def wait(self, timeout=None):
+        self.release.set()
+        return super().wait(timeout)
+
+    def terminate(self):
+        self.release.set()
+        super().terminate()

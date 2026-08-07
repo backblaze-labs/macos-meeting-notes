@@ -48,7 +48,7 @@ This boundary intentionally avoids virtual audio drivers, Aggregate Devices,
 - `rumps` imports are contained to `ui/`.
 - Background workers communicate with the UI through `types/events.py` objects
   and a thread-safe queue.
-- Source files stay at or below 300 lines.
+- Python and Swift source files stay at or below 300 lines.
 
 These rules are enforced by `tests/test_structure.py`.
 

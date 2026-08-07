@@ -36,7 +36,7 @@ def test_tray_controller_runs_pipeline_after_stop(tmp_path: Path) -> None:
     assert recorder.started_candidates == ()
     assert pipeline.calls == [(recorder.result.audio_path, recorder.result.meta)]
     assert controller.drain_events() == [
-        NotifyEvent("Recording saved", "Product Sync · transcribing now", show_notification=False)
+        NotifyEvent("Recording saved", "Product Sync · processing queued", show_notification=False)
     ]
 
 
@@ -62,6 +62,7 @@ def test_tray_controller_reports_start_recording_errors(tmp_path: Path) -> None:
         recorder=FailingRecorder(message),
         pipeline=FakePipeline(),
         event_queue=event_queue,
+        thread_factory=ImmediateThread,
     )
 
     controller.start_recording()
@@ -76,6 +77,7 @@ def test_tray_controller_reports_stop_recording_errors(tmp_path: Path) -> None:
         recorder=FailingRecorder("native converter failed", is_recording=True),
         pipeline=FakePipeline(),
         event_queue=event_queue,
+        thread_factory=ImmediateThread,
     )
 
     controller.stop_recording()

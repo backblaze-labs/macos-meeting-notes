@@ -66,6 +66,9 @@ REQUIRED_SOURCE_FILES = (
     "ui/menu.py",
     "ui/audio_modes.py",
     "ui/notes_prompt.py",
+    "ui/processing_launch.py",
+    "ui/recording_health.py",
+    "ui/recording_transitions.py",
     "ui/submenus.py",
     "ui/preferences.py",
     "ui/preference_forms.py",
@@ -91,11 +94,17 @@ REQUIRED_REPO_FILES = (
 REQUIRED_NATIVE_SOURCE_FILES = (
     "repo/native/CLI.swift",
     "repo/native/NativeCapture.swift",
+    "repo/native/ScreenCaptureRecorder.swift",
+    "repo/native/SilentSystemRecorder.swift",
 )
 
 
 def python_files() -> list[Path]:
     return sorted([*SRC_ROOT.rglob("*.py"), *TESTS_ROOT.rglob("*.py")])
+
+
+def source_files() -> list[Path]:
+    return sorted([*python_files(), *SRC_ROOT.rglob("*.swift")])
 
 
 def parse(path: Path) -> ast.Module:
@@ -191,7 +200,7 @@ def test_rumps_only_in_ui() -> None:
 def test_file_size_limits() -> None:
     oversized = [
         f"{path.relative_to(ROOT)} has {len(path.read_text(encoding='utf-8').splitlines())} lines"
-        for path in python_files()
+        for path in source_files()
         if len(path.read_text(encoding="utf-8").splitlines()) > 300
     ]
 

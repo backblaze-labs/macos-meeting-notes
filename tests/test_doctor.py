@@ -54,6 +54,22 @@ def test_native_audio_check_passes_with_current_microphone(monkeypatch) -> None:
     assert "AirPods" in result.message
 
 
+def test_native_audio_check_warns_when_full_meeting_has_no_microphone(monkeypatch) -> None:
+    monkeypatch.setattr(
+        doctor,
+        "check_native_capture",
+        lambda: {"event": "supported", "microphone": "none"},
+    )
+
+    result = doctor.check_native_audio()
+
+    assert result.ok is True
+    assert result.warning is True
+    assert "Full Meeting has no microphone" in result.message
+    assert result.fix is not None
+    assert "input device" in result.fix
+
+
 def test_native_audio_check_reports_missing_helper(monkeypatch) -> None:
     monkeypatch.setattr(
         doctor,

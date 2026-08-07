@@ -11,7 +11,7 @@ import signal
 import subprocess
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -32,8 +32,25 @@ class NativeAudioCaptureError(RuntimeError):
 class NativeCaptureProcess:
     process: subprocess.Popen[str]
     output_path: Path
-    events: queue.Queue[dict[str, Any]]
     reader: threading.Thread
+    status: _HelperStatus
+
+    def check_health(self) -> None:
+        detail = self.status.failure_message()
+        if detail:
+            self._terminate_after_failure()
+            raise NativeAudioCaptureError(f"Native audio capture failed: {detail}")
+
+        return_code = self.process.poll()
+        if return_code is None:
+            return
+        self.reader.join(timeout=2)
+        detail = self.status.failure_message()
+        if detail:
+            raise NativeAudioCaptureError(f"Native audio capture failed: {detail}")
+        raise NativeAudioCaptureError(
+            f"Native audio capture stopped unexpectedly with status {return_code}."
+        )
 
     def stop(self) -> Path:
         if self.process.poll() is None:
@@ -50,14 +67,46 @@ class NativeCaptureProcess:
             raise NativeAudioCaptureError("Native audio capture did not stop cleanly.") from exc
 
         self.reader.join(timeout=2)
-        errors = _captured_errors(self.events)
-        if return_code != 0:
-            detail = errors[-1] if errors else f"helper exited with status {return_code}"
+        detail = self.status.failure_message()
+        if detail:
             raise NativeAudioCaptureError(f"Native audio capture failed: {detail}")
+        if return_code != 0:
+            raise NativeAudioCaptureError(
+                f"Native audio capture failed: helper exited with status {return_code}"
+            )
         if not self.output_path.exists() or self.output_path.stat().st_size <= 44:
-            detail = errors[-1] if errors else "no audio samples were written"
-            raise NativeAudioCaptureError(f"Native audio capture produced no audio: {detail}")
+            raise NativeAudioCaptureError(
+                "Native audio capture produced no audio: no audio samples were written"
+            )
         return self.output_path
+
+    def _terminate_after_failure(self) -> None:
+        if self.process.poll() is not None:
+            return
+        self.process.terminate()
+        try:
+            self.process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait(timeout=5)
+        self.reader.join(timeout=2)
+
+
+@dataclass
+class _HelperStatus:
+    _failure_message: str | None = None
+    _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def observe(self, event: dict[str, Any]) -> None:
+        if event.get("event") not in {"error", "fatal"}:
+            return
+        message = str(event.get("message") or "native helper reported an error")
+        with self._lock:
+            self._failure_message = message
+
+    def failure_message(self) -> str | None:
+        with self._lock:
+            return self._failure_message
 
 
 def start_native_capture(mode_key: str, output_path: Path) -> NativeCaptureProcess:
@@ -70,9 +119,10 @@ def start_native_capture(mode_key: str, output_path: Path) -> NativeCaptureProce
         bufsize=1,
     )
     events: queue.Queue[dict[str, Any]] = queue.Queue()
+    status = _HelperStatus()
     reader = threading.Thread(
         target=_read_helper_output,
-        args=(process.stdout, process.stderr, events),
+        args=(process.stdout, process.stderr, events, status),
         daemon=True,
     )
     reader.start()
@@ -92,7 +142,9 @@ def start_native_capture(mode_key: str, output_path: Path) -> NativeCaptureProce
         process.wait(timeout=5)
         message = str(event.get("message") or "native capture could not start")
         raise NativeAudioCaptureError(message)
-    return NativeCaptureProcess(process, output_path, events, reader)
+    capture = NativeCaptureProcess(process, output_path, reader, status)
+    capture.check_health()
+    return capture
 
 
 def check_native_capture() -> dict[str, Any]:
@@ -105,9 +157,10 @@ def check_native_capture() -> dict[str, Any]:
         timeout=10,
     )
     events = [_parse_event(line) for line in result.stdout.splitlines()]
-    event = next((item for item in events if item), None)
-    if result.returncode != 0 or not event or event.get("event") != "supported":
-        message = str((event or {}).get("message") or result.stderr.strip() or "check failed")
+    error = _event_error(events)
+    event = next((item for item in events if item and item.get("event") == "supported"), None)
+    if result.returncode != 0 or error or not event:
+        message = str(error or result.stderr.strip() or "check failed")
         raise NativeAudioCaptureError(message)
     return event
 
@@ -122,9 +175,10 @@ def convert_native_audio(wav_path: Path, m4a_path: Path) -> Path:
         timeout=120,
     )
     events = [_parse_event(line) for line in result.stdout.splitlines()]
-    event = next((item for item in events if item), None)
-    if result.returncode != 0 or not event or event.get("event") != "converted":
-        message = str((event or {}).get("message") or result.stderr.strip() or "conversion failed")
+    error = _event_error(events)
+    event = next((item for item in events if item and item.get("event") == "converted"), None)
+    if result.returncode != 0 or error or not event:
+        message = str(error or result.stderr.strip() or "conversion failed")
         raise NativeAudioCaptureError(f"Native audio conversion failed: {message}")
     if not m4a_path.exists() or m4a_path.stat().st_size == 0:
         raise NativeAudioCaptureError("Native audio conversion produced no output.")
@@ -216,15 +270,19 @@ def _read_helper_output(
     stdout: TextIO | None,
     stderr: TextIO | None,
     events: queue.Queue[dict[str, Any]],
+    status: _HelperStatus,
 ) -> None:
     if stdout is not None:
         for line in stdout:
             if event := _parse_event(line):
+                status.observe(event)
                 events.put(event)
     if stderr is not None:
         detail = stderr.read().strip()
         if detail:
-            events.put({"event": "error", "message": detail})
+            event = {"event": "error", "message": detail}
+            status.observe(event)
+            events.put(event)
 
 
 def _parse_event(line: str) -> dict[str, Any] | None:
@@ -235,15 +293,8 @@ def _parse_event(line: str) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
-def _captured_errors(events: queue.Queue[dict[str, Any]]) -> list[str]:
-    drained: list[dict[str, Any]] = []
-    while True:
-        try:
-            drained.append(events.get_nowait())
-        except queue.Empty:
-            break
-    return [
-        str(event.get("message"))
-        for event in drained
-        if event.get("event") in {"error", "fatal"} and event.get("message")
-    ]
+def _event_error(events: list[dict[str, Any] | None]) -> str | None:
+    for event in reversed(events):
+        if event and event.get("event") in {"error", "fatal"}:
+            return str(event.get("message") or "native helper reported an error")
+    return None

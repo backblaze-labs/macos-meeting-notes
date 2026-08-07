@@ -26,6 +26,7 @@ from meeting_memory.ui.notifications import (
     send_notification,
 )
 from meeting_memory.ui.preferences import open_known_speakers_window, open_preferences_window
+from meeting_memory.ui.recording_health import RecordingHealthMonitor
 from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
 from meeting_memory.ui.submenus import (
     ConfigurationActions,
@@ -64,6 +65,7 @@ class RumpsTrayApp:
         self.timer = self.rumps.Timer(self.drain_events, 1)
         self.recording_item = None
         self.recording_label = ""
+        self.recording_health = RecordingHealthMonitor(controller.recorder, controller.event_queue)
         self.audio_mode_menu = AudioModeMenu(self.rumps, self.controller, rebuild_menu=self.rebuild_menu)  # noqa: E501
         self.rebuild_menu()
 
@@ -135,15 +137,7 @@ class RumpsTrayApp:
         if self.controller.recorder.is_recording:
             self.controller.stop_recording()
         else:
-            context = self.controller.recording_context()
-            if context is None:
-                self.controller.start_recording()
-            else:
-                self.controller.start_recording(
-                    context.calendar_title,
-                    ends_at=context.ends_at,
-                    speaker_candidates=context.speaker_candidates,
-                )
+            self.controller.start_recording()
         self.rebuild_menu()
 
     def open_preferences(self, _sender=None) -> None:
@@ -184,6 +178,7 @@ class RumpsTrayApp:
         self._send_notification("Meeting Memory test", "", "Notifications are working.")
 
     def drain_events(self, _timer=None) -> None:
+        self.recording_health.poll()
         for event in self.controller.drain_events():
             self.handle_event(event)
         self.update_tray_title()

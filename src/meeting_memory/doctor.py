@@ -199,6 +199,14 @@ def check_native_audio() -> CheckResult:
             "Run make setup to build and install the native audio helper.",
         )
     microphone = event.get("microphone", "unknown")
+    if str(microphone).strip().lower() in {"none", "unknown", ""}:
+        return CheckResult(
+            "native-audio",
+            True,
+            "Native system audio is ready, but Full Meeting has no microphone available.",
+            "Connect or select a macOS input device, then rerun make doctor.",
+            warning=True,
+        )
     return CheckResult(
         "native-audio",
         True,

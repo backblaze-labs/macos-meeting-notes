@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import queue
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -149,6 +150,7 @@ class FakeRecorder:
 class FakeController:
     tmp_path: Path
     recorder: FakeRecorder = field(default_factory=FakeRecorder)
+    event_queue: queue.Queue[object] = field(default_factory=queue.Queue)
     recent: list[RecentMeeting] = field(default_factory=list)
     started_title: str | None = None
     started_candidates: tuple[str, ...] = ()

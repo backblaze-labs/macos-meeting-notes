@@ -18,12 +18,7 @@ PLACEHOLDER_MARKERS = ("replace-me", "changeme", "todo", "<", ">")
 
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"
 DEFAULT_SUMMARY_PROMPT_FILE = "prompts/summary.md"
-DEFAULT_SUMMARY_PROMPT_TEMPLATE = """Summarize this meeting transcript as strict JSON.
-Return exactly these keys: summary, decisions, action_items.
-action_items must be objects with task, owner, and due_date keys.
-Use null for unknown owner or due_date. Do not include markdown fences.
-
-Privacy rules:
+DEFAULT_SUMMARY_PROMPT_TEMPLATE = """Privacy rules:
 - Omit personal information that is not needed to understand the work.
 - Do not include emails, phone numbers, addresses, account IDs, or personal anecdotes.
 - Prefer speaker labels, roles, or null instead of full names when an owner is uncertain.

@@ -51,7 +51,9 @@ generation runs in a background thread from the tray, or through the local
   Tasks** action.
 - The tray's **Configuration › Notes Prompt...** item opens the effective
   `SUMMARY_PROMPT_FILE` in a native multiline editor. Saved changes apply to
-  the next notes generation without restarting the app.
+  the next notes generation without restarting the app. Editable text is
+  treated as additional instructions; the JSON output contract is fixed in the
+  adapter.
 - `meeting-memory summarize <meeting-folder>` requires
   `speaker_status: confirmed` and remains available as a backfill/retry command
   for `notes.md`.

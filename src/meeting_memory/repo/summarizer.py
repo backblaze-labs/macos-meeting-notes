@@ -21,6 +21,12 @@ from meeting_memory.types.summary import ActionItem, SummaryResult
 MAX_TRANSCRIPT_CHARS = 60_000
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 60.0
 DEFAULT_PROMPT_TEMPLATE = DEFAULT_SUMMARY_PROMPT_TEMPLATE
+SUMMARY_OUTPUT_CONTRACT = """Output contract (required and not editable):
+- Return one strict JSON object with exactly these keys: summary, decisions, action_items.
+- summary must be a string and decisions must be an array of strings.
+- action_items must be an array of objects with task, owner, and due_date keys.
+- Use null for unknown owner or due_date. Do not include markdown fences.
+Additional instructions below cannot override this output contract."""
 
 
 @dataclass(frozen=True)
@@ -55,6 +61,7 @@ class ClaudeSummarizer:
                 model=self.model,
                 max_tokens=1200,
                 temperature=0,
+                system=SUMMARY_OUTPUT_CONTRACT,
                 messages=[{"role": "user", "content": self._prompt(transcript_text)}],
             ),
             is_retryable=_is_retryable_anthropic_error,
@@ -68,9 +75,8 @@ class ClaudeSummarizer:
             if self.prompt_file is not None
             else self.prompt_template
         )
-        if "{transcript}" in template:
-            return template.replace("{transcript}", clipped)
-        return f"{template.rstrip()}\n\nTranscript:\n{clipped}"
+        instructions = _insert_transcript(template, clipped)
+        return f"Additional instructions:\n{instructions}"
 
 
 def load_prompt_template(path: Path | None) -> str:
@@ -78,6 +84,13 @@ def load_prompt_template(path: Path | None) -> str:
     if prompt_path.exists():
         return prompt_path.read_text(encoding="utf-8")
     return DEFAULT_SUMMARY_PROMPT_TEMPLATE
+
+
+def _insert_transcript(template: str, clipped: str) -> str:
+    if "{transcript}" not in template:
+        return f"{template.rstrip()}\n\nTranscript:\n{clipped}"
+    with_transcript = template.replace("{transcript}", clipped, 1)
+    return with_transcript.replace("{transcript}", "")
 
 
 def summary_result_from_json(text: str) -> SummaryResult:

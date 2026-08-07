@@ -80,7 +80,8 @@ def _prompt_notes_text(prompt: str, path: Path, rumps: Any) -> str | None:
         alert = NSAlert.alloc().init()
         alert.setMessageText_("Notes Prompt")
         alert.setInformativeText_(
-            "Controls Summary, Decisions, and Action Items. "
+            "Adds instructions for Summary, Decisions, and Action Items; "
+            "the JSON output contract is always enforced. "
             "Use {transcript} where the transcript should appear; otherwise it is appended. "
             f"Changes apply to the next notes generation.\n{path}"
         )
@@ -105,7 +106,8 @@ def _prompt_notes_text(prompt: str, path: Path, rumps: Any) -> str | None:
 def _prompt_notes_fallback(prompt: str, path: Path, rumps: Any) -> str | None:
     window = rumps.Window(
         message=(
-            "Use {transcript} where the transcript should appear; otherwise it is appended. "
+            "The JSON output contract is fixed. Use {transcript} where the transcript "
+            "should appear; otherwise it is appended. "
             f"Saving updates {path}."
         ),
         title="Notes Prompt",

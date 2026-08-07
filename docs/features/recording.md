@@ -23,9 +23,10 @@ Only` records system audio with the microphone off and playback muted.
 
 ## Threading
 
-The tray action runs on the main thread. A Swift subprocess performs native
-capture and incremental WAV writing; the post-recording pipeline is started on
-a background thread.
+The tray action only schedules a single-flight background transition. Calendar
+context lookup, native-helper startup/shutdown, and WAV-to-M4A conversion never
+run on the main thread. A Swift subprocess performs capture and incremental WAV
+writing; the post-recording pipeline is also started on a background thread.
 
 ## Behavior Notes
 
@@ -56,6 +57,8 @@ a background thread.
 - `src/meeting_memory/service/recovery.py`
 - `src/meeting_memory/service/recording_context.py`
 - `src/meeting_memory/ui/controller.py`
+- `src/meeting_memory/ui/processing_launch.py`
+- `src/meeting_memory/ui/recording_transitions.py`
 - `src/meeting_memory/repo/native_audio.py`
 - `src/meeting_memory/repo/native/NativeCapture.swift`
 - `src/meeting_memory/ui/tray.py`

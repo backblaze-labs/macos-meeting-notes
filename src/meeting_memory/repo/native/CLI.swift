@@ -73,7 +73,7 @@ struct MeetingMemoryNativeCapture {
         let outputURL = URL(fileURLWithPath: outputPath)
         try? FileManager.default.removeItem(at: outputURL)
         let writer = try WAVWriter(url: outputURL)
-        let signalWaiter = SignalWaiter()
+        let lifetime = RecordingLifetime()
 
         switch mode {
         case .fullMeeting:
@@ -81,15 +81,24 @@ struct MeetingMemoryNativeCapture {
                 writer: writer,
                 enabledSources: [.system, .microphone]
             )
-            let recorder = ScreenCaptureRecorder(mixer: mixer, includeMicrophone: true)
+            let recorder = ScreenCaptureRecorder(
+                mixer: mixer,
+                includeMicrophone: true,
+                failureHandler: lifetime.fail
+            )
             let microphone = try await recorder.start()
             emitJSON([
                 "event": "ready",
                 "mode": mode.rawValue,
                 "microphone": microphone ?? "unknown",
             ])
-            await signalWaiter.wait()
-            try await recorder.stop()
+            var captureError = await lifetime.waitForStopOrFailure()
+            do {
+                try await recorder.stop()
+            } catch {
+                captureError = captureError ?? error
+            }
+            if let captureError { throw captureError }
             emitJSON([
                 "event": "stopped",
                 "output": outputURL.path,
@@ -97,15 +106,20 @@ struct MeetingMemoryNativeCapture {
             ])
         case .silentSystemOnly:
             let mixer = TimelineMixer(writer: writer, enabledSources: [.system])
-            let recorder = SilentSystemRecorder(mixer: mixer)
+            let recorder = SilentSystemRecorder(mixer: mixer, failureHandler: lifetime.fail)
             try recorder.start()
             emitJSON([
                 "event": "ready",
                 "mode": mode.rawValue,
                 "microphone": "off",
             ])
-            await signalWaiter.wait()
-            try recorder.stop()
+            var captureError = await lifetime.waitForStopOrFailure()
+            do {
+                try recorder.stop()
+            } catch {
+                captureError = captureError ?? error
+            }
+            if let captureError { throw captureError }
             emitJSON([
                 "event": "stopped",
                 "output": outputURL.path,
@@ -115,35 +129,59 @@ struct MeetingMemoryNativeCapture {
     }
 }
 
-final class SignalWaiter {
+private enum RecordingOutcome {
+    case stop
+    case failure(Error)
+}
+
+final class RecordingLifetime {
+    private let lock = NSLock()
     private var sources: [DispatchSourceSignal] = []
+    private var outcome: RecordingOutcome?
+    private var continuation: CheckedContinuation<RecordingOutcome, Never>?
 
     init() {
         signal(SIGINT, SIG_IGN)
         signal(SIGTERM, SIG_IGN)
+        for signalNumber in [SIGINT, SIGTERM] {
+            let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
+            source.setEventHandler { [weak self] in self?.resolve(.stop) }
+            source.resume()
+            sources.append(source)
+        }
     }
 
-    func wait() async {
-        await withCheckedContinuation { continuation in
-            let lock = NSLock()
-            var resumed = false
-            for signalNumber in [SIGINT, SIGTERM] {
-                let source = DispatchSource.makeSignalSource(
-                    signal: signalNumber,
-                    queue: .main
-                )
-                source.setEventHandler {
-                    lock.lock()
-                    defer { lock.unlock() }
-                    guard !resumed else { return }
-                    resumed = true
-                    continuation.resume()
-                }
-                source.resume()
-                sources.append(source)
+    func fail(_ error: Error) {
+        resolve(.failure(error))
+    }
+
+    func waitForStopOrFailure() async -> Error? {
+        let result = await withCheckedContinuation { continuation in
+            lock.lock()
+            if let outcome {
+                lock.unlock()
+                continuation.resume(returning: outcome)
+            } else {
+                self.continuation = continuation
+                lock.unlock()
             }
         }
         sources.forEach { $0.cancel() }
         sources.removeAll()
+        if case let .failure(error) = result { return error }
+        return nil
+    }
+
+    private func resolve(_ result: RecordingOutcome) {
+        lock.lock()
+        guard outcome == nil else {
+            lock.unlock()
+            return
+        }
+        outcome = result
+        let pendingContinuation = continuation
+        continuation = nil
+        lock.unlock()
+        pendingContinuation?.resume(returning: result)
     }
 }

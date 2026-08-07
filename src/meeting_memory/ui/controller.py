@@ -15,10 +15,11 @@ from meeting_memory.config.settings import Settings
 from meeting_memory.service.pipeline import Pipeline
 from meeting_memory.service.processing_retry import retry_failed_processing
 from meeting_memory.service.processing_state import list_pending_processing_tasks
-from meeting_memory.service.recorder import RecorderService
+from meeting_memory.service.recorder import RecorderService, RecordingResult
 from meeting_memory.service.recording_context import context_from_meetings
 from meeting_memory.service.recovery import (
     RecoveredRecording,
+    clear_audio_recovery_marker,
     convert_recovered_recording,
     find_recovered_recordings,
 )
@@ -38,6 +39,8 @@ from meeting_memory.types.meeting import (
 from meeting_memory.types.processing import ProcessingTask
 from meeting_memory.types.transcript import SpeakerReviewState
 from meeting_memory.ui.macos import open_in_finder
+from meeting_memory.ui.processing_launch import launch_processing
+from meeting_memory.ui.recording_transitions import RecordingTransitions
 
 EventQueue = queue.Queue[object]
 ThreadFactory = Callable[..., threading.Thread]
@@ -61,6 +64,17 @@ class TrayController:
     sleeper: Callable[[float], None] = time.sleep
     _known_meetings: dict[str, CalendarMeeting] = field(default_factory=dict, init=False)
     _recording_token: object | None = field(default=None, init=False)
+    _transitions: RecordingTransitions = field(init=False)
+
+    def __post_init__(self) -> None:
+        self._transitions = RecordingTransitions(
+            self.recorder,
+            self.event_queue,
+            context_provider=self.recording_context,
+            on_started=self._recording_started,
+            on_stopped=self._recording_stopped,
+            thread_factory=self.thread_factory,
+        )
 
     def start_recording(
         self,
@@ -69,59 +83,38 @@ class TrayController:
         ends_at: datetime | None = None,
         speaker_candidates: tuple[str, ...] = (),
     ) -> None:
-        context = self.recording_context() if calendar_title is None and ends_at is None else None
-        title = calendar_title or (context.calendar_title if context else "Untitled")
-        reminder_end = ends_at or (context.ends_at if context else None)
-        candidates = speaker_candidates or (context.speaker_candidates if context else ())
-        try:
-            session = self.recorder.start(calendar_title=title, speaker_candidates=candidates)
-        except Exception as exc:
-            LOGGER.exception("Failed to start recording")
-            self.event_queue.put(
-                NotifyEvent(title="Recording could not start", body=_format_exception(exc))
-            )
-            return
-        if session is not None:
-            self._recording_token = object()
-            token = self._recording_token
-            self._schedule_auto_stop(title, token)
-            self._schedule_stop_reminder(title, reminder_end, token)
+        self._transitions.request_start(
+            calendar_title,
+            ends_at=ends_at,
+            speaker_candidates=speaker_candidates,
+        )
 
     def stop_recording(self) -> None:
-        try:
-            result = self.recorder.stop()
-        except Exception as exc:
-            LOGGER.exception("Failed to stop recording")
-            self.event_queue.put(
-                NotifyEvent(title="Recording could not finish", body=_format_exception(exc))
-            )
-            return
-        if result is None:
-            return
-        self._recording_token = None
+        self._transitions.request_stop()
 
+    def _recording_started(self, title: str, reminder_end: datetime | None) -> None:
+        self._recording_token = object()
+        token = self._recording_token
+        self._schedule_auto_stop(title, token)
+        self._schedule_stop_reminder(title, reminder_end, token)
+
+    def _recording_stopped(self, result: RecordingResult) -> None:
+        self._recording_token = None
         if result.meta.needs_title_prompt:
             self.event_queue.put(RecordingTitleNeeded(result.audio_path, result.meta))
             return
-
         self.process_recording(result.audio_path, result.meta)
 
     def process_recording(self, audio_path: Path, meta: MeetingMeta) -> None:
-        self.event_queue.put(
-            NotifyEvent(
-                title="Recording saved",
-                body=f"{meta.calendar_title} · transcribing now",
-                show_notification=False,
-            )
+        launch_processing(
+            thread_factory=self.thread_factory,
+            event_sink=self.event_queue.put,
+            callback=self.run_pipeline,
+            audio_path=audio_path,
+            meta=meta,
         )
-        thread = self.thread_factory(
-            target=self.run_pipeline,
-            args=(audio_path, meta),
-            daemon=True,
-        )
-        thread.start()
 
-    def run_pipeline(self, audio_path: Path, meta: MeetingMeta) -> None:
+    def run_pipeline(self, audio_path: Path, meta: MeetingMeta) -> bool:
         try:
             self.pipeline.run(audio_path, meta)
         except Exception as exc:
@@ -129,6 +122,8 @@ class TrayController:
             self.event_queue.put(
                 NotifyEvent(title="Meeting processing failed", body=_format_exception(exc))
             )
+            return False
+        return True
 
     def sync_to_b2(self) -> None:
         if self.sync_runner is None:
@@ -272,7 +267,8 @@ class TrayController:
                 body=f"{recording.meta.calendar_title} · transcribing now",
             )
         )
-        self.run_pipeline(audio_path, recording.meta)
+        if self.run_pipeline(audio_path, recording.meta):
+            clear_audio_recovery_marker(audio_path)
 
     def _generate_notes(self, path: Path) -> None:
         summarizer = self.pipeline.summarizer_client
