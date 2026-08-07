@@ -7,6 +7,7 @@ from meeting_memory.types.processing import ProcessingTask
 
 APP_TITLE = "● Meeting Memory"
 RECENT_HEADER = "Recent Meetings"
+AUDIO_MODE_HEADER = "Audio Mode"
 NO_MEETINGS_LABEL = "No meetings yet"
 REVIEW_SPEAKERS_HEADER = "Review Speakers"
 PROCESSING_HEADER = "Continue Processing"

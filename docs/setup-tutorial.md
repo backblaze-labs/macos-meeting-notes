@@ -7,23 +7,20 @@ fresh clone of the `macos-meeting-notes` repository.
 
 You need:
 
-- macOS 13 Ventura or later
+- macOS 15 Sequoia or later
 - Python 3.11 or later
-- `ffmpeg`
-- BlackHole 2ch
+- Xcode Command Line Tools
 - A Google account with Calendar access
 - AssemblyAI API key
 - Backblaze B2 bucket and S3-compatible application key
 - Optional Anthropic API key for generated notes
 
-With Homebrew, the common local tools are:
+Install the system build tools once if they are not already present:
 
 ```bash
-brew install python@3.11 ffmpeg blackhole-2ch
+xcode-select --install
+brew install python@3.11
 ```
-
-After installing BlackHole, restart meeting apps or restart macOS if the audio
-device does not appear.
 
 ## 2. Clone and Install the Python App
 
@@ -40,20 +37,18 @@ which is ignored by git.
 
 ## 3. Configure Audio Capture
 
-Meeting Memory records from a macOS input device named `Meeting Aggregate` by
-default.
+There are no audio devices to configure. Meeting Memory builds and installs a
+native audio helper as part of `make setup` and supports two tray-selectable
+modes:
 
-Create it in Audio MIDI Setup:
+- `Full Meeting`: records system audio plus the current default microphone and
+  lets you keep listening through the current output, including AirPods.
+- `Silent System Only`: records system audio without the microphone and mutes
+  playback for the duration of the recording.
 
-1. Open `Audio MIDI Setup`.
-2. Click `+` and choose `Create Aggregate Device`.
-3. Rename it to `Meeting Aggregate`.
-4. Include your microphone and `BlackHole 2ch`.
-5. Use your microphone as the clock source when possible.
-6. Enable drift correction for non-clock-source devices.
-
-To capture remote meeting audio, route system output to BlackHole as described
-in [blackhole-setup.md](blackhole-setup.md).
+The app never changes macOS input or output selection. BlackHole, Aggregate
+Devices, and Multi-Output Devices are not required. On first use, allow the
+Microphone and Screen & System Audio permissions requested by macOS.
 
 ## 4. Create Service Credentials
 
@@ -109,7 +104,6 @@ Optional settings:
 ANTHROPIC_API_KEY=
 KNOWN_SPEAKERS={}
 MEETINGS_DIR=~/Meetings
-AUDIO_DEVICE=Meeting Aggregate
 GOOGLE_CALENDAR_ID=all
 ```
 
@@ -126,9 +120,9 @@ make doctor
 ```
 
 `make doctor` checks configuration, B2, AssemblyAI, Google credentials/auth,
-local files, `ffmpeg`, and audio device visibility. Some failures are expected
-until credentials and audio setup are complete. B2 is required before Meeting
-Memory is ready to record.
+the bundled native audio helper, and local files. Some failures are expected
+until credentials are complete. B2 is required before Meeting Memory is ready
+to record.
 
 ## 7. Authorize Google Calendar
 
@@ -165,11 +159,13 @@ make PYTHON=.venv/bin/python reload-macos-app
 1. Start Meeting Memory.
 2. Choose `Send Test Notification` from the tray to confirm notification
    permissions.
-3. Start an ad-hoc recording from the tray.
-4. Speak for a few seconds and play remote audio if testing system capture.
-5. Stop recording.
+3. Select `Full Meeting` and start an ad-hoc recording from the tray.
+4. Speak for a few seconds and play remote audio. Confirm you can still hear it
+   through your current output.
+5. Stop recording, then repeat with `Silent System Only`; confirm the microphone
+   is not recorded and playback is muted during capture.
 6. Wait for transcription.
-7. Open the created meeting folder under `MEETINGS_DIR`.
+7. Open the created meeting folders under `MEETINGS_DIR`.
 
 Expected files:
 
@@ -198,9 +194,11 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
 
 ## Troubleshooting
 
-- `AUDIO_DEVICE` missing: confirm the exact device name in Audio MIDI Setup.
-- No remote audio: confirm system output is routed to a Multi-Output Device
-  that includes `BlackHole 2ch`.
+- Native helper build fails: run `xcode-select --install`, then rerun
+  `make setup`.
+- No audio capture: open System Settings › Privacy & Security and allow Meeting
+  Memory under Microphone and Screen & System Audio Recording, then restart the
+  app.
 - Google auth fails: confirm the OAuth client type is `Desktop app` and the
   Calendar API is enabled.
 - B2 upload fails: confirm the application key is scoped to the bucket and the

@@ -17,7 +17,6 @@ PREFERENCE_KEYS = (
     "MEETINGS_DIR",
     "NOTIFY_MINUTES_BEFORE",
     "MAX_RECORDING_MINUTES",
-    "AUDIO_DEVICE",
 )
 KNOWN_SPEAKERS_KEY = "KNOWN_SPEAKERS"
 ENV_UPDATE_ORDER = (*PREFERENCE_KEYS, KNOWN_SPEAKERS_KEY)
@@ -25,7 +24,6 @@ PREFERENCE_LABELS = {
     "MEETINGS_DIR": "Meetings folder",
     "NOTIFY_MINUTES_BEFORE": "Reminder (minutes)",
     "MAX_RECORDING_MINUTES": "Recording limit (minutes)",
-    "AUDIO_DEVICE": "Audio device",
 }
 PREFERENCE_GUIDANCE = {
     "MEETINGS_DIR": "Where recordings, transcripts, and notes are saved.",
@@ -33,7 +31,6 @@ PREFERENCE_GUIDANCE = {
     "MAX_RECORDING_MINUTES": (
         "Maximum recording length before the app stops automatically."
     ),
-    "AUDIO_DEVICE": "Which macOS input to record from.",
 }
 KNOWN_SPEAKERS_GUIDANCE = (
     "This cleans up Calendar speaker suggestions. "
@@ -234,7 +231,6 @@ def _preference_fields(settings: Settings) -> tuple[PreferenceFormField, ...]:
         "MEETINGS_DIR": str(settings.meetings_dir),
         "NOTIFY_MINUTES_BEFORE": str(settings.notify_minutes_before),
         "MAX_RECORDING_MINUTES": str(settings.max_recording_minutes),
-        "AUDIO_DEVICE": settings.audio_device,
     }
     return tuple(
         PreferenceFormField(

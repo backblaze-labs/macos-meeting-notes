@@ -19,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     subcommands = parser.add_subparsers(dest="command")
     subcommands.add_parser("setup", help="prepare first-run local setup")
     subcommands.add_parser("doctor", help="run preflight checks")
+    subcommands.add_parser("build-native-audio", help="build the macOS audio helper")
     subcommands.add_parser("auth", help="run Google Calendar OAuth setup")
     subcommands.add_parser("install-macos-app", help="install the clickable macOS app")
     subcommands.add_parser("reload-macos-app", help="install, quit, and reopen the macOS app")
@@ -46,6 +47,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_setup()
     if args.command == "doctor":
         return doctor_main(())
+    if args.command == "build-native-audio":
+        from meeting_memory.service.native_audio_setup import build_native_audio
+
+        return build_native_audio(_project_dir())
     if args.command == "auth":
         return run_auth()
     if args.command == "install-macos-app":
@@ -244,7 +249,7 @@ def run_app() -> int:
         b2_client=b2_client,
         event_sink=event_queue.put,
     )
-    recorder = RecorderService(audio_device=settings.audio_device)
+    recorder = RecorderService()
     controller = TrayController(
         settings=settings,
         recorder=recorder,

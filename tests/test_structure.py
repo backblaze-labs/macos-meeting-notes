@@ -28,7 +28,6 @@ EXTERNAL_SDK_PREFIXES = (
     "google_auth_httplib2",
     "httplib2",
     "keyring",
-    "sounddevice",
 )
 
 REQUIRED_SOURCE_FILES = (
@@ -51,17 +50,20 @@ REQUIRED_SOURCE_FILES = (
     "repo/summarizer.py",
     "repo/calendar_client.py",
     "repo/google_http.py",
-    "repo/audio_device.py",
+    "repo/native_audio.py",
     "service/__init__.py",
     "service/storage.py",
     "service/markdown.py",
     "service/recorder.py",
+    "service/audio_modes.py",
+    "service/native_audio_setup.py",
     "service/pipeline.py",
     "service/calendar_watcher.py",
     "service/sync.py",
     "ui/__init__.py",
     "ui/tray.py",
     "ui/menu.py",
+    "ui/audio_modes.py",
     "ui/preferences.py",
     "ui/preference_forms.py",
 )
@@ -81,6 +83,11 @@ REQUIRED_REPO_FILES = (
     "docs/dev-workflows.md",
     "docs/features/_template.md",
     "scripts/doctor.py",
+)
+
+REQUIRED_NATIVE_SOURCE_FILES = (
+    "repo/native/CLI.swift",
+    "repo/native/NativeCapture.swift",
 )
 
 
@@ -190,7 +197,11 @@ def test_file_size_limits() -> None:
 
 def test_required_modules_exist() -> None:
     missing_source = [path for path in REQUIRED_SOURCE_FILES if not (SRC_ROOT / path).exists()]
+    missing_native = [
+        path for path in REQUIRED_NATIVE_SOURCE_FILES if not (SRC_ROOT / path).exists()
+    ]
     missing_repo = [path for path in REQUIRED_REPO_FILES if not (ROOT / path).exists()]
 
     assert missing_source == []
+    assert missing_native == []
     assert missing_repo == []

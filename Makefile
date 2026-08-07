@@ -1,6 +1,6 @@
 PYTHON ?= python
 
-.PHONY: setup install run auth doctor install-macos-app reload-macos-app open-macos-app quit-macos-app install-launch-agent uninstall-launch-agent lint format test check check-structure check\:structure
+.PHONY: setup install build-native-audio run auth doctor install-macos-app reload-macos-app open-macos-app quit-macos-app install-launch-agent uninstall-launch-agent lint format test check check-structure check\:structure
 
 setup:
 	python3 -m venv .venv
@@ -10,8 +10,11 @@ setup:
 install:
 	$(PYTHON) -m pip install -e ".[dev]"
 
-run:
-	PYTHONPATH=src $(PYTHON) -m meeting_memory
+build-native-audio:
+	PYTHONPATH=src $(PYTHON) -m meeting_memory build-native-audio
+
+run: build-native-audio
+	PYTHONPATH=src MEETING_MEMORY_CAPTURE_HELPER=$(CURDIR)/.build/MeetingMemoryCapture $(PYTHON) -m meeting_memory
 
 auth:
 	PYTHONPATH=src $(PYTHON) -m meeting_memory auth

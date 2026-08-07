@@ -13,6 +13,14 @@ from meeting_memory.service.launch_agent import (
 )
 
 
+def _fake_helper_builder(project_dir, output_path, *, runner):
+    del project_dir, runner
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_bytes(b"native-helper")
+    output_path.chmod(0o755)
+    return output_path
+
+
 def test_launch_agent_plist_opens_app_bundle(tmp_path: Path) -> None:
     (tmp_path / "src").mkdir()
     app_path = tmp_path / "Applications" / "Meeting Memory.app"
@@ -41,6 +49,7 @@ def test_install_launch_agent_writes_plist_and_reloads(tmp_path: Path) -> None:
         app_path=app_path,
         python_executable="/usr/bin/python3",
         runner=runner,
+        helper_builder=_fake_helper_builder,
         uid=501,
     )
 

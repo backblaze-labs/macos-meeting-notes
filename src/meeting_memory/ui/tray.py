@@ -9,6 +9,7 @@ from pathlib import Path
 from meeting_memory.doctor import CheckResult, run_checks
 from meeting_memory.types.events import MeetingDetected, NotifyEvent, RecordingTitleNeeded
 from meeting_memory.ui import menu
+from meeting_memory.ui.audio_modes import AudioModeMenu
 from meeting_memory.ui.controller import TrayController
 from meeting_memory.ui.icons import tray_icon_path
 from meeting_memory.ui.macos import (
@@ -57,6 +58,7 @@ class RumpsTrayApp:
         self.timer = self.rumps.Timer(self.drain_events, 1)
         self.recording_item = None
         self.recording_label = ""
+        self.audio_mode_menu = AudioModeMenu(self.rumps, self.controller, rebuild_menu=self.rebuild_menu)  # noqa: E501
         self.rebuild_menu()
 
     def run(self) -> None:
@@ -68,13 +70,11 @@ class RumpsTrayApp:
         self.app.menu.clear()
         self.app.menu.add(self.rumps.MenuItem(menu.APP_TITLE, callback=None))
         self.app.menu.add(None)
-        self.recording_item = self.rumps.MenuItem(
-            self.current_recording_label(),
-            callback=self.toggle_recording,
-        )
+        self.recording_item = self.rumps.MenuItem(self.current_recording_label(), self.toggle_recording)  # noqa: E501
         self.recording_label = self.recording_item.title
         self.app.menu.add(self.recording_item)
         self.app.menu.add(None)
+        self.audio_mode_menu.add_items(self.app.menu)
         self.app.menu.add(self.rumps.MenuItem(menu.RECENT_HEADER, callback=None))
         recent_meetings = self.controller.recent_meetings()
         for recent in recent_meetings:

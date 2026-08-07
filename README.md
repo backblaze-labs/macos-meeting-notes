@@ -26,10 +26,9 @@ meeting archive.
 
 ## Requirements
 
-- macOS 13 Ventura or later
+- macOS 15 Sequoia or later
 - Python 3.11 or later
-- `ffmpeg`
-- BlackHole 2ch plus a macOS Aggregate Device named `Meeting Aggregate`
+- Xcode Command Line Tools (`xcode-select --install`)
 - Google Calendar OAuth desktop credentials
 - AssemblyAI API key
 - Dedicated Backblaze B2 bucket and S3-compatible application key
@@ -55,9 +54,9 @@ make PYTHON=.venv/bin/python open-macos-app
 ```
 
 `make doctor` checks local setup. It is expected to report failures until
-`.env`, B2 credentials, AssemblyAI, Google credentials/auth, `ffmpeg`, and audio
-device setup are complete. B2 backup is required before Meeting Memory is ready
-to record.
+`.env`, B2 credentials, AssemblyAI, Google credentials/auth, and the native
+audio helper are ready. B2 backup is required before Meeting Memory is ready to
+record.
 
 The clickable app is installed at `~/Applications/Meeting Memory.app` so it can
 be launched from Finder or found with Cmd+Space by searching for
@@ -88,6 +87,17 @@ or click `Record` from a pre-meeting notification when the calendar watcher
 detects an upcoming Meet or Zoom event. If no nearby calendar event is found,
 the app asks for a title before starting.
 
+Choose the audio mode for the next recording from the tray:
+
+- **Full Meeting** records system audio plus the current macOS microphone. Your
+  current output, including AirPods, keeps playing normally.
+- **Silent System Only** records system audio with the microphone off and mutes
+  that system audio while recording.
+
+Meeting Memory captures these streams through native macOS APIs. It does not
+change the user's input/output devices and does not require BlackHole,
+Aggregate Devices, or per-device configuration.
+
 While recording, the status bar shows a live timer and the tray menu switches to
 `Stop Recording`. When a calendar-backed recording reaches the event end time,
 the app sends a `Stop` reminder action. After transcription finishes, the app
@@ -105,7 +115,7 @@ specific calendar ID to narrow the watcher.
 ## Setup Guides
 
 - [Full setup tutorial](docs/setup-tutorial.md)
-- [BlackHole setup](docs/blackhole-setup.md)
+- [Removing legacy BlackHole setup](docs/blackhole-setup.md)
 - [Google Calendar auth](docs/google-calendar-auth.md)
 - [Manual validation checklist](docs/manual-validation.md)
 - [Development workflows](docs/dev-workflows.md)
@@ -137,7 +147,6 @@ Optional:
 - `GOOGLE_CALENDAR_ID`
 - `KNOWN_SPEAKERS`
 - `MEETINGS_DIR`
-- `AUDIO_DEVICE`
 - `NOTIFY_MINUTES_BEFORE`
 - `MAX_RECORDING_MINUTES`
 - `CALENDAR_POLL_INTERVAL`

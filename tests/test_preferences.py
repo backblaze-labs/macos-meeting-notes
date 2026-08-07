@@ -31,7 +31,6 @@ def test_preferences_text_contains_supported_settings() -> None:
         meetings_dir=Path("~/Meetings"),
         notify_minutes_before=7,
         max_recording_minutes=90,
-        audio_device="Meeting Aggregate",
     )
 
     assert preferences_text(settings).splitlines() == [
@@ -46,10 +45,6 @@ def test_preferences_text_contains_supported_settings() -> None:
         "# Recording limit (minutes) (MAX_RECORDING_MINUTES)",
         "# Maximum recording length before the app stops automatically.",
         "MAX_RECORDING_MINUTES=90",
-        "",
-        "# Audio device (AUDIO_DEVICE)",
-        "# Which macOS input to record from.",
-        "AUDIO_DEVICE=Meeting Aggregate",
     ]
     assert "Use:" not in preferences_text(settings)
     assert "Good:" not in preferences_text(settings)
@@ -60,8 +55,7 @@ def test_preferences_text_contains_supported_settings() -> None:
 
 def test_parse_preferences_text_filters_unknown_keys() -> None:
     assert parse_preferences_text("MEETINGS_DIR=/tmp\nUNKNOWN=x\nAUDIO_DEVICE=Mic\n") == {
-        "MEETINGS_DIR": "/tmp",
-        "AUDIO_DEVICE": "Mic",
+        "MEETINGS_DIR": "/tmp"
     }
 
 
@@ -73,14 +67,14 @@ def test_update_env_file_replaces_and_appends_preferences(tmp_path: Path) -> Non
         env_path,
         {
             "MEETINGS_DIR": "/tmp/meetings",
-            "AUDIO_DEVICE": "Meeting Aggregate",
+            "NOTIFY_MINUTES_BEFORE": "4",
         },
     )
 
     assert env_path.read_text(encoding="utf-8").splitlines() == [
         "B2_BUCKET_NAME=bucket",
         "MEETINGS_DIR=/tmp/meetings",
-        "AUDIO_DEVICE=Meeting Aggregate",
+        "NOTIFY_MINUTES_BEFORE=4",
     ]
 
 

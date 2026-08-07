@@ -172,6 +172,9 @@ def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
     titles = [item.title for item in app.app.menu.items if item is not None]
     assert titles.count(menu.QUIT_LABEL) == 1
     assert titles.count(menu.KNOWN_SPEAKERS_LABEL) == 1
+    assert titles.count(menu.AUDIO_MODE_HEADER) == 1
+    assert titles.count("✓ Full Meeting") == 1
+    assert titles.count("Silent System Only") == 1
 
 
 def _settings(tmp_path: Path) -> Settings:

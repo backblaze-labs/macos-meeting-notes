@@ -14,7 +14,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from meeting_memory.config.defaults import (
     DEFAULT_ANTHROPIC_MODEL,
-    DEFAULT_AUDIO_DEVICE,
     DEFAULT_CALENDAR_POLL_INTERVAL,
     DEFAULT_GOOGLE_CALENDAR_CREDENTIALS_FILE,
     DEFAULT_GOOGLE_CALENDAR_ID,
@@ -47,7 +46,6 @@ class Settings(BaseSettings):
     google_calendar_id: str = DEFAULT_GOOGLE_CALENDAR_ID
     known_speakers: tuple[KnownSpeaker, ...] = DEFAULT_KNOWN_SPEAKERS
     meetings_dir: Path = Path(DEFAULT_MEETINGS_DIR)
-    audio_device: str = DEFAULT_AUDIO_DEVICE
     notify_minutes_before: int = Field(default=DEFAULT_NOTIFY_MINUTES_BEFORE, ge=0)
     max_recording_minutes: int = Field(default=DEFAULT_MAX_RECORDING_MINUTES, gt=0)
     calendar_poll_interval: int = Field(default=DEFAULT_CALENDAR_POLL_INTERVAL, gt=0)
@@ -92,7 +90,7 @@ class Settings(BaseSettings):
         text = str(value).strip()
         return Path(text) if text else None
 
-    @field_validator("anthropic_model", "google_calendar_id", "audio_device", mode="before")
+    @field_validator("anthropic_model", "google_calendar_id", mode="before")
     @classmethod
     def reject_blank_defaults(cls, value: Any) -> str:
         text = str(value or "").strip()

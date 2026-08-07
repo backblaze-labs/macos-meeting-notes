@@ -10,7 +10,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from meeting_memory.service.macos_app import default_app_path, install_macos_app
+from meeting_memory.repo.native_audio import build_native_capture_helper
+from meeting_memory.service.macos_app import (
+    HelperBuilder,
+    default_app_path,
+    install_macos_app,
+)
 
 LABEL = "com.meeting-memory.app"
 PLIST_NAME = f"{LABEL}.plist"
@@ -26,6 +31,7 @@ def install_launch_agent(
     app_path: Path | None = None,
     python_executable: str | None = None,
     runner: Runner = subprocess.run,
+    helper_builder: HelperBuilder = build_native_capture_helper,
     uid: int | None = None,
 ) -> Path:
     target = plist_path or default_plist_path()
@@ -40,6 +46,7 @@ def install_launch_agent(
         app_path=app_target,
         python_executable=python,
         runner=runner,
+        helper_builder=helper_builder,
     )
     target.write_bytes(plistlib.dumps(launch_agent_plist(root, app_target, log_dir)))
     reload_launch_agent(target, runner=runner, uid=uid)
