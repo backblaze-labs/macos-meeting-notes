@@ -18,10 +18,12 @@ Naming boundaries:
 
 1. `AGENTS.md`
 2. `SPEC.md`
-3. `ARCHITECTURE.md`
-4. `docs/deferred-work.md` when revisiting unresolved or partially implemented
+3. `docs/local-first-contract.md` for capability composition, readiness,
+   local artifact lifecycle, configuration migration, or onboarding work
+4. `ARCHITECTURE.md`
+5. `docs/deferred-work.md` when revisiting unresolved or partially implemented
    behavior
-5. `docs/features/<feature>.md` when working on a specific feature
+6. `docs/features/<feature>.md` when working on a specific feature
 
 ## Repository Map
 

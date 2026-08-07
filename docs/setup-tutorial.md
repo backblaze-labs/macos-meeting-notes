@@ -3,6 +3,11 @@
 This tutorial gets Meeting Memory running as a local macOS menu-bar app from a
 fresh clone of the `macos-meeting-notes` repository.
 
+This is the current legacy-checkout setup. The accepted local-first target
+requires none of these integrations for a first recording; see
+[`local-first-contract.md`](local-first-contract.md). Runtime and native
+onboarding changes are delivered in later phases.
+
 ## 1. Install System Requirements
 
 You need:
@@ -122,7 +127,8 @@ make doctor
 `make doctor` checks configuration, B2, AssemblyAI, Google credentials/auth,
 the bundled native audio helper, and local files. Some failures are expected
 until credentials are complete. B2 is required before Meeting Memory is ready
-to record.
+to record in the current legacy runtime; it is optional in the accepted
+local-first target.
 
 ## 7. Authorize Google Calendar
 

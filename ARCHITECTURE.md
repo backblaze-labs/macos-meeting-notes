@@ -24,6 +24,33 @@ types <- config <- repo <- service <- ui
 Cross-cutting modules live directly under `meeting_memory`: `__main__.py`,
 `doctor.py`, and `logging_config.py`.
 
+`types/capabilities.py` defines the stable capability IDs, five-state lifecycle,
+and readiness report used by the local-first transition. The composition rules
+and phase boundaries are canonical in
+[`docs/local-first-contract.md`](docs/local-first-contract.md).
+
+## Capability Composition
+
+```text
+Recording Core
+├── Transcription (optional)
+├── Backup (optional)
+├── Calendar (optional)
+└── Notes (optional; consumes a reviewed transcript)
+```
+
+Recording Core is the only first-value gate. Optional adapters are constructed,
+checked, and failed independently. All optional processing starts from a
+durably committed local recording and must preserve it on failure. Recording
+Core assembles `recording.m4a` and the schema-v2 metadata stub in app-owned
+staging on the `MEETINGS_DIR` filesystem, then publishes the complete meeting
+directory with one atomic rename.
+
+The current runtime still constructs the cloud adapters from one fail-fast
+`Settings` object. That legacy coupling is characterized by tests and is
+scheduled for replacement in the next implementation phase; the architecture
+above is the accepted target, not a claim that the transition is complete.
+
 ## Native Audio Boundary
 
 `repo/native/` contains a small Swift helper compiled during setup and copied
@@ -62,3 +89,14 @@ These rules are enforced by `tests/test_structure.py`.
 
 Background threads must not call UI APIs directly. They emit events, and the UI
 drains those events on the main thread.
+
+In the accepted target, the local-commit worker emits `RecordingCommitted`
+after atomic publication and optional transcription emits `TranscriptReady`
+only after job success or `TranscriptionFailed` on failure. The tray main thread
+alone translates those typed events into the separate Recording saved,
+Transcript ready, and Transcription failed notifications.
+
+Readiness checks follow the same boundary: repositories perform hardware or
+provider checks, services compose typed capability statuses, and the UI only
+renders the resulting report. Default doctor success is determined by Recording
+Core; optional capability failures remain visible but non-blocking.

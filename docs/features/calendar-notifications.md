@@ -5,6 +5,10 @@
 Detect upcoming Google Meet or Zoom events and prompt the user to start or stop
 recording at the right time.
 
+Calendar is an optional capability. Recording Core remains available without
+Google credentials, OAuth, or network access; see
+[`../local-first-contract.md`](../local-first-contract.md).
+
 ## Inputs
 
 - `GOOGLE_CALENDAR_CREDENTIALS_FILE`
@@ -45,6 +49,8 @@ notification guard.
 - Dismissing `Record` does not start recording.
 - Notification visibility can still be affected by macOS notification
   permissions and Focus settings.
+- In the accepted target, `unconfigured` Calendar state suppresses watching and
+  reminders without blocking ad-hoc recording.
 
 ## Related Files
 

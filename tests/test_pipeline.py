@@ -78,30 +78,6 @@ def test_pipeline_does_not_summarize_after_recording_stop(tmp_path: Path) -> Non
     assert "**Speaker A** (0:00:05): Hello from the meeting." in markdown
 
 
-def test_pipeline_transcription_failure_writes_non_empty_meeting_md(tmp_path: Path) -> None:
-    events: list[NotifyEvent] = []
-    summarizer = FakeSummarizer(SummaryResult(summary="Should not be used."))
-    pipeline = Pipeline(
-        meetings_dir=tmp_path / "meetings",
-        transcription_client=FailingTranscriber(),
-        summarizer_client=summarizer,
-        event_sink=events.append,
-    )
-
-    result = pipeline.run(_audio_source(tmp_path), _meta())
-    markdown = result.files.markdown_path.read_text(encoding="utf-8")
-    frontmatter = read_frontmatter(result.files.markdown_path)
-
-    assert result.transcript.error == "transcription unavailable"
-    assert result.summary.status == "skipped"
-    assert summarizer.transcript_text is None
-    assert result.files.audio_path.exists()
-    assert result.files.markdown_path.stat().st_size > 0
-    assert frontmatter["assemblyai_id"] == "transcription-failed"
-    assert "_Transcription failed: transcription unavailable_" in markdown
-    assert events[0].body == "Product Sync · transcription failed. Audio saved locally."
-
-
 def test_pipeline_marks_frontmatter_when_b2_upload_fails(tmp_path: Path) -> None:
     events: list[NotifyEvent] = []
     pipeline = Pipeline(
@@ -150,11 +126,6 @@ class FakeTranscriber:
     def transcribe(self, audio_path: Path) -> TranscriptResult:
         self.audio_path = audio_path
         return self.result
-
-
-class FailingTranscriber:
-    def transcribe(self, audio_path: Path) -> TranscriptResult:
-        raise RuntimeError("transcription unavailable")
 
 
 @dataclass

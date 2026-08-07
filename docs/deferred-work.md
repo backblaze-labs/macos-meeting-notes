@@ -11,6 +11,28 @@ When ending a work session with deferred behavior, append a dated note with:
 - why the original request was deferred,
 - the first thing to check if the user raises it again.
 
+## 2026-08-07 Local-First Contract Transition
+
+Request: make a fresh user's first recording possible in under five minutes
+without Terminal, cloud accounts, API keys, Google auth, or network access. The
+acceptance path is about 30 seconds of real audio that can be played and
+revealed in Finder within that window.
+
+Outcome in this stage: accepted the capability/readiness, durable-audio,
+privacy, legacy migration, and phased acceptance contract in
+`docs/local-first-contract.md`; added pure boundary types and passing legacy
+characterization tests. No runtime configuration or secret storage changed.
+
+Deferred by phase: independent optional adapters and local commit behavior
+(Phase 2, including same-filesystem staging and atomic directory publication),
+capability-aware setup/doctor (Phase 3), Keychain-backed progressive
+configuration and `.env` import (Phase 4), clean-user computer validation
+(Phase 5), and signed/notarized standalone distribution (Phase 6).
+
+First thing to check: read `docs/local-first-contract.md`, then find the legacy
+tests in `tests/test_legacy_local_first_characterization.py`. Replace those
+expectations rather than layering exceptions onto the global `Settings` model.
+
 ## 2026-06-18 Current Reliability and Product Notes
 
 This snapshot reflects the tree at the time this note was written. Before

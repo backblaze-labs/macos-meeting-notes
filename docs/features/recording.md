@@ -6,6 +6,10 @@ Capture audio from the selected tray mode without changing macOS audio devices.
 `Full Meeting` records system audio plus the current microphone; `Silent System
 Only` records system audio with the microphone off and playback muted.
 
+Recording is the local-first core and the only capability that gates first
+value. Its composition and durable lifecycle are defined in
+[`../local-first-contract.md`](../local-first-contract.md).
+
 ## Inputs
 
 - Manual tray `Start Recording`
@@ -16,8 +20,11 @@ Only` records system audio with the microphone off and playback muted.
 
 ## Outputs
 
-- Temporary WAV in the system temp directory
+- Current legacy runtime: temporary WAV in the system temp directory
+- Accepted target: recoverable WAV in app-owned staging on the
+  `MEETINGS_DIR` filesystem
 - `recording.m4a` in the meeting directory
+- Schema-v2 `transcript.md` metadata stub published atomically with the audio
 - `MeetingMeta` passed to the pipeline
 - Visible recording duration in the status bar and tray menu
 
@@ -26,7 +33,8 @@ Only` records system audio with the microphone off and playback muted.
 The tray action only schedules a single-flight background transition. Calendar
 context lookup, native-helper startup/shutdown, and WAV-to-M4A conversion never
 run on the main thread. A Swift subprocess performs capture and incremental WAV
-writing; the post-recording pipeline is also started on a background thread.
+writing; local commit and configured optional jobs also run in background
+workers and emit typed events for the tray main thread to render.
 
 ## Behavior Notes
 
@@ -47,9 +55,17 @@ writing; the post-recording pipeline is also started on a background thread.
 - A calendar-backed recording can emit a `Stop` reminder at the event end time;
   it does not fully auto-record meetings.
 - `MAX_RECORDING_MINUTES` is enforced as a hard safety limit. When reached, the
-  controller stops the active recording and starts the normal pipeline.
+  controller stops the active recording, atomically commits local artifacts,
+  and starts only configured optional jobs.
 - Interrupted temp WAV files without a matching M4A sibling appear in the tray
   as recovered recordings and can be processed by the user.
+- The accepted target commits `recording.m4a` locally before starting any
+  optional provider work. A missing or failed Transcription, Backup, Calendar,
+  or Notes capability must not discard or hide the recording.
+- The accepted target assembles audio plus metadata in a same-filesystem staging
+  directory and publishes the complete meeting directory with one atomic
+  rename. Legacy system-temp files are discovered locally once and never start
+  provider work without an explicit recovery action.
 
 ## Related Files
 

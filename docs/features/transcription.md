@@ -5,6 +5,11 @@
 Send completed meeting audio to AssemblyAI and write the source-of-truth
 diarized transcript to `transcript.md`.
 
+Transcription is an optional capability under
+[`../local-first-contract.md`](../local-first-contract.md). The current runtime
+still requires its credential globally; that coupling is intentionally
+characterized until the next phase replaces it.
+
 ## Inputs
 
 - `recording.m4a`
@@ -49,6 +54,9 @@ generation runs in a background thread from the tray, or through the local
 - Confirmed speaker review starts notes generation automatically. If notes are
   missing, skipped, or failed, the tray shows a **Debugging › Pending Meeting
   Tasks** action.
+- Anthropic receives the fixed output-schema instructions, the configured
+  editable prompt, and only a speaker-confirmed transcript excerpt clipped to
+  at most 60,000 characters. It never receives an unreviewed metadata stub.
 - The tray's **Configuration › Notes Prompt...** item opens the effective
   `SUMMARY_PROMPT_FILE` in a native multiline editor. Saved changes apply to
   the next notes generation without restarting the app. Editable text is
@@ -61,6 +69,8 @@ generation runs in a background thread from the tray, or through the local
   with a transcription failure state.
 - Failed transcription states can be retried later with `Retry Failed
   Transcriptions`, using transcript frontmatter as durable state.
+- In the accepted local-first target, an unconfigured or failed transcription
+  leaves the committed audio usable and reports only Transcription's state.
 
 ## Related Files
 

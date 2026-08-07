@@ -5,10 +5,10 @@
 > behavior may change without notice. Use at your own risk.
 
 `macos-meeting-notes` is the repository for **Meeting Memory**, a local-first
-macOS menu-bar app that records meetings, transcribes them with speaker
-diarization (AssemblyAI), optionally summarizes them (Anthropic Claude), saves
-portable markdown files locally, and backs up each meeting's artifacts to
-Backblaze B2 over the S3-compatible API.
+macOS menu-bar app that records meetings, optionally transcribes them with
+speaker diarization (AssemblyAI), optionally summarizes them (Anthropic
+Claude), saves portable artifacts locally, and optionally backs up each
+meeting's audio and transcript to Backblaze B2 over the S3-compatible API.
 
 The repository/distribution name is `macos-meeting-notes`; the app visible to
 users remains **Meeting Memory**, the Python import package remains
@@ -23,6 +23,19 @@ The app is local-first: each completed recording creates a directory under
 
 B2 is the durable backup layer. The local files remain the user's readable
 meeting archive.
+
+The accepted local-first contract makes **Recording Core** usable without a
+Terminal, account, key, or network, with Transcription, Backup, Calendar, and
+Notes enabled progressively. See
+[the capability contract](docs/local-first-contract.md). The runtime transition
+is being delivered in phases: the current checkout still uses the legacy
+`.env` setup below and requires AssemblyAI, B2, and Google configuration to
+launch the full tray. Those requirements are characterized so the next phase
+can remove them without silently breaking existing setups.
+
+The first-value acceptance test is concrete: record about 30 seconds of real
+audio, stop, play the saved result, and reveal its meeting directory in Finder
+within five minutes of first launch.
 
 ## Requirements
 
@@ -56,7 +69,8 @@ make PYTHON=.venv/bin/python open-macos-app
 `make doctor` checks local setup. It is expected to report failures until
 `.env`, B2 credentials, AssemblyAI, Google credentials/auth, and the native
 audio helper are ready. B2 backup is required before Meeting Memory is ready to
-record.
+record **in the current legacy runtime**. The target doctor will gate recording
+only on Recording Core and report optional integrations independently.
 
 The clickable app is installed at `~/Applications/Meeting Memory.app` so it can
 be launched from Finder or found with Cmd+Space by searching for
@@ -122,6 +136,7 @@ specific calendar ID to narrow the watcher.
 - [Development workflows](docs/dev-workflows.md)
 - [Publishing and privacy checklist](docs/publishing-checklist.md)
 - [Deferred work and product notes](docs/deferred-work.md)
+- [Local-first capability contract](docs/local-first-contract.md)
 
 ## Configuration
 
@@ -160,6 +175,12 @@ Real credentials, OAuth files, local recordings, transcripts, generated meeting
 folders, and `.env` are ignored by git. Before publishing or pushing changes,
 run the checks in [docs/publishing-checklist.md](docs/publishing-checklist.md).
 
+The target app-managed configuration stores API secrets and OAuth tokens in
+macOS Keychain, names each integration's data egress before opt-in, and imports
+legacy `.env` values only with explicit confirmation. This migration is not yet
+implemented; existing `.env` files are neither changed nor deleted by this
+contract stage.
+
 `KNOWN_SPEAKERS` is intentionally empty by default. Use the tray's
 **Configuration › Known Speakers...** item to add local aliases for normalizing
 Calendar speaker candidates. The app stores them in `.env` as a JSON object
@@ -181,8 +202,9 @@ As of 2026-06-11, Backblaze lists B2 pay-as-you-go storage starting at
 monthly storage. See [Backblaze B2 pricing](https://www.backblaze.com/cloud-storage/pricing).
 
 Anthropic summary cost depends on the selected model, transcript length, and
-current Anthropic pricing. The app sends at most the first 60,000 transcript
-characters to Claude.
+current Anthropic pricing. Each request sends the fixed output-schema
+instructions, your configured editable prompt, and only a speaker-confirmed
+transcript excerpt capped at 60,000 characters.
 
 ## Summary Prompt
 

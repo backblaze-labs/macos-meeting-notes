@@ -36,6 +36,7 @@ REQUIRED_SOURCE_FILES = (
     "doctor.py",
     "logging_config.py",
     "types/__init__.py",
+    "types/capabilities.py",
     "types/meeting.py",
     "types/transcript.py",
     "types/summary.py",
@@ -86,9 +87,11 @@ REQUIRED_REPO_FILES = (
     ".gitignore",
     "docs/blackhole-setup.md",
     "docs/google-calendar-auth.md",
+    "docs/local-first-contract.md",
     "docs/dev-workflows.md",
     "docs/features/_template.md",
     "scripts/doctor.py",
+    ".github/workflows/ci.yml",
 )
 
 REQUIRED_NATIVE_SOURCE_FILES = (
