@@ -13,10 +13,12 @@ from typing import Protocol
 from urllib.parse import parse_qs, urlsplit
 
 from meeting_memory.config.settings import Settings
+from meeting_memory.repo.google_http import authorized_google_http
 from meeting_memory.repo.speaker_candidates import (
     speaker_candidates_from_event as _speaker_candidates,
 )
 from meeting_memory.types.meeting import CalendarMeeting
+from meeting_memory.types.speakers import KnownSpeaker
 
 GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
 KEYCHAIN_SERVICE = "meeting-memory.google-calendar"
@@ -49,7 +51,7 @@ class KeychainTokenStore:
 class GoogleCalendarClient:
     credentials_file: Path
     calendar_id: str = "primary"
-    known_speakers: tuple[str, ...] = ()
+    known_speakers: tuple[KnownSpeaker, ...] = ()
     token_store: TokenStore = field(default_factory=KeychainTokenStore)
     scopes: tuple[str, ...] = (GOOGLE_CALENDAR_SCOPE,)
 
@@ -93,7 +95,12 @@ class GoogleCalendarClient:
         lookahead_minutes: int,
         lookbehind_minutes: int = 0,
     ) -> list[CalendarMeeting]:
-        service = _load_google_build()("calendar", "v3", credentials=self.credentials())
+        service = _load_google_build()(
+            "calendar",
+            "v3",
+            http=authorized_google_http(self.credentials()),
+            cache_discovery=False,
+        )
         meetings: list[CalendarMeeting] = []
         for calendar_id in self._calendar_ids(service):
             response = (
@@ -132,7 +139,7 @@ class GoogleCalendarClient:
 
 def _meeting_from_event(
     item: dict[str, object],
-    known_speakers: tuple[str, ...] = (),
+    known_speakers: tuple[KnownSpeaker, ...] = (),
 ) -> CalendarMeeting | None:
     if _self_declined_event(item):
         return None

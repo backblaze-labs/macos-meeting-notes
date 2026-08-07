@@ -10,7 +10,6 @@ processed.
 - `MEETINGS_DIR`
 - `meeting-memory search <query>`
 - `meeting-memory relabel <meeting-folder>`
-- Optional `SPEAKER_MAPPING_FILE`
 - Meeting Memory-owned `transcript.md` files
 
 ## Outputs
@@ -27,7 +26,7 @@ processed.
   confirmed names.
 - Calendar attendees populate `speaker_candidates` as hints. Attendees are
   shown by Calendar full name, except aliases explicitly configured in
-  `KNOWN_SPEAKERS`.
+  `KNOWN_SPEAKERS` when the attendee name or email matches.
 - Relabeling is local deterministic code; it does not infer names from audio or
   use an LLM.
 

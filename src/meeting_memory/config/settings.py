@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import re
 import sys
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +14,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from meeting_memory.config.defaults import (
     DEFAULT_ANTHROPIC_MODEL,
-    DEFAULT_AUDIO_DEVICE,
     DEFAULT_CALENDAR_POLL_INTERVAL,
     DEFAULT_GOOGLE_CALENDAR_CREDENTIALS_FILE,
     DEFAULT_GOOGLE_CALENDAR_ID,
@@ -22,6 +24,9 @@ from meeting_memory.config.defaults import (
     DEFAULT_SUMMARY_PROMPT_FILE,
     PLACEHOLDER_MARKERS,
 )
+from meeting_memory.types.speakers import KnownSpeaker
+
+KNOWN_SPEAKER_LEGACY_MATCH_SEPARATORS = re.compile(r"[|;]")
 
 
 class Settings(BaseSettings):
@@ -37,13 +42,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model: str = DEFAULT_ANTHROPIC_MODEL
     summary_prompt_file: Path | None = Path(DEFAULT_SUMMARY_PROMPT_FILE)
-    speaker_mapping_file: Path | None = None
     google_calendar_credentials_file: Path = Path(DEFAULT_GOOGLE_CALENDAR_CREDENTIALS_FILE)
     google_calendar_id: str = DEFAULT_GOOGLE_CALENDAR_ID
-    known_speakers: tuple[str, ...] = DEFAULT_KNOWN_SPEAKERS
+    known_speakers: tuple[KnownSpeaker, ...] = DEFAULT_KNOWN_SPEAKERS
     meetings_dir: Path = Path(DEFAULT_MEETINGS_DIR)
-    audio_device: str = DEFAULT_AUDIO_DEVICE
-    notify_minutes_before: int = Field(default=DEFAULT_NOTIFY_MINUTES_BEFORE, gt=0)
+    notify_minutes_before: int = Field(default=DEFAULT_NOTIFY_MINUTES_BEFORE, ge=0)
     max_recording_minutes: int = Field(default=DEFAULT_MAX_RECORDING_MINUTES, gt=0)
     calendar_poll_interval: int = Field(default=DEFAULT_CALENDAR_POLL_INTERVAL, gt=0)
 
@@ -79,7 +82,7 @@ class Settings(BaseSettings):
         text = str(value).strip()
         return text or None
 
-    @field_validator("summary_prompt_file", "speaker_mapping_file", mode="before")
+    @field_validator("summary_prompt_file", mode="before")
     @classmethod
     def blank_optional_path_to_none(cls, value: Any) -> Path | None:
         if value is None:
@@ -87,7 +90,7 @@ class Settings(BaseSettings):
         text = str(value).strip()
         return Path(text) if text else None
 
-    @field_validator("anthropic_model", "google_calendar_id", "audio_device", mode="before")
+    @field_validator("anthropic_model", "google_calendar_id", mode="before")
     @classmethod
     def reject_blank_defaults(cls, value: Any) -> str:
         text = str(value or "").strip()
@@ -97,12 +100,104 @@ class Settings(BaseSettings):
 
     @field_validator("known_speakers", mode="before")
     @classmethod
-    def parse_known_speakers(cls, value: Any) -> tuple[str, ...]:
+    def parse_known_speakers(cls, value: Any) -> tuple[KnownSpeaker, ...]:
         if value is None:
             return DEFAULT_KNOWN_SPEAKERS
         if isinstance(value, str):
-            return tuple(part.strip() for part in value.split(",") if part.strip())
-        return tuple(str(part).strip() for part in value if str(part).strip())
+            text = value.strip()
+            if not text:
+                return DEFAULT_KNOWN_SPEAKERS
+            if text[:1] in ("{", "["):
+                try:
+                    return cls._known_speakers_from_value(json.loads(text))
+                except json.JSONDecodeError as exc:
+                    raise ValueError("must be valid JSON") from exc
+            return cls._known_speakers_from_value(text.split(","))
+        return cls._known_speakers_from_value(value)
+
+    @classmethod
+    def _known_speakers_from_value(cls, value: Any) -> tuple[KnownSpeaker, ...]:
+        if isinstance(value, KnownSpeaker):
+            return (value,)
+        if isinstance(value, Mapping):
+            return cls._dedupe_known_speakers(
+                KnownSpeaker(str(name), cls._known_speaker_matches(matches))
+                for name, matches in value.items()
+            )
+        if isinstance(value, Iterable) and not isinstance(value, (bytes, str)):
+            speakers = [
+                speaker
+                for item in value
+                if (speaker := cls._known_speaker_from_item(item)) is not None
+            ]
+            return cls._dedupe_known_speakers(speakers)
+        raise ValueError("must be a JSON object mapping speaker names to match lists")
+
+    @classmethod
+    def _known_speaker_from_item(cls, value: Any) -> KnownSpeaker | None:
+        if isinstance(value, KnownSpeaker):
+            return value
+        if isinstance(value, Mapping):
+            name = value.get("name")
+            if name is None:
+                raise ValueError("known speaker objects must include a name")
+            matches = value.get("matches", value.get("aliases", value.get("emails", ())))
+            return KnownSpeaker(str(name), cls._known_speaker_matches(matches))
+        display, matches = cls._split_legacy_known_speaker(str(value))
+        return KnownSpeaker(display, matches) if display else None
+
+    @classmethod
+    def _known_speaker_matches(cls, value: Any) -> tuple[str, ...]:
+        if value is None:
+            return ()
+        if isinstance(value, str):
+            text = value.strip()
+            return (text,) if text else ()
+        if isinstance(value, Mapping):
+            matches: list[str] = []
+            for key in ("matches", "aliases", "emails"):
+                matches.extend(cls._known_speaker_matches(value.get(key)))
+            return tuple(dict.fromkeys(matches))
+        if isinstance(value, Iterable) and not isinstance(value, bytes):
+            matches = [text for item in value if (text := str(item).strip())]
+            return tuple(dict.fromkeys(matches))
+        text = str(value).strip()
+        return (text,) if text else ()
+
+    @classmethod
+    def _split_legacy_known_speaker(cls, raw_alias: str) -> tuple[str, tuple[str, ...]]:
+        value = raw_alias.strip()
+        if not value:
+            return "", ()
+
+        name, separator, raw_matches = value.partition("=")
+        matches = cls._split_legacy_matches(raw_matches) if separator else ()
+        if not matches:
+            match = re.fullmatch(r"(.+?)\s*<([^>]+)>", name.strip())
+            if match:
+                return match.group(1).strip(), (match.group(2).strip(),)
+        return name.strip(), matches
+
+    @staticmethod
+    def _split_legacy_matches(raw_matches: str) -> tuple[str, ...]:
+        return tuple(
+            value.strip()
+            for value in KNOWN_SPEAKER_LEGACY_MATCH_SEPARATORS.split(raw_matches)
+            if value.strip()
+        )
+
+    @staticmethod
+    def _dedupe_known_speakers(
+        speakers: Iterable[KnownSpeaker],
+    ) -> tuple[KnownSpeaker, ...]:
+        deduped: list[KnownSpeaker] = []
+        seen: set[str] = set()
+        for speaker in speakers:
+            key = speaker.name.casefold()
+            if key not in seen:
+                deduped.append(speaker)
+                seen.add(key)
+        return tuple(deduped)
 
     @property
     def meetings_dir_path(self) -> Path:
@@ -118,19 +213,13 @@ class Settings(BaseSettings):
             return None
         return self.summary_prompt_file.expanduser()
 
-    @property
-    def speaker_mapping_path(self) -> Path | None:
-        if self.speaker_mapping_file is None:
-            return None
-        return self.speaker_mapping_file.expanduser()
-
 
 class GoogleAuthSettings(BaseSettings):
     """Minimal settings required for the one-time Google OAuth flow."""
 
     google_calendar_credentials_file: Path = Path(DEFAULT_GOOGLE_CALENDAR_CREDENTIALS_FILE)
     google_calendar_id: str = DEFAULT_GOOGLE_CALENDAR_ID
-    known_speakers: tuple[str, ...] = DEFAULT_KNOWN_SPEAKERS
+    known_speakers: tuple[KnownSpeaker, ...] = DEFAULT_KNOWN_SPEAKERS
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -150,7 +239,7 @@ class GoogleAuthSettings(BaseSettings):
 
     @field_validator("known_speakers", mode="before")
     @classmethod
-    def parse_known_speakers(cls, value: Any) -> tuple[str, ...]:
+    def parse_known_speakers(cls, value: Any) -> tuple[KnownSpeaker, ...]:
         return Settings.parse_known_speakers(value)
 
     @property

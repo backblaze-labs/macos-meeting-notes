@@ -10,6 +10,13 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from meeting_memory.repo.native_audio import build_native_capture_helper
+from meeting_memory.service.macos_app import (
+    HelperBuilder,
+    default_app_path,
+    install_macos_app,
+)
+
 LABEL = "com.meeting-memory.app"
 PLIST_NAME = f"{LABEL}.plist"
 DEFAULT_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
@@ -21,18 +28,27 @@ def install_launch_agent(
     *,
     project_dir: Path | None = None,
     plist_path: Path | None = None,
+    app_path: Path | None = None,
     python_executable: str | None = None,
     runner: Runner = subprocess.run,
+    helper_builder: HelperBuilder = build_native_capture_helper,
     uid: int | None = None,
 ) -> Path:
     target = plist_path or default_plist_path()
     root = (project_dir or Path.cwd()).resolve()
+    app_target = app_path or default_app_path()
+    python = python_executable or sys.executable
     target.parent.mkdir(parents=True, exist_ok=True)
     log_dir = Path.home() / "Library" / "Logs" / "meeting-memory"
     log_dir.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(
-        plistlib.dumps(launch_agent_plist(root, python_executable or sys.executable, log_dir))
+    install_macos_app(
+        project_dir=root,
+        app_path=app_target,
+        python_executable=python,
+        runner=runner,
+        helper_builder=helper_builder,
     )
+    target.write_bytes(plistlib.dumps(launch_agent_plist(root, app_target, log_dir)))
     reload_launch_agent(target, runner=runner, uid=uid)
     return target
 
@@ -49,18 +65,15 @@ def uninstall_launch_agent(
     return target
 
 
-def launch_agent_plist(project_dir: Path, python_executable: str, log_dir: Path) -> dict[str, Any]:
+def launch_agent_plist(project_dir: Path, app_path: Path, log_dir: Path) -> dict[str, Any]:
     environment = {
         "PATH": DEFAULT_PATH,
         "PYTHONUNBUFFERED": "1",
     }
-    source_dir = project_dir / "src"
-    if source_dir.exists():
-        environment["PYTHONPATH"] = str(source_dir)
 
     return {
         "Label": LABEL,
-        "ProgramArguments": [python_executable, "-m", "meeting_memory"],
+        "ProgramArguments": ["/usr/bin/open", "-gj", str(app_path)],
         "WorkingDirectory": str(project_dir),
         "EnvironmentVariables": environment,
         "RunAtLoad": True,

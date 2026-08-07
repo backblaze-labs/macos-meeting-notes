@@ -26,6 +26,36 @@ def hide_dock_icon(logger: logging.Logger) -> None:
         logger.debug("Could not hide Dock icon", exc_info=True)
 
 
+def configure_background_app_identity(logger: logging.Logger) -> None:
+    hide_dock_icon(logger)
+    hide_dock_icon_when_app_activates(logger)
+
+
+def hide_dock_icon_when_app_activates(logger: logging.Logger) -> None:
+    """Keep notification body clicks from leaving Python visible in the Dock."""
+    try:
+        from Foundation import NSSelectorFromString
+        from rumps.rumps import NSApp
+
+        selector = NSSelectorFromString("applicationDidBecomeActive:")
+        if NSApp.instancesRespondToSelector_(selector):
+            method = getattr(NSApp, "applicationDidBecomeActive_", None)
+            if getattr(method, "_meeting_memory_hides_dock", False):
+                return
+
+        existing = getattr(NSApp, "applicationDidBecomeActive_", None)
+
+        def applicationDidBecomeActive_(self, notification) -> None:
+            if callable(existing):
+                existing(self, notification)
+            hide_dock_icon(logger)
+
+        applicationDidBecomeActive_._meeting_memory_hides_dock = True
+        NSApp.applicationDidBecomeActive_ = applicationDidBecomeActive_
+    except Exception:
+        logger.debug("Could not install Dock icon activation guard", exc_info=True)
+
+
 def keep_timer_running_during_menu_tracking(timer: Any, logger: logging.Logger) -> None:
     """Let the recording timer keep ticking while the menu is open."""
     try:
@@ -197,6 +227,7 @@ def _modern_notification_delegate_class():
         ) -> None:
             del self, center
             try:
+                hide_dock_icon(logging.getLogger(__name__))
                 user_info = response.notification().request().content().userInfo()
                 data = dict(user_info) if user_info is not None else {}
                 handler = _UN_RESPONSE_HANDLER

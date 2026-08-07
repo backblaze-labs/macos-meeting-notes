@@ -25,8 +25,9 @@ EXTERNAL_SDK_PREFIXES = (
     "google",
     "google_auth_oauthlib",
     "googleapiclient",
+    "google_auth_httplib2",
+    "httplib2",
     "keyring",
-    "sounddevice",
 )
 
 REQUIRED_SOURCE_FILES = (
@@ -39,6 +40,7 @@ REQUIRED_SOURCE_FILES = (
     "types/transcript.py",
     "types/summary.py",
     "types/events.py",
+    "types/speakers.py",
     "config/__init__.py",
     "config/settings.py",
     "repo/__init__.py",
@@ -47,18 +49,29 @@ REQUIRED_SOURCE_FILES = (
     "repo/transcription.py",
     "repo/summarizer.py",
     "repo/calendar_client.py",
-    "repo/audio_device.py",
+    "repo/google_http.py",
+    "repo/native_audio.py",
     "service/__init__.py",
     "service/storage.py",
     "service/markdown.py",
     "service/recorder.py",
+    "service/audio_modes.py",
+    "service/native_audio_setup.py",
+    "service/summary_prompt.py",
     "service/pipeline.py",
     "service/calendar_watcher.py",
     "service/sync.py",
     "ui/__init__.py",
     "ui/tray.py",
     "ui/menu.py",
+    "ui/audio_modes.py",
+    "ui/notes_prompt.py",
+    "ui/processing_launch.py",
+    "ui/recording_health.py",
+    "ui/recording_transitions.py",
+    "ui/submenus.py",
     "ui/preferences.py",
+    "ui/preference_forms.py",
 )
 
 REQUIRED_REPO_FILES = (
@@ -78,9 +91,20 @@ REQUIRED_REPO_FILES = (
     "scripts/doctor.py",
 )
 
+REQUIRED_NATIVE_SOURCE_FILES = (
+    "repo/native/CLI.swift",
+    "repo/native/NativeCapture.swift",
+    "repo/native/ScreenCaptureRecorder.swift",
+    "repo/native/SilentSystemRecorder.swift",
+)
+
 
 def python_files() -> list[Path]:
     return sorted([*SRC_ROOT.rglob("*.py"), *TESTS_ROOT.rglob("*.py")])
+
+
+def source_files() -> list[Path]:
+    return sorted([*python_files(), *SRC_ROOT.rglob("*.swift")])
 
 
 def parse(path: Path) -> ast.Module:
@@ -176,7 +200,7 @@ def test_rumps_only_in_ui() -> None:
 def test_file_size_limits() -> None:
     oversized = [
         f"{path.relative_to(ROOT)} has {len(path.read_text(encoding='utf-8').splitlines())} lines"
-        for path in python_files()
+        for path in source_files()
         if len(path.read_text(encoding="utf-8").splitlines()) > 300
     ]
 
@@ -185,7 +209,11 @@ def test_file_size_limits() -> None:
 
 def test_required_modules_exist() -> None:
     missing_source = [path for path in REQUIRED_SOURCE_FILES if not (SRC_ROOT / path).exists()]
+    missing_native = [
+        path for path in REQUIRED_NATIVE_SOURCE_FILES if not (SRC_ROOT / path).exists()
+    ]
     missing_repo = [path for path in REQUIRED_REPO_FILES if not (ROOT / path).exists()]
 
     assert missing_source == []
+    assert missing_native == []
     assert missing_repo == []

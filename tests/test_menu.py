@@ -9,7 +9,9 @@ from meeting_memory.types.meeting import RecentMeeting
 from meeting_memory.types.processing import ProcessingTask
 from meeting_memory.ui.menu import (
     NO_MEETINGS_LABEL,
+    processing_header_label,
     processing_task_label,
+    processing_task_tooltip,
     recent_meeting_labels,
     recording_label,
     review_speakers_label,
@@ -28,19 +30,23 @@ def test_recording_labels() -> None:
 
 
 def test_recent_meeting_labels() -> None:
-    labels = recent_meeting_labels(
-        [
+    meetings = [
             RecentMeeting(
-                slug="slug",
-                calendar_title="Product Sync",
-                started_at=datetime(2026, 6, 11, 9, 0, tzinfo=UTC),
-                directory=Path("/tmp/meeting"),
-                markdown_path=Path("/tmp/meeting/meeting.md"),
+                slug=f"slug-{index}",
+                calendar_title=f"Product Sync {index}",
+                started_at=datetime(2026, 6, 11, 9, index, tzinfo=UTC),
+                directory=Path(f"/tmp/meeting-{index}"),
+                markdown_path=Path(f"/tmp/meeting-{index}/meeting.md"),
             )
+            for index in range(4)
         ]
-    )
+    labels = recent_meeting_labels(meetings)
 
-    assert labels == ["2026-06-11 09:00 · Product Sync"]
+    assert labels == [
+        "2026-06-11 09:00 · Product Sync 0",
+        "2026-06-11 09:01 · Product Sync 1",
+        "2026-06-11 09:02 · Product Sync 2",
+    ]
     assert recent_meeting_labels([]) == [NO_MEETINGS_LABEL]
 
 
@@ -65,15 +71,14 @@ def test_processing_task_label() -> None:
         markdown_path=Path("/tmp/meeting/transcript.md"),
     )
 
-    assert (
-        processing_task_label(
-            ProcessingTask(
-                meeting=meeting,
-                stage="notes",
-                action="generate_notes",
-                status="waiting",
-                label="Generate notes",
-            )
-        )
-        == "2026-06-11 09:00 · Generate notes · Product Sync"
+    task = ProcessingTask(
+        meeting=meeting,
+        stage="notes",
+        action="generate_notes",
+        status="waiting",
+        label="Generate notes",
     )
+
+    assert processing_header_label(1) == "Pending Meeting Tasks (1)"
+    assert processing_task_label(task) == "2026-06-11 09:00 · Generate notes · Product Sync"
+    assert processing_task_tooltip(task) == "Generate notes from the reviewed transcript."

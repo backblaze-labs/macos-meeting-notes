@@ -36,7 +36,7 @@ def test_tray_controller_runs_pipeline_after_stop(tmp_path: Path) -> None:
     assert recorder.started_candidates == ()
     assert pipeline.calls == [(recorder.result.audio_path, recorder.result.meta)]
     assert controller.drain_events() == [
-        NotifyEvent("Recording saved", "Product Sync · transcribing now", show_notification=False)
+        NotifyEvent("Recording saved", "Product Sync · processing queued", show_notification=False)
     ]
 
 
@@ -56,12 +56,13 @@ def test_tray_controller_drains_events(tmp_path: Path) -> None:
 
 def test_tray_controller_reports_start_recording_errors(tmp_path: Path) -> None:
     event_queue: queue.Queue[object] = queue.Queue()
-    message = "Audio device not found: Meeting Aggregate"
+    message = "Screen & System Audio permission is required"
     controller = TrayController(
         settings=_settings(tmp_path),
         recorder=FailingRecorder(message),
         pipeline=FakePipeline(),
         event_queue=event_queue,
+        thread_factory=ImmediateThread,
     )
 
     controller.start_recording()
@@ -73,15 +74,16 @@ def test_tray_controller_reports_stop_recording_errors(tmp_path: Path) -> None:
     event_queue: queue.Queue[object] = queue.Queue()
     controller = TrayController(
         settings=_settings(tmp_path),
-        recorder=FailingRecorder("ffmpeg failed", is_recording=True),
+        recorder=FailingRecorder("native converter failed", is_recording=True),
         pipeline=FakePipeline(),
         event_queue=event_queue,
+        thread_factory=ImmediateThread,
     )
 
     controller.stop_recording()
 
     assert controller.drain_events() == [
-        NotifyEvent(title="Recording could not finish", body="ffmpeg failed")
+        NotifyEvent(title="Recording could not finish", body="native converter failed")
     ]
 
 
@@ -170,11 +172,32 @@ def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
     assert app.app.icon.endswith("robot-template.png")
     assert app.app.template is True
     titles = [item.title for item in app.app.menu.items if item is not None]
+    configuration_titles = _submenu_titles(app, menu.CONFIGURATION_LABEL)
+    debugging_titles = _submenu_titles(app, menu.DEBUGGING_LABEL)
     assert titles.count(menu.QUIT_LABEL) == 1
+    assert titles.count(menu.CONFIGURATION_LABEL) == 1
+    assert titles.count(menu.DEBUGGING_LABEL) == 1
+    assert menu.AUDIO_MODE_HEADER not in titles
+    assert configuration_titles == [
+        menu.AUDIO_MODE_HEADER,
+        "✓ Full Meeting",
+        "Silent System Only",
+        menu.KNOWN_SPEAKERS_LABEL,
+        menu.NOTES_PROMPT_LABEL,
+        menu.PREFERENCES_LABEL,
+    ]
+    assert debugging_titles == [
+        menu.processing_header_label(0),
+        menu.SYNC_LABEL,
+        menu.RETRY_PROCESSING_LABEL,
+        menu.RUN_DIAGNOSTICS_LABEL,
+        menu.TEST_NOTIFICATION_LABEL,
+    ]
 
 
 def _settings(tmp_path: Path) -> Settings:
     return Settings(
+        _env_file=None,
         b2_application_key_id="key-id",
         b2_application_key="secret",
         b2_endpoint="https://s3.example.com",
@@ -185,9 +208,15 @@ def _settings(tmp_path: Path) -> Settings:
     )
 
 
+def _submenu_titles(app: RumpsTrayApp, title: str) -> list[str]:
+    submenu = next(item for item in app.app.menu.items if item and item.title == title)
+    return [item.title for item in submenu.items if item is not None]
+
+
 @dataclass
 class FakeRecorder:
     tmp_path: Path
+    capture_mode: str = "full-meeting"
     is_recording: bool = False
     started_title: str | None = None
     started_candidates: tuple[str, ...] = ()

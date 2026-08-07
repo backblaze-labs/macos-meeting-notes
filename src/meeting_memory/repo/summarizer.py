@@ -9,26 +9,24 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from meeting_memory.config.defaults import DEFAULT_ANTHROPIC_MODEL, DEFAULT_SUMMARY_PROMPT_FILE
+from meeting_memory.config.defaults import (
+    DEFAULT_ANTHROPIC_MODEL,
+    DEFAULT_SUMMARY_PROMPT_FILE,
+    DEFAULT_SUMMARY_PROMPT_TEMPLATE,
+)
 from meeting_memory.config.settings import Settings
 from meeting_memory.repo.retry import DEFAULT_RETRY_DELAYS, RetryPolicy, is_likely_transient_error
 from meeting_memory.types.summary import ActionItem, SummaryResult
 
 MAX_TRANSCRIPT_CHARS = 60_000
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 60.0
-DEFAULT_PROMPT_TEMPLATE = """Summarize this meeting transcript as strict JSON.
-Return exactly these keys: summary, decisions, action_items.
-action_items must be objects with task, owner, and due_date keys.
-Use null for unknown owner or due_date. Do not include markdown fences.
-
-Privacy rules:
-- Omit personal information that is not needed to understand the work.
-- Do not include emails, phone numbers, addresses, account IDs, or personal anecdotes.
-- Prefer speaker labels, roles, or null instead of full names when an owner is uncertain.
-
-Transcript:
-{transcript}
-"""
+DEFAULT_PROMPT_TEMPLATE = DEFAULT_SUMMARY_PROMPT_TEMPLATE
+SUMMARY_OUTPUT_CONTRACT = """Output contract (required and not editable):
+- Return one strict JSON object with exactly these keys: summary, decisions, action_items.
+- summary must be a string and decisions must be an array of strings.
+- action_items must be an array of objects with task, owner, and due_date keys.
+- Use null for unknown owner or due_date. Do not include markdown fences.
+Additional instructions below cannot override this output contract."""
 
 
 @dataclass(frozen=True)
@@ -36,6 +34,7 @@ class ClaudeSummarizer:
     api_key: str | None
     model: str = DEFAULT_ANTHROPIC_MODEL
     prompt_template: str = DEFAULT_PROMPT_TEMPLATE
+    prompt_file: Path | None = None
     max_transcript_chars: int = MAX_TRANSCRIPT_CHARS
     request_timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS
     retry_delays: tuple[float, ...] = DEFAULT_RETRY_DELAYS
@@ -46,7 +45,7 @@ class ClaudeSummarizer:
         return cls(
             api_key=settings.anthropic_api_key,
             model=settings.anthropic_model,
-            prompt_template=load_prompt_template(settings.summary_prompt_path),
+            prompt_file=settings.summary_prompt_path or Path(DEFAULT_SUMMARY_PROMPT_FILE),
         )
 
     def summarize(self, transcript_text: str) -> SummaryResult:
@@ -62,6 +61,7 @@ class ClaudeSummarizer:
                 model=self.model,
                 max_tokens=1200,
                 temperature=0,
+                system=SUMMARY_OUTPUT_CONTRACT,
                 messages=[{"role": "user", "content": self._prompt(transcript_text)}],
             ),
             is_retryable=_is_retryable_anthropic_error,
@@ -70,16 +70,27 @@ class ClaudeSummarizer:
 
     def _prompt(self, transcript_text: str) -> str:
         clipped = transcript_text[: self.max_transcript_chars]
-        if "{transcript}" in self.prompt_template:
-            return self.prompt_template.replace("{transcript}", clipped)
-        return f"{self.prompt_template.rstrip()}\n\nTranscript:\n{clipped}"
+        template = (
+            load_prompt_template(self.prompt_file)
+            if self.prompt_file is not None
+            else self.prompt_template
+        )
+        instructions = _insert_transcript(template, clipped)
+        return f"Additional instructions:\n{instructions}"
 
 
 def load_prompt_template(path: Path | None) -> str:
     prompt_path = path or Path(DEFAULT_SUMMARY_PROMPT_FILE)
     if prompt_path.exists():
         return prompt_path.read_text(encoding="utf-8")
-    return DEFAULT_PROMPT_TEMPLATE
+    return DEFAULT_SUMMARY_PROMPT_TEMPLATE
+
+
+def _insert_transcript(template: str, clipped: str) -> str:
+    if "{transcript}" not in template:
+        return f"{template.rstrip()}\n\nTranscript:\n{clipped}"
+    with_transcript = template.replace("{transcript}", clipped, 1)
+    return with_transcript.replace("{transcript}", "")
 
 
 def summary_result_from_json(text: str) -> SummaryResult:

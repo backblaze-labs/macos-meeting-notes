@@ -34,6 +34,9 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
 - The app uses `LSUIElement`, so it appears as a menu-bar app rather than a
   regular Dock app.
 - The wrapper sets `PYTHONPATH=src` and runs `python -m meeting_memory`.
+- The LaunchAgent refreshes and opens the generated app bundle with
+  LaunchServices so startup-at-login keeps the menu-bar app identity instead of
+  exposing Python in the Dock.
 - It is not signed, notarized, or standalone.
 - After changing code, assets, or `.env`, use `reload-macos-app` or quit and
   reopen the app.

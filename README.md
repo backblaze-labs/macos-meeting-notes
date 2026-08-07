@@ -26,10 +26,9 @@ meeting archive.
 
 ## Requirements
 
-- macOS 13 Ventura or later
+- macOS 15 Sequoia or later
 - Python 3.11 or later
-- `ffmpeg`
-- BlackHole 2ch plus a macOS Aggregate Device named `Meeting Aggregate`
+- Xcode Command Line Tools (`xcode-select --install`)
 - Google Calendar OAuth desktop credentials
 - AssemblyAI API key
 - Dedicated Backblaze B2 bucket and S3-compatible application key
@@ -55,9 +54,9 @@ make PYTHON=.venv/bin/python open-macos-app
 ```
 
 `make doctor` checks local setup. It is expected to report failures until
-`.env`, B2 credentials, AssemblyAI, Google credentials/auth, `ffmpeg`, and audio
-device setup are complete. B2 backup is required before Meeting Memory is ready
-to record.
+`.env`, B2 credentials, AssemblyAI, Google credentials/auth, and the native
+audio helper are ready. B2 backup is required before Meeting Memory is ready to
+record.
 
 The clickable app is installed at `~/Applications/Meeting Memory.app` so it can
 be launched from Finder or found with Cmd+Space by searching for
@@ -88,6 +87,17 @@ or click `Record` from a pre-meeting notification when the calendar watcher
 detects an upcoming Meet or Zoom event. If no nearby calendar event is found,
 the app asks for a title before starting.
 
+Choose the audio mode for the next recording from the tray:
+
+- **Full Meeting** records system audio plus the current macOS microphone. Your
+  current output, including AirPods, keeps playing normally.
+- **Silent System Only** records system audio with the microphone off and mutes
+  that system audio while recording.
+
+Meeting Memory captures these streams through native macOS APIs. It does not
+change the user's input/output devices and does not require BlackHole,
+Aggregate Devices, or per-device configuration.
+
 While recording, the status bar shows a live timer and the tray menu switches to
 `Stop Recording`. When a calendar-backed recording reaches the event end time,
 the app sends a `Stop` reminder action. After transcription finishes, the app
@@ -95,8 +105,9 @@ writes `transcript.md`; the completion notification opens the meeting directory
 so you can review speaker aliases.
 
 If the app crashes during recording, restart it and check the tray for
-`Recovered Recordings`. Failed B2 uploads can be retried with `Sync to B2`, and
-failed transcription states can be retried with `Retry Failed Processing`.
+**Debugging › Interrupted Recordings**. Failed B2 uploads can be retried with
+**Debugging › Retry Pending B2 Backups**, and failed transcription states can
+be retried with **Debugging › Retry Failed Transcriptions**.
 
 By default, the calendar watcher scans all non-deleted calendars accessible to
 the authenticated Google account. Set `GOOGLE_CALENDAR_ID=primary` or a
@@ -105,7 +116,7 @@ specific calendar ID to narrow the watcher.
 ## Setup Guides
 
 - [Full setup tutorial](docs/setup-tutorial.md)
-- [BlackHole setup](docs/blackhole-setup.md)
+- [Removing legacy BlackHole setup](docs/blackhole-setup.md)
 - [Google Calendar auth](docs/google-calendar-auth.md)
 - [Manual validation checklist](docs/manual-validation.md)
 - [Development workflows](docs/dev-workflows.md)
@@ -134,11 +145,9 @@ Optional:
 - `ANTHROPIC_API_KEY`
 - `ANTHROPIC_MODEL`
 - `SUMMARY_PROMPT_FILE`
-- `SPEAKER_MAPPING_FILE`
 - `GOOGLE_CALENDAR_ID`
 - `KNOWN_SPEAKERS`
 - `MEETINGS_DIR`
-- `AUDIO_DEVICE`
 - `NOTIFY_MINUTES_BEFORE`
 - `MAX_RECORDING_MINUTES`
 - `CALENDAR_POLL_INTERVAL`
@@ -151,8 +160,12 @@ Real credentials, OAuth files, local recordings, transcripts, generated meeting
 folders, and `.env` are ignored by git. Before publishing or pushing changes,
 run the checks in [docs/publishing-checklist.md](docs/publishing-checklist.md).
 
-`KNOWN_SPEAKERS` is intentionally blank by default. Add your own local aliases
-only in `.env` if you want Calendar speaker candidates normalized.
+`KNOWN_SPEAKERS` is intentionally empty by default. Use the tray's
+**Configuration › Known Speakers...** item to add local aliases for normalizing
+Calendar speaker candidates. The app stores them in `.env` as a JSON object
+whose keys are display names and whose values are attendee names, emails, or
+email local-parts to match, for example
+`{"Alex Rivera":["alex@example.com","alex.rivera"]}`.
 
 ## Costs
 
@@ -178,12 +191,19 @@ Set `SUMMARY_PROMPT_FILE` to point at another prompt file. If the file contains
 `{transcript}`, the app replaces that placeholder with the clipped transcript;
 otherwise it appends the transcript below the prompt.
 
+Choose **Configuration › Notes Prompt...** in the tray to edit the effective
+additional instructions in a native multiline editor. The required JSON output
+contract stays fixed so custom text cannot change the parser-facing schema.
+Saving updates `SUMMARY_PROMPT_FILE`, and the next notes generation uses the new
+text without restarting the app. The editor can also restore the built-in
+default.
+
 ## Speaker Review
 
 `transcript.md` is the source-of-truth transcript. It includes candidate
 speaker names from Google Calendar attendees. Attendees are shown by their
-Calendar full name, except the team aliases from `KNOWN_SPEAKERS`, plus editable
-aliases:
+Calendar full name, except configured matches from `KNOWN_SPEAKERS`, plus
+editable aliases:
 
 ```yaml
 speaker_candidates: ["Alex", "Ada Lovelace", "Casey"]
@@ -207,17 +227,13 @@ meeting-memory summarize ~/Meetings/<meeting-folder>
 ```
 
 This writes `notes.md` with Summary, Decisions, and Action Items. If notes are
-missing, skipped, or failed after speakers are confirmed, the tray shows a
-`Continue Processing` item. No LLM is used for relabeling; Anthropic is used for
-notes generation.
+missing, skipped, or failed after speakers are confirmed, the tray shows it
+under **Debugging › Pending Meeting Tasks**. No LLM is used for relabeling;
+Anthropic is used for notes generation.
 
-`SPEAKER_MAPPING_FILE` remains available as an optional global JSON mapping:
-
-```json
-{"Speaker A": "Alex", "Speaker B": "Customer"}
-```
-
-Prefer per-meeting `speaker_aliases` when reviewing real meetings.
+Per-meeting `speaker_aliases` are the source of truth for who spoke in a
+specific recording. Global `Speaker A` / `Speaker B` mappings are intentionally
+not supported because AssemblyAI labels can change between transcription jobs.
 
 ## Local Search
 
@@ -238,7 +254,7 @@ meeting-memory search "launch risks"
   `transcript.md`.
 - Calendar watching uses all accessible calendars by default; set
   `GOOGLE_CALENDAR_ID` to a specific ID to narrow it.
-- Failed B2 uploads can be retried with `Sync to B2`. Failed transcription can
-  be retried with `Retry Failed Processing`; fully automatic
+- Failed B2 uploads can be retried with `Retry Pending B2 Backups`. Failed
+  transcription can be retried with `Retry Failed Transcriptions`; fully automatic
   connectivity-aware background queueing is future work.
 - The preferences window edits `.env`; restart the app after saving changes.

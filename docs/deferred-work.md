@@ -34,7 +34,7 @@ tests for fake sleepers/timer thread factories before changing behavior.
 Request: recover partial recordings after a crash or force quit.
 
 Outcome: implemented as tray-discoverable recovery. `service/recovery.py`
-detects temp WAV files, the tray shows `Recovered Recordings`, and selecting one
+detects temp WAV files, **Debugging** shows `Interrupted Recordings`, and selecting one
 converts and processes it through the pipeline.
 
 First thing to check if this comes up again: search temp-dir handling in
@@ -46,8 +46,8 @@ conversion/pipeline handoff in service/controller boundaries.
 Request: retry failed transcription and backup work when
 connectivity returns.
 
-Outcome: partially implemented. B2 has retry behavior plus manual `Sync to B2`.
-Failed transcription can be retried through `Retry Failed Processing`, using
+Outcome: partially implemented. B2 has retry behavior plus manual `Retry Pending B2 Backups`.
+Failed transcription can be retried through `Retry Failed Transcriptions`, using
 existing transcript frontmatter as durable state. What remains deferred is
 automatic connectivity-triggered retry.
 
@@ -71,7 +71,7 @@ lower-layer helper that does not violate SDK containment.
 Request: expose local diagnostics for notification permissions, observed
 calendar scope, next detected event, auth/B2 setup, audio device, and logs.
 
-Outcome: partially implemented. The tray includes `Run Diagnostics`, which
+Outcome: partially implemented. The tray includes `Check Setup & Dependencies`, which
 reruns doctor checks and notifies a compact result, plus `Send Test
 Notification`. Richer diagnostics such as observed calendars, next detected
 event, B2 object state, and direct log-path display remain future work.
@@ -97,21 +97,18 @@ local.
 ### Active Meet/Zoom Microphone Detection
 
 Request: record only the microphone that Google Meet or Zoom is actively
-receiving, instead of recording the locally configured microphone.
+receiving, instead of the current macOS default microphone.
 
-Outcome: not implemented as requested. The recorder now opens all input
-channels from the configured Aggregate Device and downmixes to mono, which fixes
-the case where the desired mic exists in the aggregate but lands on a different
-channel.
+Outcome: Meeting Memory now uses native macOS capture and no longer configures
+an input device. `Full Meeting` captures the current macOS default microphone;
+`Silent System Only` disables microphone capture entirely.
 
 Reason deferred: macOS, browser-hosted Meet, and Zoom do not expose a reliable
 app-level API here for this Python menu bar app to know which mic another app is
 currently receiving, or to gate capture only while that app is receiving it.
 
-First thing to check if this comes up again: verify that `AUDIO_DEVICE` points
-to the intended Aggregate Device and that the aggregate includes the same mic the
-user selected in Meet/Zoom. Missing local voice in transcripts is most likely an
-aggregate/channel/configuration issue, not a Meet/Zoom active-mic API issue.
+First thing to check if this comes up again: verify that Meet/Zoom and macOS are
+using the same default input when local voice is expected in transcripts.
 
 ### Recording Timer While Menu Is Open
 

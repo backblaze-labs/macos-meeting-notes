@@ -56,8 +56,10 @@ make PYTHON=.venv/bin/python install-launch-agent
 ```
 
 It writes `~/Library/LaunchAgents/com.meeting-memory.app.plist`, starts the app
-in the background, and sends stdout/stderr to
-`~/Library/Logs/meeting-memory/launch-agent.*.log`.
+in the background by opening `~/Applications/Meeting Memory.app` through
+LaunchServices, and keeps opener stdout/stderr under
+`~/Library/Logs/meeting-memory/launch-agent.*.log`. App logs are written to
+`~/Library/Logs/meeting-memory/app.log`.
 
 Remove it after validation unless you want Meeting Memory to keep starting at
 login:
@@ -83,6 +85,6 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
 `meeting-memory` starts the tray process. Stop it from the tray menu with
 `Quit`.
 
-The tray menu also exposes `Sync to B2`, `Retry Failed Processing`, `Run
-Diagnostics`, and `Send Test Notification` for local validation without adding
-new CLI commands.
+The tray's **Debugging** submenu exposes `Retry Pending B2 Backups`, `Retry
+Failed Transcriptions`, `Check Setup & Dependencies`, and `Test macOS
+Notifications` for local validation without adding new CLI commands.

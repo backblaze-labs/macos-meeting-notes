@@ -19,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     subcommands = parser.add_subparsers(dest="command")
     subcommands.add_parser("setup", help="prepare first-run local setup")
     subcommands.add_parser("doctor", help="run preflight checks")
+    subcommands.add_parser("build-native-audio", help="build the macOS audio helper")
     subcommands.add_parser("auth", help="run Google Calendar OAuth setup")
     subcommands.add_parser("install-macos-app", help="install the clickable macOS app")
     subcommands.add_parser("reload-macos-app", help="install, quit, and reopen the macOS app")
@@ -46,6 +47,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_setup()
     if args.command == "doctor":
         return doctor_main(())
+    if args.command == "build-native-audio":
+        from meeting_memory.service.native_audio_setup import build_native_audio
+
+        return build_native_audio(_project_dir())
     if args.command == "auth":
         return run_auth()
     if args.command == "install-macos-app":
@@ -224,7 +229,6 @@ def run_app() -> int:
     from meeting_memory.service.processing_retry import retry_failed_processing
     from meeting_memory.service.recorder import RecorderService
     from meeting_memory.service.recording_context import current_recording_context
-    from meeting_memory.service.speaker_mapping import load_speaker_mapping
     from meeting_memory.service.sync import sync_pending_meetings
     from meeting_memory.ui.tray import RumpsTrayApp, TrayController
 
@@ -238,16 +242,14 @@ def run_app() -> int:
     event_queue: queue.Queue[object] = queue.Queue()
     b2_client = B2S3Client.from_settings(settings)
     calendar_client = GoogleCalendarClient.from_settings(settings)
-    speaker_mapping = load_speaker_mapping(settings.speaker_mapping_path)
     pipeline = Pipeline(
         meetings_dir=settings.meetings_dir_path,
         transcription_client=AssemblyAITranscriptionClient.from_settings(settings),
         summarizer_client=ClaudeSummarizer.from_settings(settings),
         b2_client=b2_client,
         event_sink=event_queue.put,
-        speaker_mapping=speaker_mapping,
     )
-    recorder = RecorderService(audio_device=settings.audio_device)
+    recorder = RecorderService()
     controller = TrayController(
         settings=settings,
         recorder=recorder,

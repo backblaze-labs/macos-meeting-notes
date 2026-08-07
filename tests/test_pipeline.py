@@ -123,13 +123,12 @@ def test_pipeline_marks_frontmatter_when_b2_upload_fails(tmp_path: Path) -> None
     assert frontmatter["b2_status"] == "upload_failed"
 
 
-def test_pipeline_applies_speaker_mapping_when_rendering_markdown(tmp_path: Path) -> None:
+def test_pipeline_preserves_speaker_labels_until_review(tmp_path: Path) -> None:
     summarizer = FakeSummarizer(SummaryResult(summary="A summary."))
     pipeline = Pipeline(
         meetings_dir=tmp_path / "meetings",
         transcription_client=FakeTranscriber(_transcript("tx-123")),
         summarizer_client=summarizer,
-        speaker_mapping={"Speaker A": "Alex"},
     )
 
     result = pipeline.run(_audio_source(tmp_path), _meta())
@@ -137,8 +136,10 @@ def test_pipeline_applies_speaker_mapping_when_rendering_markdown(tmp_path: Path
     frontmatter = read_frontmatter(result.files.markdown_path)
 
     assert summarizer.transcript_text is None
-    assert frontmatter["participants"] == ["Alex"]
-    assert "**Alex** (0:00:05): Hello from the meeting." in markdown
+    assert frontmatter["participants"] == ["Speaker A"]
+    assert frontmatter["speaker_aliases"] == {}
+    assert frontmatter["speaker_status"] == "needs_review"
+    assert "**Speaker A** (0:00:05): Hello from the meeting." in markdown
 
 
 @dataclass

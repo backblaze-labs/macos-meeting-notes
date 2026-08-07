@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import queue
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -114,12 +115,19 @@ def test_continue_processing_menu_lists_pending_tasks(tmp_path: Path) -> None:
     app = RumpsTrayApp(controller, rumps_module=fake_rumps)
 
     titles = _menu_titles(app)
-    assert menu.PROCESSING_HEADER in titles
-    assert menu.processing_task_label(controller.pending[0]) in titles
+    debugging_titles = _submenu_titles(app, menu.DEBUGGING_LABEL)
+    assert menu.PROCESSING_HEADER not in titles
+    assert menu.processing_header_label(1) in debugging_titles
+    assert menu.processing_task_label(controller.pending[0]) in debugging_titles
 
 
 def _menu_titles(app: RumpsTrayApp) -> list[str]:
     return [item.title for item in app.app.menu.items if item is not None]
+
+
+def _submenu_titles(app: RumpsTrayApp, title: str) -> list[str]:
+    submenu = next(item for item in app.app.menu.items if item and item.title == title)
+    return [item.title for item in submenu.items if item is not None]
 
 
 def _recent(tmp_path: Path) -> RecentMeeting:
@@ -142,6 +150,7 @@ class FakeRecorder:
 class FakeController:
     tmp_path: Path
     recorder: FakeRecorder = field(default_factory=FakeRecorder)
+    event_queue: queue.Queue[object] = field(default_factory=queue.Queue)
     recent: list[RecentMeeting] = field(default_factory=list)
     started_title: str | None = None
     started_candidates: tuple[str, ...] = ()
@@ -229,6 +238,10 @@ class FakeRumps:
         def __init__(self, title, callback=None):
             self.title = title
             self.callback = callback
+            self.items = []
+
+        def add(self, item) -> None:
+            self.items.append(item)
 
     class Timer:
         def __init__(self, callback, interval):

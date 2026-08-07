@@ -26,6 +26,12 @@ Calendar polling runs in `CalendarWatcher` on a background thread. The watcher
 emits typed events into the tray queue; `RumpsTrayApp` renders notifications on
 the UI thread.
 
+Google API connections prefer IPv4 before falling back to IPv6. This avoids
+long watcher stalls on networks that advertise IPv6 DNS records but cannot
+actually route IPv6 traffic. Repeated failures during one uninterrupted outage
+are logged but produce only one user notification; a successful poll resets the
+notification guard.
+
 ## Behavior Notes
 
 - `GOOGLE_CALENDAR_ID=all` is the default and scans every non-deleted calendar

@@ -1,5 +1,7 @@
 """Configuration defaults shared by settings and doctor."""
 
+from meeting_memory.types.speakers import KnownSpeaker
+
 B2_ENV_VARS = (
     "B2_APPLICATION_KEY_ID",
     "B2_APPLICATION_KEY",
@@ -8,9 +10,7 @@ B2_ENV_VARS = (
     "B2_BUCKET_NAME",
 )
 
-ASSEMBLYAI_ENV_VARS = (
-    "ASSEMBLYAI_API_KEY",
-)
+ASSEMBLYAI_ENV_VARS = ("ASSEMBLYAI_API_KEY",)
 
 REQUIRED_ENV_VARS = (*B2_ENV_VARS, *ASSEMBLYAI_ENV_VARS)
 
@@ -18,11 +18,24 @@ PLACEHOLDER_MARKERS = ("replace-me", "changeme", "todo", "<", ">")
 
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"
 DEFAULT_SUMMARY_PROMPT_FILE = "prompts/summary.md"
+DEFAULT_SUMMARY_PROMPT_TEMPLATE = """Privacy rules:
+- Omit personal information that is not needed to understand the work.
+- Do not include emails, phone numbers, addresses, account IDs, or personal anecdotes.
+- Prefer speaker labels, roles, or null instead of full names when an owner is uncertain.
+- Do not quote casual/private conversation unless it directly affects a work decision.
+
+Content rules:
+- Keep the summary focused on work topics, decisions, risks, and next steps.
+- Do not infer due dates.
+- Preserve technical names, project names, and company/product names when relevant.
+
+Transcript:
+{transcript}
+"""
 DEFAULT_GOOGLE_CALENDAR_CREDENTIALS_FILE = "credentials.json"
 DEFAULT_GOOGLE_CALENDAR_ID = "all"
-DEFAULT_KNOWN_SPEAKERS: tuple[str, ...] = ()
+DEFAULT_KNOWN_SPEAKERS: tuple[KnownSpeaker, ...] = ()
 DEFAULT_MEETINGS_DIR = "~/Meetings"
-DEFAULT_AUDIO_DEVICE = "Meeting Aggregate"
 DEFAULT_NOTIFY_MINUTES_BEFORE = 5
 DEFAULT_MAX_RECORDING_MINUTES = 180
 DEFAULT_CALENDAR_POLL_INTERVAL = 120

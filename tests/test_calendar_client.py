@@ -21,6 +21,7 @@ from meeting_memory.repo.calendar_client import (
     GoogleCalendarClient,
     KeychainTokenStore,
 )
+from meeting_memory.types.speakers import KnownSpeaker
 
 
 def test_calendar_auth_stores_oauth_token(monkeypatch, tmp_path: Path):
@@ -160,6 +161,63 @@ def test_calendar_suggests_candidates_from_email_names_when_names_are_missing():
     assert candidates == ("Blair", "Casey", "Alex")
 
 
+def test_calendar_does_not_add_unmatched_known_speakers_to_candidates():
+    candidates = calendar_client._speaker_candidates(
+        {
+            "attendees": [
+                {"displayName": "Ada Lovelace", "email": "ada.lovelace@example.com"},
+            ],
+        },
+        ("Alex", "Blair"),
+    )
+
+    assert candidates == ("Ada Lovelace",)
+
+
+def test_calendar_known_speakers_can_match_configured_email_aliases():
+    candidates = calendar_client._speaker_candidates(
+        {
+            "attendees": [
+                {"email": "alex@example.com"},
+                {"email": "blair@example.com"},
+            ],
+        },
+        (
+            KnownSpeaker("Alex", ("alex",)),
+            KnownSpeaker("Blair", ("blair@example.com",)),
+        ),
+    )
+
+    assert candidates == ("Alex", "Blair")
+
+
+def test_calendar_known_speaker_sources_do_not_match_display_alias_initials():
+    candidates = calendar_client._speaker_candidates(
+        {
+            "attendees": [
+                {"email": "john.doe@example.com"},
+                {"email": "jdeleon@example.com"},
+            ],
+        },
+        (KnownSpeaker("Drew", ("jdeleon@example.com",)),),
+    )
+
+    assert candidates == ("John Doe", "Drew")
+
+
+def test_calendar_email_matching_does_not_use_first_initial_only():
+    candidates = calendar_client._speaker_candidates(
+        {
+            "attendees": [
+                {"email": "sales@example.com"},
+            ],
+        },
+        ("Casey",),
+    )
+
+    assert candidates == ("sales@example.com",)
+
+
 def test_calendar_lists_all_accessible_calendars(monkeypatch, tmp_path: Path):
     token_store = InMemoryTokenStore('{"token":"valid"}')
     fake_service = FakeCalendarService()
@@ -179,7 +237,10 @@ def test_calendar_lists_all_accessible_calendars(monkeypatch, tmp_path: Path):
 
     assert [call["calendarId"] for call in fake_service.list_calls] == ["primary", "team"]
     assert [meeting.calendar_title for meeting in meetings] == [
-        "Daily Standup", "Daily Standup", "Customer Call", "Customer Call"
+        "Daily Standup",
+        "Daily Standup",
+        "Customer Call",
+        "Customer Call",
     ]
 
 
@@ -196,6 +257,7 @@ def test_keychain_token_store_uses_keyring(monkeypatch):
 
 def test_calendar_client_from_settings(tmp_path: Path):
     settings = Settings(
+        _env_file=None,
         b2_application_key_id="key-id",
         b2_application_key="secret",
         b2_endpoint="https://s3.example.com",
@@ -211,8 +273,6 @@ def test_calendar_client_from_settings(tmp_path: Path):
     assert client.credentials_file == tmp_path / "credentials.json"
     assert client.calendar_id == "primary"
     assert client.known_speakers == ()
-
-
 
 
 class FakeKeyring:

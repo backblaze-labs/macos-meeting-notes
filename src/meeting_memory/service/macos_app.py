@@ -15,6 +15,13 @@ from importlib.resources import as_file, files
 from pathlib import Path
 from typing import Any
 
+from meeting_memory.repo.native_audio import (
+    HELPER_ENV_VAR,
+    HELPER_NAME,
+    build_native_capture_helper,
+    default_build_helper_path,
+)
+
 APP_NAME = "Meeting Memory"
 APP_BUNDLE_NAME = f"{APP_NAME}.app"
 BUNDLE_IDENTIFIER = "com.meeting-memory.app"
@@ -27,6 +34,7 @@ LSREGISTER = (
 )
 
 Runner = Callable[..., subprocess.CompletedProcess]
+HelperBuilder = Callable[..., Path]
 
 
 def install_macos_app(
@@ -35,6 +43,7 @@ def install_macos_app(
     app_path: Path | None = None,
     python_executable: str | None = None,
     runner: Runner = subprocess.run,
+    helper_builder: HelperBuilder = build_native_capture_helper,
 ) -> Path:
     target = app_path or default_app_path()
     root = (project_dir or Path.cwd()).resolve()
@@ -44,6 +53,13 @@ def install_macos_app(
     macos_dir.mkdir(parents=True, exist_ok=True)
     resources_dir.mkdir(parents=True, exist_ok=True)
     copy_macos_app_icon(resources_dir)
+    built_helper = helper_builder(
+        root,
+        default_build_helper_path(root),
+        runner=runner,
+    )
+    shutil.copyfile(built_helper, macos_dir / HELPER_NAME)
+    (macos_dir / HELPER_NAME).chmod(0o755)
 
     executable = macos_dir / EXECUTABLE_NAME
     executable.write_text(
@@ -62,12 +78,14 @@ def reload_macos_app(
     app_path: Path | None = None,
     python_executable: str | None = None,
     runner: Runner = subprocess.run,
+    helper_builder: HelperBuilder = build_native_capture_helper,
 ) -> Path:
     target = install_macos_app(
         project_dir=project_dir,
         app_path=app_path,
         python_executable=python_executable,
         runner=runner,
+        helper_builder=helper_builder,
     )
     quit_macos_app(runner=runner)
     open_macos_app(target, runner=runner)
@@ -86,10 +104,13 @@ def macos_app_plist() -> dict[str, Any]:
         "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": "0.1.0",
         "CFBundleVersion": "1",
-        "LSMinimumSystemVersion": "13.0",
+        "LSMinimumSystemVersion": "15.0",
         "LSUIElement": True,
         "NSMicrophoneUsageDescription": (
             "Meeting Memory records meeting audio when you start a recording."
+        ),
+        "NSScreenCaptureUsageDescription": (
+            "Meeting Memory captures system audio only while you record a meeting."
         ),
         "NSPrincipalClass": "NSApplication",
     }
@@ -107,6 +128,7 @@ def macos_app_executable(project_dir: Path, python_executable: str) -> str:
             f"cd {project}",
             f"export PATH={shlex.quote(DEFAULT_PATH)}",
             'export PYTHONUNBUFFERED="1"',
+            f'export {HELPER_ENV_VAR}="${{0:A:h}}/{HELPER_NAME}"',
             f'export PYTHONPATH={pythonpath}${{PYTHONPATH:+:$PYTHONPATH}}',
             f"{python} -m meeting_memory",
             "",

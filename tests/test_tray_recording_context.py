@@ -51,11 +51,12 @@ def test_tray_controller_auto_stops_at_recording_limit(tmp_path: Path) -> None:
         pipeline=pipeline,
         event_queue=queue.Queue(),
         thread_factory=ImmediateThread,
-        timer_thread_factory=ImmediateThread,
+        timer_thread_factory=PassiveThread,
         sleeper=lambda seconds: sleeps.append(seconds),
     )
 
     controller.start_recording("Long Meeting")
+    controller._auto_stop_recording("Long Meeting", controller._recording_token)
 
     assert sleeps == [60]
     assert recorder.is_recording is False
@@ -103,6 +104,7 @@ def test_rumps_tray_app_uses_calendar_context_without_prompt(tmp_path: Path) -> 
         recorder=recorder,
         pipeline=FakePipeline(),
         event_queue=queue.Queue(),
+        thread_factory=ImmediateThread,
         recording_context_provider=lambda: RecordingContext(
             "Calendar Sync",
             ends_at=ends_at,
@@ -120,6 +122,7 @@ def test_rumps_tray_app_uses_calendar_context_without_prompt(tmp_path: Path) -> 
 
 def _settings(tmp_path: Path, *, max_recording_minutes: int = 180) -> Settings:
     return Settings(
+        _env_file=None,
         b2_application_key_id="key-id",
         b2_application_key="secret",
         b2_endpoint="https://s3.example.com",
@@ -232,6 +235,10 @@ class FakeRumps:
         def __init__(self, title, callback=None):
             self.title = title
             self.callback = callback
+            self.items = []
+
+        def add(self, item) -> None:
+            self.items.append(item)
 
     class Timer:
         def __init__(self, callback, interval):

@@ -8,24 +8,32 @@ from pathlib import Path
 
 from meeting_memory.doctor import CheckResult, run_checks
 from meeting_memory.types.events import MeetingDetected, NotifyEvent, RecordingTitleNeeded
-from meeting_memory.ui import menu
+from meeting_memory.ui import load_rumps, menu
+from meeting_memory.ui.audio_modes import AudioModeMenu
 from meeting_memory.ui.controller import TrayController
 from meeting_memory.ui.icons import tray_icon_path
 from meeting_memory.ui.macos import (
     allow_foreground_notifications,
+    configure_background_app_identity,
     configure_modern_notifications,
-    hide_dock_icon,
     keep_timer_running_during_menu_tracking,
 )
+from meeting_memory.ui.notes_prompt import open_notes_prompt_window
 from meeting_memory.ui.notifications import (
     notify_event_kwargs,
     parse_notification_candidates,
     parse_notification_datetime,
     send_notification,
 )
-from meeting_memory.ui.preferences import open_preferences_window
-from meeting_memory.ui.processing_actions import run_processing_task
+from meeting_memory.ui.preferences import open_known_speakers_window, open_preferences_window
+from meeting_memory.ui.recording_health import RecordingHealthMonitor
 from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
+from meeting_memory.ui.submenus import (
+    ConfigurationActions,
+    DebuggingActions,
+    configuration_submenu,
+    debugging_submenu,
+)
 from meeting_memory.ui.title_prompt import ask_recording_title
 
 LOGGER = logging.getLogger(__name__)
@@ -39,11 +47,11 @@ class RumpsTrayApp:
         doctor_results: list[CheckResult] | None = None,
         rumps_module=None,
     ) -> None:
-        self.rumps = rumps_module or _load_rumps()
+        self.rumps = rumps_module or load_rumps()
         self.controller = controller
         self.doctor_results = doctor_results or []
         if rumps_module is None:
-            hide_dock_icon(LOGGER)
+            configure_background_app_identity(LOGGER)
             allow_foreground_notifications(LOGGER)
             configure_modern_notifications(self.handle_notification, LOGGER)
         self._register_notification_handler()
@@ -57,6 +65,8 @@ class RumpsTrayApp:
         self.timer = self.rumps.Timer(self.drain_events, 1)
         self.recording_item = None
         self.recording_label = ""
+        self.recording_health = RecordingHealthMonitor(controller.recorder, controller.event_queue)
+        self.audio_mode_menu = AudioModeMenu(self.rumps, self.controller, rebuild_menu=self.rebuild_menu)  # noqa: E501
         self.rebuild_menu()
 
     def run(self) -> None:
@@ -68,10 +78,7 @@ class RumpsTrayApp:
         self.app.menu.clear()
         self.app.menu.add(self.rumps.MenuItem(menu.APP_TITLE, callback=None))
         self.app.menu.add(None)
-        self.recording_item = self.rumps.MenuItem(
-            self.current_recording_label(),
-            callback=self.toggle_recording,
-        )
+        self.recording_item = self.rumps.MenuItem(self.current_recording_label(), self.toggle_recording)  # noqa: E501
         self.recording_label = self.recording_item.title
         self.app.menu.add(self.recording_item)
         self.app.menu.add(None)
@@ -86,78 +93,61 @@ class RumpsTrayApp:
             )
         if not recent_meetings:
             self.app.menu.add(self.rumps.MenuItem(menu.NO_MEETINGS_LABEL, callback=None))
-        processing_tasks = self.controller.pending_processing_tasks()
-        if processing_tasks:
-            self.app.menu.add(None)
-            self.app.menu.add(self.rumps.MenuItem(menu.PROCESSING_HEADER, callback=None))
-            for task in processing_tasks:
-                self.app.menu.add(
-                    self.rumps.MenuItem(
-                        menu.processing_task_label(task),
-                        callback=lambda _sender, item=task: run_processing_task(
-                            item,
-                            review_speakers=self.open_speaker_review,
-                            generate_notes=self.controller.generate_notes,
-                        ),
-                    )
-                )
         self.app.menu.add(None)
-        recovered_recordings = self.controller.recovered_recordings()
-        if recovered_recordings:
-            self.app.menu.add(self.rumps.MenuItem(menu.RECOVERED_HEADER, callback=None))
-            for recovered in recovered_recordings:
-                self.app.menu.add(
-                    self.rumps.MenuItem(
-                        menu.recovered_recording_label(recovered.meta.slug),
-                        callback=lambda _sender, item=recovered: (
-                            self.controller.process_recovered_recording(item)
-                        ),
-                    )
-                )
-            self.app.menu.add(None)
         self.app.menu.add(
             self.rumps.MenuItem(
                 menu.OPEN_MEETINGS_LABEL,
                 lambda _sender: self.controller.open_meetings_folder(),
             )
         )
-        self.app.menu.add(
-            self.rumps.MenuItem(menu.SYNC_LABEL, lambda _sender: self.controller.sync_to_b2())
-        )
-        self.app.menu.add(
-            self.rumps.MenuItem(
-                menu.RETRY_PROCESSING_LABEL,
-                lambda _sender: self.controller.retry_failed_processing(),
-            )
-        )
         self.app.menu.add(None)
-        for result in self.doctor_results:
-            if not result.ok or result.warning:
-                self.app.menu.add(self.rumps.MenuItem(f"Setup: {result.name}", callback=None))
-        self.app.menu.add(self.rumps.MenuItem(menu.RUN_DIAGNOSTICS_LABEL, self.run_diagnostics))
-        self.app.menu.add(
-            self.rumps.MenuItem(menu.TEST_NOTIFICATION_LABEL, self.send_test_notification)
-        )
-        self.app.menu.add(self.rumps.MenuItem(menu.PREFERENCES_LABEL, self.open_preferences))
+        self.app.menu.add(self._configuration_submenu())
+        self.app.menu.add(self._debugging_submenu())
         self.app.menu.add(self.rumps.MenuItem(menu.QUIT_LABEL, self.rumps.quit_application))
+
+    def _configuration_submenu(self):
+        return configuration_submenu(
+            self.rumps,
+            self.audio_mode_menu,
+            ConfigurationActions(
+                open_known_speakers=self.open_known_speakers,
+                open_notes_prompt=self.open_notes_prompt,
+                open_preferences=self.open_preferences,
+            ),
+        )
+
+    def _debugging_submenu(self):
+        return debugging_submenu(
+            self.rumps,
+            processing_tasks=self.controller.pending_processing_tasks(),
+            recovered_recordings=self.controller.recovered_recordings(),
+            doctor_results=self.doctor_results,
+            actions=DebuggingActions(
+                review_speakers=self.open_speaker_review,
+                generate_notes=self.controller.generate_notes,
+                process_recovered_recording=self.controller.process_recovered_recording,
+                sync_to_b2=self.controller.sync_to_b2,
+                retry_failed_processing=self.controller.retry_failed_processing,
+                run_diagnostics=self.run_diagnostics,
+                send_test_notification=self.send_test_notification,
+            ),
+        )
 
     def toggle_recording(self, _sender=None) -> None:
         if self.controller.recorder.is_recording:
             self.controller.stop_recording()
         else:
-            context = self.controller.recording_context()
-            if context is None:
-                self.controller.start_recording()
-            else:
-                self.controller.start_recording(
-                    context.calendar_title,
-                    ends_at=context.ends_at,
-                    speaker_candidates=context.speaker_candidates,
-                )
+            self.controller.start_recording()
         self.rebuild_menu()
 
     def open_preferences(self, _sender=None) -> None:
         open_preferences_window(self.controller.settings)
+
+    def open_known_speakers(self, _sender=None) -> None:
+        open_known_speakers_window(self.controller.settings)
+
+    def open_notes_prompt(self, _sender=None) -> None:
+        open_notes_prompt_window(self.controller.settings, rumps_module=self.rumps)
 
     def open_speaker_review(self, meeting_path: Path) -> None:
         open_speaker_review_window(
@@ -184,14 +174,11 @@ class RumpsTrayApp:
         self.rebuild_menu()
 
     def send_test_notification(self, _sender=None) -> None:
-        LOGGER.info("Send Test Notification selected")
-        self._send_notification(
-            "Meeting Memory test",
-            "",
-            "Notifications are working.",
-        )
+        LOGGER.info("Test macOS Notifications selected")
+        self._send_notification("Meeting Memory test", "", "Notifications are working.")
 
     def drain_events(self, _timer=None) -> None:
+        self.recording_health.poll()
         for event in self.controller.drain_events():
             self.handle_event(event)
         self.update_tray_title()
@@ -292,9 +279,3 @@ class RumpsTrayApp:
 
     def _send_notification(self, title: str, subtitle: str, message: str, **kwargs) -> None:
         send_notification(self.rumps, title, subtitle, message, LOGGER, **kwargs)
-
-
-def _load_rumps():
-    import rumps
-
-    return rumps

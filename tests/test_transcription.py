@@ -79,6 +79,7 @@ def test_assemblyai_transcription_retries_transient_errors(tmp_path: Path, monke
 
 def test_assemblyai_client_from_settings() -> None:
     settings = Settings(
+        _env_file=None,
         b2_application_key_id="key-id",
         b2_application_key="secret",
         b2_endpoint="https://s3.example.com",

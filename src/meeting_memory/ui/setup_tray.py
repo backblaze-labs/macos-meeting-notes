@@ -9,14 +9,14 @@ from meeting_memory.ui import menu
 from meeting_memory.ui.icons import tray_icon_path
 from meeting_memory.ui.macos import (
     allow_foreground_notifications,
+    configure_background_app_identity,
     configure_modern_notifications,
-    hide_dock_icon,
 )
 from meeting_memory.ui.notifications import send_notification
 
 LOGGER = logging.getLogger(__name__)
 SETUP_HEADER = "Setup Required"
-SETUP_HINT = "Run make setup, fill .env, then Run Diagnostics"
+SETUP_HINT = "Run make setup, fill .env, then Check Setup & Dependencies"
 
 
 class RumpsSetupApp:
@@ -24,7 +24,7 @@ class RumpsSetupApp:
         self.rumps = rumps_module or _load_rumps()
         self.doctor_results = doctor_results or []
         if rumps_module is None:
-            hide_dock_icon(LOGGER)
+            configure_background_app_identity(LOGGER)
             allow_foreground_notifications(LOGGER)
             configure_modern_notifications(lambda _data: None, LOGGER)
         self.app = self.rumps.App(

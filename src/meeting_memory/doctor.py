@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import platform
-import shutil
 import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -13,15 +12,10 @@ from pathlib import Path
 from meeting_memory.config.defaults import (
     ASSEMBLYAI_ENV_VARS,
     B2_ENV_VARS,
-    DEFAULT_AUDIO_DEVICE,
     DEFAULT_GOOGLE_CALENDAR_CREDENTIALS_FILE,
     PLACEHOLDER_MARKERS,
 )
-from meeting_memory.repo.audio_device import (
-    AudioDeviceCheckUnavailable,
-    AudioDeviceInfo,
-    list_audio_devices,
-)
+from meeting_memory.repo.native_audio import NativeAudioCaptureError, check_native_capture
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = PROJECT_ROOT / ".env"
@@ -75,18 +69,18 @@ def check_macos() -> CheckResult:
         return CheckResult(
             "macos",
             False,
-            "meeting-memory targets macOS 13 or newer.",
+            "meeting-memory targets macOS 15 or newer.",
             "Run on macOS.",
         )
 
     major = int(platform.release().split(".", maxsplit=1)[0])
-    if major >= 22:
+    if major >= 24:
         return CheckResult("macos", True, "macOS version is supported.")
     return CheckResult(
         "macos",
         False,
-        "macOS 13 Ventura or newer is required.",
-        "Upgrade macOS before using recording features.",
+        "macOS 15 Sequoia or newer is required.",
+        "Upgrade macOS to use native system and microphone audio capture.",
     )
 
 
@@ -135,12 +129,6 @@ def check_assemblyai_env(dotenv_values: dict[str, str]) -> CheckResult:
         f"Missing or placeholder values: {missing}.",
         "Set ASSEMBLYAI_API_KEY in .env.",
     )
-
-
-def check_ffmpeg() -> CheckResult:
-    if shutil.which("ffmpeg"):
-        return CheckResult("ffmpeg", True, "ffmpeg is available on PATH.")
-    return CheckResult("ffmpeg", False, "ffmpeg was not found on PATH.", "Install ffmpeg.")
 
 
 def check_google_credentials(dotenv_values: dict[str, str]) -> CheckResult:
@@ -200,56 +188,30 @@ def _keychain_token_store_cls():
     return KeychainTokenStore
 
 
-def check_audio_device(dotenv_values: dict[str, str]) -> CheckResult:
-    configured = _configured_value("AUDIO_DEVICE", dotenv_values) or DEFAULT_AUDIO_DEVICE
+def check_native_audio() -> CheckResult:
     try:
-        devices = list_audio_devices()
-    except AudioDeviceCheckUnavailable as exc:
-        return CheckResult("audio-device", True, str(exc), "Install dependencies.", warning=True)
-
-    input_devices = [device for device in devices if device.max_input_channels > 0]
-    if not input_devices:
+        event = check_native_capture()
+    except NativeAudioCaptureError as exc:
         return CheckResult(
-            "audio-device",
+            "native-audio",
+            False,
+            str(exc),
+            "Run make setup to build and install the native audio helper.",
+        )
+    microphone = event.get("microphone", "unknown")
+    if str(microphone).strip().lower() in {"none", "unknown", ""}:
+        return CheckResult(
+            "native-audio",
             True,
-            (
-                "No audio input devices are visible to this process; "
-                f"could not verify AUDIO_DEVICE={configured}."
-            ),
-            (
-                "Grant microphone access to the terminal or run diagnostics from "
-                "Meeting Memory.app. If the app records successfully, the aggregate "
-                "device is likely OK."
-            ),
+            "Native system audio is ready, but Full Meeting has no microphone available.",
+            "Connect or select a macOS input device, then rerun make doctor.",
             warning=True,
         )
-
-    matching_devices = [device for device in input_devices if device.name == configured]
-    if matching_devices:
-        return CheckResult("audio-device", True, f"Audio device exists: {configured}.")
-
-    if any(device.name == configured for device in devices):
-        return CheckResult(
-            "audio-device",
-            False,
-            f"Audio device exists but has no input channels: {configured}.",
-            "Use an aggregate/input device that exposes microphone or BlackHole input channels.",
-        )
-
-    visible = _format_audio_devices(input_devices)
     return CheckResult(
-        "audio-device",
-        False,
-        f"Audio input device was not found: {configured}. Visible input devices: {visible}.",
-        "Create the aggregate device or set AUDIO_DEVICE in .env.",
+        "native-audio",
+        True,
+        f"Native system audio is ready; current microphone: {microphone}.",
     )
-
-
-def _format_audio_devices(devices: Sequence[AudioDeviceInfo], limit: int = 8) -> str:
-    visible = [f"{device.name} ({device.max_input_channels} in)" for device in devices[:limit]]
-    if len(devices) > limit:
-        visible.append(f"{len(devices) - limit} more")
-    return ", ".join(visible)
 
 
 def run_checks() -> list[CheckResult]:
@@ -260,10 +222,9 @@ def run_checks() -> list[CheckResult]:
         check_env_file(),
         check_b2_env(dotenv_values),
         check_assemblyai_env(dotenv_values),
-        check_ffmpeg(),
         check_google_credentials(dotenv_values),
         check_google_token(),
-        check_audio_device(dotenv_values),
+        check_native_audio(),
     ]
 
 

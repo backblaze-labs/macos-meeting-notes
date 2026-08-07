@@ -5,14 +5,11 @@ setup and real service credentials.
 
 ## Preconditions
 
-- macOS 13 or later
+- macOS 15 or later
 - Python virtualenv active
 - `make setup` completed
 - `.env` exists and contains real values
-- `ffmpeg` installed
-- BlackHole 2ch installed
-- `Meeting Aggregate` audio device exists, or `AUDIO_DEVICE` names the actual
-  aggregate device
+- Xcode Command Line Tools installed
 - Google Calendar OAuth credentials JSON exists
 - `.venv/bin/meeting-memory auth` completed successfully
 - AssemblyAI account has available credit
@@ -33,9 +30,9 @@ Pass criteria:
 - macOS is supported.
 - `.env` exists.
 - Required env values are not placeholders.
-- `ffmpeg` is on `PATH`.
 - Google OAuth credentials file exists.
-- Audio device exists.
+- The native audio helper is installed, reports the current microphone, and
+  provides capture plus M4A conversion.
 
 ## 2. Auth
 
@@ -75,11 +72,13 @@ Pass criteria:
 
 ## 4. Manual Recording
 
-1. Join any test call or play audio routed through the meeting audio path.
-2. Click `Start Recording`.
-3. Speak into the microphone and play remote/system audio.
-4. Wait at least 30 seconds.
-5. Click `Stop Recording`.
+1. Connect AirPods or select another preferred macOS input/output device.
+2. Choose `Full Meeting` from the tray and join any test call.
+3. Note the selected macOS input/output devices.
+4. Click `Start Recording`.
+5. Speak into the microphone and play remote or system audio.
+6. Wait at least 30 seconds.
+7. Click `Stop Recording`.
 
 Pass criteria:
 
@@ -89,8 +88,22 @@ Pass criteria:
   after stopping.
 - A new meeting directory appears under `MEETINGS_DIR`.
 - `recording.m4a` exists and is playable.
+- Both the remote/system audio and local microphone are audible in the file.
+- The selected macOS input/output devices did not change.
+- Meeting playback remained audible through the selected output while
+  recording.
 - If the recording maps to a calendar event with an end time, a stop reminder
   appears at the event finish time.
+
+For system-audio-only validation:
+
+1. Choose `Silent System Only` and start recording.
+2. Play remote or system audio and speak near the microphone.
+3. Confirm playback is muted while recording.
+4. Stop and play `recording.m4a`.
+
+The file must contain the remote/system audio, must not contain microphone
+speech, and macOS must still have the same input/output devices selected.
 
 ## 5. Transcription
 
@@ -103,7 +116,7 @@ Pass criteria after stopping recording:
 - Speaker labels are preserved by default, for example `Speaker A`.
 - Calendar-backed recordings include `speaker_candidates` from event attendees.
   People matching optional `KNOWN_SPEAKERS` entries use those configured
-  aliases.
+  display names.
 
 ## 6. Speaker Review
 
@@ -126,7 +139,8 @@ With `ANTHROPIC_API_KEY` set:
 - `summary_status: ok`
 - `## Summary`, `## Decisions`, and `## Action Items` are present.
 - If notes are missing or failed after speakers were confirmed, use the tray's
-  `Continue Processing` item or run `meeting-memory summarize <meeting-folder>`.
+  **Debugging › Pending Meeting Tasks** item or run
+  `meeting-memory summarize <meeting-folder>`.
 
 Without `ANTHROPIC_API_KEY`:
 
@@ -153,8 +167,8 @@ Pass criteria:
 If upload fails:
 
 - `b2_status: upload_failed` is written.
-- `Sync to B2` retries pending or failed meetings.
-- `Retry Failed Processing` retries meetings with
+- `Retry Pending B2 Backups` retries pending or failed meetings.
+- `Retry Failed Transcriptions` retries meetings with
   `assemblyai_id: transcription-failed`.
 
 ## 9. Recent Meeting Browsing
@@ -165,18 +179,17 @@ If upload fails:
 
 Pass criteria:
 
-- At most five meetings are shown.
+- At most three meetings are shown.
 - The meeting directory opens in Finder.
 - `transcript.md`, `recording.m4a`, and any generated `notes.md` are visible.
 
 ## 10. Preferences
 
-1. Open `Preferences...`.
+1. Open `Configuration › Preferences...`.
 2. Change one of:
    - `MEETINGS_DIR`
    - `NOTIFY_MINUTES_BEFORE`
    - `MAX_RECORDING_MINUTES`
-   - `AUDIO_DEVICE`
 3. Save.
 4. Restart the app.
 
@@ -184,6 +197,19 @@ Pass criteria:
 
 - `.env` is updated.
 - The app uses the new setting after restart.
+
+Prompt editor:
+
+1. Open `Configuration › Notes Prompt...`.
+2. Add a recognizable instruction while preserving `{transcript}`, then save.
+3. Generate notes for a confirmed transcript.
+4. Reopen the editor and choose `Restore Default`, then save again.
+
+Pass criteria:
+
+- The editor shows the path from `SUMMARY_PROMPT_FILE`.
+- The next notes generation uses the edited prompt without restarting the app.
+- Restoring the default replaces the editor contents with the built-in prompt.
 
 ## 10. Auto-Stop, Recovery, Diagnostics, and Search
 
@@ -206,14 +232,14 @@ Recovery:
 
 Pass criteria:
 
-- The tray menu shows `Recovered Recordings`.
+- `Debugging` shows `Interrupted Recordings`.
 - Clicking a recovered item converts and processes it.
 
 Diagnostics:
 
-- `Send Test Notification` shows a local notification.
-- `Run Diagnostics` reports either `All checks passed.` or actionable setup
-  failures.
+- `Debugging › Test macOS Notifications` shows a local notification.
+- `Debugging › Check Setup & Dependencies` reports either `All checks passed.` or
+  actionable setup failures.
 
 Search:
 
