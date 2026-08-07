@@ -18,6 +18,7 @@ MANUAL_OPTION = "Manual..."
 OK_RESPONSES = {1, 1000}
 OPEN_MARKDOWN_RESPONSE = 1002
 FULL_TRANSCRIPT_RESPONSE = 1003
+SPEAKER_REVIEW_MAX_HEIGHT = 430
 
 PromptAliases = Callable[[SpeakerReviewState], dict[str, str] | None]
 OpenConversation = Callable[[Path], None]
@@ -89,17 +90,26 @@ def _prompt_aliases_appkit(
     open_conversation: OpenConversation,
     show_transcript: ShowTranscript,
 ) -> dict[str, str] | None:
-    from AppKit import NSAlert, NSMakeRect, NSPopUpButton, NSTextField, NSView
+    from AppKit import (
+        NSAlert,
+        NSMakePoint,
+        NSMakeRect,
+        NSPopUpButton,
+        NSScrollView,
+        NSTextField,
+        NSView,
+    )
 
     while True:
         width = 640
         row_height = 82
-        height = max(140, 62 + len(state.speaker_labels) * row_height)
-        view = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, width, height))
+        content_height = max(140, 62 + len(state.speaker_labels) * row_height)
+        height = min(content_height, SPEAKER_REVIEW_MAX_HEIGHT)
+        view = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, width, content_height))
         rows: list[tuple[str, Any, Any]] = []
 
         for index, label in enumerate(state.speaker_labels):
-            y = height - 38 - index * row_height
+            y = content_height - 38 - index * row_height
             label_field = _label_field(_display_label(label), 0, y, 120, 22)
             popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
                 NSMakeRect(132, y - 3, 190, 26),
@@ -121,6 +131,15 @@ def _prompt_aliases_appkit(
             view.addSubview_(_hint_field(_speaker_hint(state, label), 132, y - 52, 488, 46))
             rows.append((label, popup, manual_field))
 
+        scroll_view = NSScrollView.alloc().initWithFrame_(NSMakeRect(0, 0, width, height))
+        scroll_view.setDocumentView_(view)
+        scroll_view.setHasVerticalScroller_(content_height > height)
+        scroll_view.setHasHorizontalScroller_(False)
+        scroll_view.setAutohidesScrollers_(False)
+        clip_view = scroll_view.contentView()
+        clip_view.scrollToPoint_(NSMakePoint(0, max(0, content_height - height)))
+        scroll_view.reflectScrolledClipView_(clip_view)
+
         alert = NSAlert.alloc().init()
         alert.setMessageText_("Review Speakers")
         alert.setInformativeText_(_review_message(state))
@@ -128,7 +147,7 @@ def _prompt_aliases_appkit(
         alert.addButtonWithTitle_("Cancel")
         alert.addButtonWithTitle_("Open in VS Code")
         alert.addButtonWithTitle_("Full Transcript")
-        alert.setAccessoryView_(view)
+        alert.setAccessoryView_(scroll_view)
         response = alert.runModal()
         if _is_ok_response(response):
             return _aliases_from_rows(rows)

@@ -85,6 +85,6 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
 `meeting-memory` starts the tray process. Stop it from the tray menu with
 `Quit`.
 
-The tray menu also exposes `Sync to B2`, `Retry Failed Processing`, `Run
-Diagnostics`, and `Send Test Notification` for local validation without adding
-new CLI commands.
+The tray's **Debugging** submenu exposes `Retry Pending B2 Backups`, `Retry
+Failed Transcriptions`, `Check Setup & Dependencies`, and `Test macOS
+Notifications` for local validation without adding new CLI commands.

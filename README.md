@@ -105,8 +105,9 @@ writes `transcript.md`; the completion notification opens the meeting directory
 so you can review speaker aliases.
 
 If the app crashes during recording, restart it and check the tray for
-`Recovered Recordings`. Failed B2 uploads can be retried with `Sync to B2`, and
-failed transcription states can be retried with `Retry Failed Processing`.
+**Debugging › Interrupted Recordings**. Failed B2 uploads can be retried with
+**Debugging › Retry Pending B2 Backups**, and failed transcription states can
+be retried with **Debugging › Retry Failed Transcriptions**.
 
 By default, the calendar watcher scans all non-deleted calendars accessible to
 the authenticated Google account. Set `GOOGLE_CALENDAR_ID=primary` or a
@@ -160,10 +161,11 @@ folders, and `.env` are ignored by git. Before publishing or pushing changes,
 run the checks in [docs/publishing-checklist.md](docs/publishing-checklist.md).
 
 `KNOWN_SPEAKERS` is intentionally empty by default. Use the tray's
-**Known Speakers...** item to add local aliases for normalizing Calendar speaker
-candidates. The app stores them in `.env` as a JSON object whose keys are
-display names and whose values are attendee names, emails, or email local-parts
-to match, for example `{"Alex Rivera":["alex@example.com","alex.rivera"]}`.
+**Configuration › Known Speakers...** item to add local aliases for normalizing
+Calendar speaker candidates. The app stores them in `.env` as a JSON object
+whose keys are display names and whose values are attendee names, emails, or
+email local-parts to match, for example
+`{"Alex Rivera":["alex@example.com","alex.rivera"]}`.
 
 ## Costs
 
@@ -188,6 +190,11 @@ The default summary prompt lives at [prompts/summary.md](prompts/summary.md).
 Set `SUMMARY_PROMPT_FILE` to point at another prompt file. If the file contains
 `{transcript}`, the app replaces that placeholder with the clipped transcript;
 otherwise it appends the transcript below the prompt.
+
+Choose **Configuration › Notes Prompt...** in the tray to edit the effective
+prompt in a native multiline editor. Saving updates `SUMMARY_PROMPT_FILE`, and
+the next notes generation uses the new text without restarting the app. The
+editor can also restore the built-in default.
 
 ## Speaker Review
 
@@ -218,9 +225,9 @@ meeting-memory summarize ~/Meetings/<meeting-folder>
 ```
 
 This writes `notes.md` with Summary, Decisions, and Action Items. If notes are
-missing, skipped, or failed after speakers are confirmed, the tray shows a
-`Continue Processing` item. No LLM is used for relabeling; Anthropic is used for
-notes generation.
+missing, skipped, or failed after speakers are confirmed, the tray shows it
+under **Debugging › Pending Meeting Tasks**. No LLM is used for relabeling;
+Anthropic is used for notes generation.
 
 Per-meeting `speaker_aliases` are the source of truth for who spoke in a
 specific recording. Global `Speaker A` / `Speaker B` mappings are intentionally
@@ -245,7 +252,7 @@ meeting-memory search "launch risks"
   `transcript.md`.
 - Calendar watching uses all accessible calendars by default; set
   `GOOGLE_CALENDAR_ID` to a specific ID to narrow it.
-- Failed B2 uploads can be retried with `Sync to B2`. Failed transcription can
-  be retried with `Retry Failed Processing`; fully automatic
+- Failed B2 uploads can be retried with `Retry Pending B2 Backups`. Failed
+  transcription can be retried with `Retry Failed Transcriptions`; fully automatic
   connectivity-aware background queueing is future work.
 - The preferences window edits `.env`; restart the app after saving changes.

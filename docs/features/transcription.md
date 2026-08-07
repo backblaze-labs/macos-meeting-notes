@@ -42,19 +42,23 @@ generation runs in a background thread from the tray, or through the local
   Anthropic and does not write summaries or decisions.
 - Google Calendar attendees populate `speaker_candidates`. Attendees are shown
   by Calendar full name, except aliases explicitly configured in
-  `KNOWN_SPEAKERS` through the tray's **Known Speakers...** editor. This is a
-  local hint, not automatic identification.
+  `KNOWN_SPEAKERS` through the tray's **Configuration › Known Speakers...**
+  editor. This is a local hint, not automatic identification.
 - The user confirms speaker aliases in the tray UI. Relabeling is deterministic
   code, not an LLM step.
 - Confirmed speaker review starts notes generation automatically. If notes are
-  missing, skipped, or failed, the tray shows a `Continue Processing` action.
+  missing, skipped, or failed, the tray shows a **Debugging › Pending Meeting
+  Tasks** action.
+- The tray's **Configuration › Notes Prompt...** item opens the effective
+  `SUMMARY_PROMPT_FILE` in a native multiline editor. Saved changes apply to
+  the next notes generation without restarting the app.
 - `meeting-memory summarize <meeting-folder>` requires
   `speaker_status: confirmed` and remains available as a backfill/retry command
   for `notes.md`.
 - If AssemblyAI fails, the pipeline still writes a non-empty `transcript.md`
   with a transcription failure state.
 - Failed transcription states can be retried later with `Retry Failed
-  Processing`, using transcript frontmatter as durable state.
+  Transcriptions`, using transcript frontmatter as durable state.
 
 ## Related Files
 
@@ -64,8 +68,10 @@ generation runs in a background thread from the tray, or through the local
 - `src/meeting_memory/service/pipeline.py`
 - `src/meeting_memory/service/markdown.py`
 - `src/meeting_memory/service/transcript_review.py`
+- `src/meeting_memory/service/summary_prompt.py`
 - `src/meeting_memory/service/processing_retry.py`
 - `src/meeting_memory/service/speaker_mapping.py`
+- `src/meeting_memory/ui/notes_prompt.py`
 - `prompts/summary.md`
 
 ## Tests
@@ -73,6 +79,7 @@ generation runs in a background thread from the tray, or through the local
 - `tests/test_transcription.py`
 - `tests/test_transcript_review.py`
 - `tests/test_summarizer.py`
+- `tests/test_summary_prompt.py`
 - `tests/test_pipeline.py`
 - `tests/test_processing_retry.py`
 - `tests/test_speaker_mapping.py`

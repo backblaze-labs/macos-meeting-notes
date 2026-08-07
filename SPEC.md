@@ -277,7 +277,7 @@ as a manual backfill/retry command for confirmed transcripts.
 
 **REQ-F5-05** The summarize command MUST write `notes.md` and MUST NOT modify `transcript.md`.
 
-**REQ-F5-06** The summarization prompt MUST be configurable through `SUMMARY_PROMPT_FILE`. If the file contains `{transcript}`, the app MUST replace that placeholder with the clipped transcript; otherwise it MUST append the transcript below the prompt text.
+**REQ-F5-06** The summarization prompt MUST be configurable through `SUMMARY_PROMPT_FILE` and the tray's **Configuration › Notes Prompt...** editor. If the file contains `{transcript}`, the app MUST replace that placeholder with the clipped transcript; otherwise it MUST append the transcript below the prompt text. A saved UI change MUST apply to the next notes generation without an app restart.
 
 ### F6: Local Storage
 
@@ -311,7 +311,7 @@ as a manual backfill/retry command for confirmed transcripts.
 
 **REQ-F7-04** If a B2 upload fails, the application MUST retry up to 3 times with exponential backoff (2s, 4s, 8s). After 3 failures, the upload MUST be logged and silently abandoned (with the frontmatter `b2_status: upload_failed` written to `transcript.md`).
 
-**REQ-F7-05** The **Sync to B2** tray menu item MUST scan `$MEETINGS_DIR` for meeting directories where `b2_status` is missing or `upload_failed` and re-attempt upload.
+**REQ-F7-05** The **Retry Pending B2 Backups** tray menu item MUST scan `$MEETINGS_DIR` for meeting directories where `b2_status` is missing or `upload_failed` and re-attempt upload.
 
 **REQ-F7-06** The application MUST NOT upload any file from `$MEETINGS_DIR` that was not created by `meeting-memory` itself (identified by the presence of valid YAML frontmatter with the `assemblyai_id` field).
 
@@ -325,35 +325,46 @@ as a manual backfill/retry command for confirmed transcripts.
 ▶ Start Recording                 (or ■ Stop Recording · <HH:MM> while active)
 ─────────────────
 Recent Meetings                   (section header, non-interactive)
-  <date> · <title>  ×5           (one item per recent meeting, most recent first)
+  <date> · <title>  ×3           (one item per recent meeting, most recent first)
 ─────────────────
 Open Meetings Folder
-Sync to B2
-Retry Failed Processing
 ─────────────────
-Run Diagnostics
-Send Test Notification
-Preferences…
+Configuration                      (hover submenu)
+  Audio Mode
+  Known Speakers…
+  Notes Prompt…
+  Preferences…
+Debugging                          (hover submenu)
+  Pending Meeting Tasks (<count>)
+  Interrupted Recordings (<count>)  (when present)
+  Retry Pending B2 Backups
+  Retry Failed Transcriptions
+  Check Setup & Dependencies
+  Test macOS Notifications
 Quit
 ```
 
 **REQ-F8-02** Clicking a **Recent Meetings** item MUST open the corresponding meeting directory in Finder (not the `transcript.md` file directly, so the user can see all artifacts).
 
-**REQ-F8-03** The **Recent Meetings** list MUST show at most 5 entries. If there are no meetings, the section MUST show `No meetings yet`.
+**REQ-F8-03** The **Recent Meetings** list MUST show at most 3 entries. If there are no meetings, the section MUST show `No meetings yet`.
 
 **REQ-F8-04** The **Recent Meetings** list MUST be rebuilt from the filesystem each time the menu is opened (not cached in memory).
 
 **REQ-F8-05** **Open Meetings Folder** MUST open `$MEETINGS_DIR` in Finder.
 
-**REQ-F8-06** **Preferences** MUST open a simple settings view where the user can configure: `MEETINGS_DIR`, `NOTIFY_MINUTES_BEFORE`, `MAX_RECORDING_MINUTES`, and `AUDIO_DEVICE`.
+**REQ-F8-06** **Configuration › Preferences** MUST open a simple settings view where the user can configure: `MEETINGS_DIR`, `NOTIFY_MINUTES_BEFORE`, and `MAX_RECORDING_MINUTES`.
 
-**REQ-F8-07** If recoverable temporary recordings are found, the tray menu MUST show a **Recovered Recordings** section with one action per recoverable item.
+**REQ-F8-07** If recoverable temporary recordings are found, **Debugging** MUST show an **Interrupted Recordings** section with one action per recoverable item.
 
-**REQ-F8-08** **Retry Failed Processing** MUST scan local meeting directories and retry meetings whose transcript frontmatter indicates failed transcription.
+**REQ-F8-08** **Retry Failed Transcriptions** MUST scan local meeting directories and retry meetings whose transcript frontmatter indicates failed transcription.
 
-**REQ-F8-09** **Run Diagnostics** MUST rerun doctor-lite checks and surface the result through a notification and tray setup items.
+**REQ-F8-09** **Check Setup & Dependencies** MUST rerun doctor-lite checks and surface the result through a notification and tray setup items.
 
-**REQ-F8-10** **Send Test Notification** MUST send a local notification for validating macOS notification behavior.
+**REQ-F8-10** **Test macOS Notifications** MUST send a local notification for validating macOS notification behavior.
+
+**REQ-F8-11** **Configuration › Notes Prompt...** MUST open a native multiline editor for the effective `SUMMARY_PROMPT_FILE`, allow restoring the built-in default, reject an empty prompt, and show the file updated after saving.
+
+**REQ-F8-12** **Configuration** and **Debugging** MUST be native hover submenus. Audio modes and user-editable settings MUST live under **Configuration**. Pending meeting tasks, interrupted recordings, backup/transcription retry, setup checks, and test notifications MUST live under **Debugging**, not at the tray root. Debugging actions MUST use explicit labels and native hover help that describes their scope.
 
 ### F9: Completion Notification
 
@@ -540,9 +551,9 @@ The codebase is organized into five strictly-ordered layers under `src/meeting_m
 |---|---|---|
 | **types** | `types/` | `meeting.py` (`MeetingMeta`, slug helpers-as-data) · `transcript.py` (`TranscriptResult`, `TranscriptSegment`) · `summary.py` (`SummaryResult` with decisions + action items) · `events.py` (UI events emitted to the tray: `MeetingDetected`, `NotifyEvent`, `RecordingStateChanged`). Pure data — **no SDK imports, no cross-layer imports.** |
 | **config** | `config/` | `settings.py` — `pydantic-settings` `Settings` class (the §8 table) + `validate_or_exit()` fail-fast validation and placeholder detection. Depends only on `types`. |
-| **repo** | `repo/` | `b2_client.py` (boto3 S3 adapter) · `transcription.py` (AssemblyAI adapter; `transcribe(audio_path) -> TranscriptResult`) · `summarizer.py` (Anthropic adapter; `summarize(text) -> SummaryResult`) · `calendar_client.py` (Google Calendar OAuth + Keychain + event list) · `audio_device.py` (sounddevice device lookup) · `retry.py` (repo-adapter retry policy). **The only layer permitted to import external SDKs.** |
-| **service** | `service/` | `storage.py` (`write_meeting_dir()`, `list_recent_meetings()`, frontmatter read/update, `is_ours()`) · `markdown.py` (renders `transcript.md` and `notes.md`) · `transcript_review.py` (local relabel + derived notes generation) · `processing_state.py` (resumable post-processing task detection) · `recorder.py` (sounddevice stream → temp WAV → m4a; `start()/stop()`) · `pipeline.py` (orchestrates transcription → local transcript write → B2 upload) · `calendar_watcher.py` (daemon poll loop; emits `MeetingDetected`) · `recording_context.py` (nearby-calendar title lookup) · `recovery.py` (temp-recording discovery/conversion) · `processing_retry.py` (frontmatter-based retry) · `search.py` (local full-text search) · `speaker_mapping.py` (speaker label replacement helper) · `sync.py` (Sync-to-B2 rescan) · `macos_app.py` (local app wrapper commands) · `launch_agent.py` (login item install/uninstall). Calls `repo`, returns `types`; **no `rumps`, no SDKs.** |
-| **ui** | `ui/` | `tray.py` (`rumps.App` subclass; menu state, action dispatch, notifications, status timer, `rumps.Timer` draining the event queue) · `controller.py` (recording/pipeline/sync handoff) · `menu.py` (menu label helpers) · `preferences.py` (minimal settings window) · `notifications.py` (rumps notification wrapper + fallback) · `title_prompt.py` (ad-hoc title prompt) · `macos.py` / `icons.py` (macOS UI helpers). **The only layer permitted to import `rumps`.** |
+| **repo** | `repo/` | `b2_client.py` (boto3 S3 adapter) · `transcription.py` (AssemblyAI adapter; `transcribe(audio_path) -> TranscriptResult`) · `summarizer.py` (Anthropic adapter; `summarize(text) -> SummaryResult`) · `calendar_client.py` (Google Calendar OAuth + Keychain + event list) · `native_audio.py` (native helper build/process adapter) · `native/*.swift` (ScreenCaptureKit/Core Audio capture and WAV writing) · `retry.py` (repo-adapter retry policy). **The only layer permitted to import external SDKs.** |
+| **service** | `service/` | `storage.py` (`write_meeting_dir()`, `list_recent_meetings()`, frontmatter read/update, `is_ours()`) · `markdown.py` (renders `transcript.md` and `notes.md`) · `transcript_review.py` (local relabel + derived notes generation) · `summary_prompt.py` (prompt-file storage) · `processing_state.py` (resumable post-processing task detection) · `recorder.py` (native capture → temp WAV → M4A; `start()/stop()`) · `audio_modes.py` (supported native capture policies) · `pipeline.py` (orchestrates transcription → local transcript write → B2 upload) · `calendar_watcher.py` (daemon poll loop; emits `MeetingDetected`) · `recording_context.py` (nearby-calendar title lookup) · `recovery.py` (temp-recording discovery/conversion) · `processing_retry.py` (frontmatter-based retry) · `search.py` (local full-text search) · `speaker_mapping.py` (speaker label replacement helper) · `sync.py` (Sync-to-B2 rescan) · `macos_app.py` (local app wrapper commands) · `launch_agent.py` (login item install/uninstall). Calls `repo`, returns `types`; **no `rumps`, no SDKs.** |
+| **ui** | `ui/` | `tray.py` (`rumps.App` subclass; menu state, action dispatch, notifications, status timer, `rumps.Timer` draining the event queue) · `controller.py` (recording/pipeline/sync handoff) · `menu.py` (menu label helpers) · `submenus.py` (Configuration and Debugging menu composition) · `preferences.py` (minimal settings window) · `notes_prompt.py` (native prompt editor) · `notifications.py` (rumps notification wrapper + fallback) · `title_prompt.py` (ad-hoc title prompt) · `macos.py` / `icons.py` (macOS UI helpers). **The only layer permitted to import `rumps`.** |
 | *cross-cutting* | — | `__main__.py` (entrypoint; `auth` subcommand; loads `.env`; logging; doctor-lite; starts tray) · `doctor.py` (preflight, §7.6) · `logging_config.py` (logs → `~/Library/Logs/meeting-memory/app.log`). |
 
 ### 7.2 Processing Sequence (Happy Path)
@@ -722,7 +733,7 @@ All configuration is read from environment variables, with `.env` file support v
 | `ASSEMBLYAI_API_KEY` | ✓ | — | AssemblyAI key |
 | `ANTHROPIC_API_KEY` | — | — | Claude key for the `summarize` command |
 | `ANTHROPIC_MODEL` | — | `claude-haiku-4-5` | Summarization model override (OQ-5) |
-| `SUMMARY_PROMPT_FILE` | — | `prompts/summary.md` | Prompt template used for Summary, Decisions, and Action Items |
+| `SUMMARY_PROMPT_FILE` | — | `prompts/summary.md` | Prompt template used for Summary, Decisions, and Action Items; editable from **Configuration › Notes Prompt...** |
 | `KNOWN_SPEAKERS` | — | `{}` | Optional JSON object mapping speaker display names to Calendar attendee match hints |
 | `GOOGLE_CALENDAR_CREDENTIALS_FILE` | ✓ | `credentials.json` | Path to OAuth client secrets |
 | `GOOGLE_CALENDAR_ID` | — | `all` | Calendar scope to watch: `all`, `primary`, or a specific calendar ID |
@@ -745,7 +756,7 @@ All configuration is read from environment variables, with `.env` file support v
 
 **C5** The application does not infer speaker names. It suggests known Calendar attendees and applies user-confirmed `speaker_aliases` from `transcript.md` with deterministic local code.
 
-**C6** Internet connectivity is required during transcription and derived-note summarization. Recording itself works offline. Failed B2 uploads can be retried with **Sync to B2**; failed transcription states can be retried with **Retry Failed Processing**.
+**C6** Internet connectivity is required during transcription and derived-note summarization. Recording itself works offline. Failed B2 uploads can be retried with **Retry Pending B2 Backups**; failed transcription states can be retried with **Retry Failed Transcriptions**.
 
 ---
 

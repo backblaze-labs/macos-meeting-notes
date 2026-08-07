@@ -24,7 +24,7 @@ Upload local meeting artifacts to Backblaze B2 through the S3-compatible API.
 ## Threading
 
 B2 upload runs after the local files and completion event are written. The tray
-`Sync to B2` action starts a background retry worker.
+`Retry Pending B2 Backups` starts a background retry worker.
 
 ## Behavior Notes
 
@@ -35,11 +35,11 @@ B2 upload runs after the local files and completion event are written. The tray
   or failed upload does not hide the local transcript from the user.
 - The B2 adapter retries uploads with exponential backoff before marking a
   meeting as failed.
-- `Sync to B2` scans local meeting directories and retries missing, pending, or
+- `Retry Pending B2 Backups` scans local meeting directories and retries missing, pending, or
   failed uploads that belong to Meeting Memory, including legacy `meeting.md`
   directories and recordings split across `recording-part-*.m4a` files.
-- Failed transcription is retried through `Retry Failed Processing`, not
-  `Sync to B2`.
+- Failed transcription is retried through `Retry Failed Transcriptions`, not
+  `Retry Pending B2 Backups`.
 
 ## Related Files
 

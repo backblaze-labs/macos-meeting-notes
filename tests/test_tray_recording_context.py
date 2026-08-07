@@ -233,6 +233,10 @@ class FakeRumps:
         def __init__(self, title, callback=None):
             self.title = title
             self.callback = callback
+            self.items = []
+
+        def add(self, item) -> None:
+            self.items.append(item)
 
     class Timer:
         def __init__(self, callback, interval):

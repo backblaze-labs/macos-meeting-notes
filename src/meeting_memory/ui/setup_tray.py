@@ -16,7 +16,7 @@ from meeting_memory.ui.notifications import send_notification
 
 LOGGER = logging.getLogger(__name__)
 SETUP_HEADER = "Setup Required"
-SETUP_HINT = "Run make setup, fill .env, then Run Diagnostics"
+SETUP_HINT = "Run make setup, fill .env, then Check Setup & Dependencies"
 
 
 class RumpsSetupApp:

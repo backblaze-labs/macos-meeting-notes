@@ -8,17 +8,20 @@ from meeting_memory.types.processing import ProcessingTask
 APP_TITLE = "● Meeting Memory"
 RECENT_HEADER = "Recent Meetings"
 AUDIO_MODE_HEADER = "Audio Mode"
+CONFIGURATION_LABEL = "Configuration"
+DEBUGGING_LABEL = "Debugging"
 NO_MEETINGS_LABEL = "No meetings yet"
 REVIEW_SPEAKERS_HEADER = "Review Speakers"
-PROCESSING_HEADER = "Continue Processing"
-RECOVERED_HEADER = "Recovered Recordings"
+PROCESSING_HEADER = "Pending Meeting Tasks"
+RECOVERED_HEADER = "Interrupted Recordings"
 NO_RECOVERED_LABEL = "No recovered recordings"
 OPEN_MEETINGS_LABEL = "Open Meetings Folder"
-SYNC_LABEL = "Sync to B2"
-RETRY_PROCESSING_LABEL = "Retry Failed Processing"
-RUN_DIAGNOSTICS_LABEL = "Run Diagnostics"
-TEST_NOTIFICATION_LABEL = "Send Test Notification"
+SYNC_LABEL = "Retry Pending B2 Backups"
+RETRY_PROCESSING_LABEL = "Retry Failed Transcriptions"
+RUN_DIAGNOSTICS_LABEL = "Check Setup & Dependencies"
+TEST_NOTIFICATION_LABEL = "Test macOS Notifications"
 KNOWN_SPEAKERS_LABEL = "Known Speakers..."
+NOTES_PROMPT_LABEL = "Notes Prompt..."
 PREFERENCES_LABEL = "Preferences..."
 QUIT_LABEL = "Quit"
 
@@ -48,10 +51,26 @@ def processing_task_label(task: ProcessingTask) -> str:
     return f"{meeting.started_at:%Y-%m-%d %H:%M} · {task.label} · {meeting.calendar_title}"
 
 
+def processing_header_label(count: int) -> str:
+    return f"{PROCESSING_HEADER} ({count})"
+
+
+def processing_task_tooltip(task: ProcessingTask) -> str:
+    if task.action == "review_speakers":
+        return "Confirm who each speaker is, then generate notes."
+    if task.status in {"failed", "skipped"}:
+        return "Retry notes generation for this meeting."
+    return "Generate notes from the reviewed transcript."
+
+
+def recovered_header_label(count: int) -> str:
+    return f"{RECOVERED_HEADER} ({count})"
+
+
 def recent_meeting_labels(meetings: list[RecentMeeting]) -> list[str]:
     if not meetings:
         return [NO_MEETINGS_LABEL]
-    return [recent_meeting_label(meeting) for meeting in meetings[:5]]
+    return [recent_meeting_label(meeting) for meeting in meetings[:3]]
 
 
 def recovered_recording_label(slug: str) -> str:

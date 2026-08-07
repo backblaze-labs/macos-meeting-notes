@@ -139,7 +139,8 @@ With `ANTHROPIC_API_KEY` set:
 - `summary_status: ok`
 - `## Summary`, `## Decisions`, and `## Action Items` are present.
 - If notes are missing or failed after speakers were confirmed, use the tray's
-  `Continue Processing` item or run `meeting-memory summarize <meeting-folder>`.
+  **Debugging › Pending Meeting Tasks** item or run
+  `meeting-memory summarize <meeting-folder>`.
 
 Without `ANTHROPIC_API_KEY`:
 
@@ -166,8 +167,8 @@ Pass criteria:
 If upload fails:
 
 - `b2_status: upload_failed` is written.
-- `Sync to B2` retries pending or failed meetings.
-- `Retry Failed Processing` retries meetings with
+- `Retry Pending B2 Backups` retries pending or failed meetings.
+- `Retry Failed Transcriptions` retries meetings with
   `assemblyai_id: transcription-failed`.
 
 ## 9. Recent Meeting Browsing
@@ -178,13 +179,13 @@ If upload fails:
 
 Pass criteria:
 
-- At most five meetings are shown.
+- At most three meetings are shown.
 - The meeting directory opens in Finder.
 - `transcript.md`, `recording.m4a`, and any generated `notes.md` are visible.
 
 ## 10. Preferences
 
-1. Open `Preferences...`.
+1. Open `Configuration › Preferences...`.
 2. Change one of:
    - `MEETINGS_DIR`
    - `NOTIFY_MINUTES_BEFORE`
@@ -196,6 +197,19 @@ Pass criteria:
 
 - `.env` is updated.
 - The app uses the new setting after restart.
+
+Prompt editor:
+
+1. Open `Configuration › Notes Prompt...`.
+2. Add a recognizable instruction while preserving `{transcript}`, then save.
+3. Generate notes for a confirmed transcript.
+4. Reopen the editor and choose `Restore Default`, then save again.
+
+Pass criteria:
+
+- The editor shows the path from `SUMMARY_PROMPT_FILE`.
+- The next notes generation uses the edited prompt without restarting the app.
+- Restoring the default replaces the editor contents with the built-in prompt.
 
 ## 10. Auto-Stop, Recovery, Diagnostics, and Search
 
@@ -218,14 +232,14 @@ Recovery:
 
 Pass criteria:
 
-- The tray menu shows `Recovered Recordings`.
+- `Debugging` shows `Interrupted Recordings`.
 - Clicking a recovered item converts and processes it.
 
 Diagnostics:
 
-- `Send Test Notification` shows a local notification.
-- `Run Diagnostics` reports either `All checks passed.` or actionable setup
-  failures.
+- `Debugging › Test macOS Notifications` shows a local notification.
+- `Debugging › Check Setup & Dependencies` reports either `All checks passed.` or
+  actionable setup failures.
 
 Search:
 

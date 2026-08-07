@@ -107,7 +107,7 @@ MEETINGS_DIR=~/Meetings
 GOOGLE_CALENDAR_ID=all
 ```
 
-Use the tray's **Known Speakers...** item to edit this later. It saves
+Use the tray's **Configuration › Known Speakers...** item to edit this later. It saves
 `KNOWN_SPEAKERS` as a JSON object that maps display names to attendee names,
 emails, or email local-parts to match, for example
 `KNOWN_SPEAKERS='{"Alex Rivera":["alex@example.com","alex.rivera"]}'`. Do not
@@ -157,7 +157,7 @@ make PYTHON=.venv/bin/python reload-macos-app
 ## 9. Validate a Recording
 
 1. Start Meeting Memory.
-2. Choose `Send Test Notification` from the tray to confirm notification
+2. Choose `Debugging › Test macOS Notifications` from the tray to confirm notification
    permissions.
 3. Select `Full Meeting` and start an ad-hoc recording from the tray.
 4. Speak for a few seconds and play remote audio. Confirm you can still hear it

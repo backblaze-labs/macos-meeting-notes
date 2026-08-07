@@ -57,6 +57,7 @@ REQUIRED_SOURCE_FILES = (
     "service/recorder.py",
     "service/audio_modes.py",
     "service/native_audio_setup.py",
+    "service/summary_prompt.py",
     "service/pipeline.py",
     "service/calendar_watcher.py",
     "service/sync.py",
@@ -64,6 +65,8 @@ REQUIRED_SOURCE_FILES = (
     "ui/tray.py",
     "ui/menu.py",
     "ui/audio_modes.py",
+    "ui/notes_prompt.py",
+    "ui/submenus.py",
     "ui/preferences.py",
     "ui/preference_forms.py",
 )

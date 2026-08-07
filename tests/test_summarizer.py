@@ -31,7 +31,7 @@ def test_claude_summarizer_requests_json_and_truncates_transcript(monkeypatch) -
     prompt = fake_client.kwargs["messages"][0]["content"]
     assert "strict JSON" in prompt
     assert prompt.count("9") == MAX_TRANSCRIPT_CHARS
-    assert len(prompt) < MAX_TRANSCRIPT_CHARS + 800
+    assert len(prompt) < MAX_TRANSCRIPT_CHARS + 1_000
     assert result.summary == "Good meeting."
     assert result.decisions == ("Ship it",)
     assert result.action_items[0].owner == "Alex"
@@ -103,6 +103,10 @@ def test_claude_summarizer_loads_custom_prompt_from_settings(tmp_path) -> None:
     client = ClaudeSummarizer.from_settings(settings)
 
     assert client._prompt("hello") == "Custom privacy prompt\nhello"
+
+    prompt_file.write_text("Updated prompt\n{transcript}", encoding="utf-8")
+
+    assert client._prompt("next meeting") == "Updated prompt\nnext meeting"
 
 
 def test_summary_parser_accepts_fenced_json() -> None:

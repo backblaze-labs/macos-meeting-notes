@@ -26,14 +26,14 @@ background threads. UI notifications are emitted through the event queue.
 ## Behavior Notes
 
 - Recovery finds non-empty temp WAV files without a matching `.m4a` sibling.
-- Selecting a recovered recording converts it, removes the temp WAV after
-  conversion, and sends it through the standard pipeline.
-- `Retry Failed Processing` uses existing frontmatter as durable state instead
-  of a separate job database.
-- `Sync to B2` is only for backup retry; processing retry handles failed
-  transcription.
-- Retries are user-triggered from the tray; automatic connectivity-triggered
-  retry remains future work.
+- Selecting a recovered recording under **Debugging** converts it, removes the
+  temp WAV after conversion, and sends it through the standard pipeline.
+- `Retry Failed Transcriptions` uses existing frontmatter as durable state
+  instead of a separate job database.
+- `Retry Pending B2 Backups` is only for backup retry; transcription retry
+  handles failed transcription.
+- Retries are user-triggered from the tray's **Debugging** submenu; automatic
+  connectivity-triggered retry remains future work.
 
 ## Related Files
 

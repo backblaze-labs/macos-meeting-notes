@@ -141,7 +141,7 @@ def is_ours(meeting_dir: Path) -> bool:
     return bool(frontmatter.get("assemblyai_id"))
 
 
-def list_recent_meetings(meetings_dir: Path, limit: int = 5) -> list[RecentMeeting]:
+def list_recent_meetings(meetings_dir: Path, limit: int = 3) -> list[RecentMeeting]:
     if not meetings_dir.exists():
         return []
 

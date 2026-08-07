@@ -74,9 +74,9 @@ def test_list_recent_meetings_filters_to_ours_and_limits_results(tmp_path: Path)
 
     recent = list_recent_meetings(tmp_path / "meetings")
 
-    assert len(recent) == 5
+    assert len(recent) == 3
     assert recent[0].slug == "2026-06-10_09-05_product-sync"
-    assert recent[-1].slug == "2026-06-10_09-01_product-sync"
+    assert recent[-1].slug == "2026-06-10_09-03_product-sync"
     assert all("not-ours" not in str(item.directory) for item in recent)
 
 

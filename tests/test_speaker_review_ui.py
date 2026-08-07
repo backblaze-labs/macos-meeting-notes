@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import sys
 import types
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from meeting_memory.types.transcript import SpeakerReviewState
 from meeting_memory.ui.speaker_review import (
     FULL_TRANSCRIPT_RESPONSE,
     OPEN_MARKDOWN_RESPONSE,
+    SPEAKER_REVIEW_MAX_HEIGHT,
     SpeakerReviewActions,
     _prompt_aliases_appkit,
     _review_message,
@@ -106,6 +107,29 @@ def test_appkit_review_actions_return_to_selector(monkeypatch, tmp_path: Path) -
     assert expanded == [tmp_path / "transcript.md"]
 
 
+def test_appkit_review_scrolls_many_speakers(monkeypatch, tmp_path: Path) -> None:
+    fake_appkit = FakeAppKit(responses=[1000])
+    monkeypatch.setitem(sys.modules, "AppKit", fake_appkit)
+    labels = tuple(f"Speaker {index}" for index in range(12))
+    state = replace(
+        _state(tmp_path),
+        speaker_labels=labels,
+        speaker_longest_lines=dict.fromkeys(labels, "Line from the meeting."),
+    )
+
+    _prompt_aliases_appkit(state, lambda _path: None, lambda _path: None)
+
+    scroll_view = fake_appkit.alerts[0].accessory
+    content_height = 62 + len(labels) * 82
+    assert (scroll_view.frame, scroll_view.document_view.frame) == (
+        (0, 0, 640, SPEAKER_REVIEW_MAX_HEIGHT),
+        (0, 0, 640, content_height),
+    )
+    assert scroll_view.vertical_scroller is True
+    assert scroll_view.horizontal_scroller is False
+    assert scroll_view.scrolled_to == (0, content_height - SPEAKER_REVIEW_MAX_HEIGHT)
+
+
 def _state(tmp_path: Path) -> SpeakerReviewState:
     return SpeakerReviewState(
         meeting_directory=tmp_path,
@@ -154,11 +178,14 @@ class FakeRumps:
 
 class FakeAppKit(types.SimpleNamespace):
     def __init__(self, responses: list[int]) -> None:
+        self.alerts: list[FakeAlert] = []
         super().__init__(
-            NSAlert=_FakeAlertFactory(responses),
+            NSAlert=_FakeAlertFactory(responses, self.alerts),
             NSFont=types.SimpleNamespace(systemFontOfSize_=lambda _size: object()),
+            NSMakePoint=lambda *args: args,
             NSMakeRect=lambda *args: args,
             NSPopUpButton=FakePopUpButton,
+            NSScrollView=FakeScrollView,
             NSTextField=FakeTextField,
             NSView=FakeView,
         )
@@ -171,16 +198,20 @@ class _FakeAlloc:
 
 
 class _FakeAlertFactory:
-    def __init__(self, responses: list[int]) -> None:
+    def __init__(self, responses: list[int], alerts: list[FakeAlert]) -> None:
         self.responses = responses
+        self.alerts = alerts
 
     def alloc(self):
-        return FakeAlert(self.responses)
+        alert = FakeAlert(self.responses)
+        self.alerts.append(alert)
+        return alert
 
 
 class FakeAlert:
     def __init__(self, responses: list[int]) -> None:
         self.responses = responses
+        self.accessory = None
 
     def init(self):
         return self
@@ -194,18 +225,38 @@ class FakeAlert:
     def addButtonWithTitle_(self, _title) -> None:
         pass
 
-    def setAccessoryView_(self, _view) -> None:
-        pass
+    def setAccessoryView_(self, view) -> None:
+        self.accessory = view
 
     def runModal(self) -> int:
         return self.responses.pop(0)
 
 
 class FakeView(_FakeAlloc):
-    def initWithFrame_(self, _frame):
+    def initWithFrame_(self, frame):
+        self.frame = frame
         return self
-
     def addSubview_(self, _view) -> None:
+        pass
+
+
+class FakeScrollView(_FakeAlloc):
+    def initWithFrame_(self, frame):
+        self.frame = frame
+        return self
+    def setDocumentView_(self, view) -> None:
+        self.document_view = view
+    def setHasVerticalScroller_(self, value) -> None:
+        self.vertical_scroller = value
+    def setHasHorizontalScroller_(self, value) -> None:
+        self.horizontal_scroller = value
+    def setAutohidesScrollers_(self, value) -> None:
+        pass
+    def contentView(self):
+        return self
+    def scrollToPoint_(self, point) -> None:
+        self.scrolled_to = point
+    def reflectScrolledClipView_(self, _view) -> None:
         pass
 
 
@@ -213,13 +264,10 @@ class FakePopUpButton(_FakeAlloc):
     def initWithFrame_pullsDown_(self, _frame, _pulls_down):
         self.selected = ""
         return self
-
     def addItemsWithTitles_(self, options) -> None:
         self.selected = options[0]
-
     def selectItemWithTitle_(self, option) -> None:
         self.selected = option
-
     def titleOfSelectedItem(self) -> str:
         return self.selected
 
@@ -228,27 +276,19 @@ class FakeTextField(_FakeAlloc):
     def initWithFrame_(self, _frame):
         self.value = ""
         return self
-
     def setStringValue_(self, value) -> None:
         self.value = value
-
     def stringValue(self) -> str:
         return self.value
-
     def setPlaceholderString_(self, _value) -> None:
         pass
-
     def setBezeled_(self, _value) -> None:
         pass
-
     def setDrawsBackground_(self, _value) -> None:
         pass
-
     def setEditable_(self, _value) -> None:
         pass
-
     def setSelectable_(self, _value) -> None:
         pass
-
     def setFont_(self, _value) -> None:
         pass
