@@ -9,6 +9,7 @@ from pathlib import Path
 
 TITLE_SLUG_MAX_LENGTH = 40
 DEFAULT_MEETING_TITLE = "Untitled"
+CANONICAL_MEETING_SLUG = re.compile(r"[a-z0-9]+(?:[-_][a-z0-9]+)*", flags=re.ASCII)
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,31 @@ class MeetingFiles:
 
 
 @dataclass(frozen=True)
+class MeetingRef:
+    """Stable reference carried by local-first boundary events."""
+
+    slug: str
+    calendar_title: str
+    directory: Path
+
+    @property
+    def audio_path(self) -> Path:
+        return self.directory / "recording.m4a"
+
+    @property
+    def transcript_path(self) -> Path:
+        return self.directory / "transcript.md"
+
+
+@dataclass(frozen=True)
+class PostCommitPolicy:
+    """Optional work requested for recordings committed after opt-in."""
+
+    transcription: bool = False
+    backup: bool = False
+
+
+@dataclass(frozen=True)
 class B2UploadResult:
     audio_key: str
     transcript_key: str
@@ -97,6 +123,14 @@ def slugify_title(title: str, max_length: int = TITLE_SLUG_MAX_LENGTH) -> str:
     normalized = re.sub(r"[^a-z0-9-]", "", normalized)
     normalized = re.sub(r"-+", "-", normalized).strip("-")
     return normalized[:max_length].strip("-") or "untitled"
+
+
+def validate_meeting_slug(slug: str) -> str:
+    """Require one canonical ASCII path component for a meeting directory."""
+
+    if not isinstance(slug, str) or CANONICAL_MEETING_SLUG.fullmatch(slug) is None:
+        raise ValueError("meeting slug must be one canonical ASCII path component")
+    return slug
 
 
 def build_meeting_slug(started_at: datetime, title: str) -> str:

@@ -1,5 +1,12 @@
 """Boundary data models."""
 
+from meeting_memory.types.artifacts import (
+    ArtifactFieldOwner,
+    ArtifactOwnership,
+    BackupCompletionResult,
+    MeetingArtifact,
+    MeetingJob,
+)
 from meeting_memory.types.capabilities import (
     Capability,
     CapabilityState,
@@ -10,18 +17,24 @@ from meeting_memory.types.capabilities import (
 from meeting_memory.types.events import (
     MeetingDetected,
     NotifyEvent,
+    RecordingCommitted,
     RecordingStateChanged,
     RecordingTitleNeeded,
+    TranscriptionFailed,
+    TranscriptReady,
 )
 from meeting_memory.types.meeting import (
     B2UploadResult,
     CalendarMeeting,
     MeetingFiles,
     MeetingMeta,
+    MeetingRef,
+    PostCommitPolicy,
     RecentMeeting,
     RecordingContext,
     build_meeting_slug,
     slugify_title,
+    validate_meeting_slug,
 )
 from meeting_memory.types.processing import ProcessingTask
 from meeting_memory.types.speakers import KnownSpeaker
@@ -30,6 +43,9 @@ from meeting_memory.types.transcript import SpeakerReviewState, TranscriptResult
 
 __all__ = [
     "ActionItem",
+    "ArtifactFieldOwner",
+    "ArtifactOwnership",
+    "BackupCompletionResult",
     "B2UploadResult",
     "Capability",
     "CapabilityState",
@@ -37,20 +53,28 @@ __all__ = [
     "CalendarMeeting",
     "KnownSpeaker",
     "MeetingDetected",
+    "MeetingArtifact",
     "MeetingFiles",
     "MeetingMeta",
+    "MeetingRef",
     "MeetingJobState",
+    "MeetingJob",
     "NotifyEvent",
     "ProcessingTask",
     "RecentMeeting",
     "RecordingContext",
+    "RecordingCommitted",
     "RecordingStateChanged",
     "RecordingTitleNeeded",
+    "PostCommitPolicy",
     "ReadinessReport",
     "SpeakerReviewState",
     "SummaryResult",
     "TranscriptResult",
+    "TranscriptReady",
     "TranscriptSegment",
+    "TranscriptionFailed",
     "build_meeting_slug",
     "slugify_title",
+    "validate_meeting_slug",
 ]

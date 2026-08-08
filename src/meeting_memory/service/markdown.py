@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 
 from meeting_memory.service.frontmatter import dump_frontmatter
 from meeting_memory.service.speaker_mapping import apply_speaker_mapping
-from meeting_memory.types.meeting import MeetingMeta
+from meeting_memory.types.capabilities import MeetingJobState
+from meeting_memory.types.meeting import MeetingMeta, PostCommitPolicy
 from meeting_memory.types.summary import ActionItem, SummaryResult
 from meeting_memory.types.transcript import TranscriptResult
 
@@ -26,6 +29,25 @@ TRANSCRIPT_FRONTMATTER_FIELDS = (
     "b2_status",
 )
 
+TRANSCRIPT_STUB_FIELDS = (
+    "schema_version",
+    "created_by",
+    "id",
+    "date",
+    "duration_minutes",
+    "calendar_title",
+    "participants",
+    "assemblyai_id",
+    "transcription_status",
+    "speaker_candidates",
+    "speaker_aliases",
+    "speaker_status",
+    "b2_audio",
+    "b2_transcript",
+    "backup_status",
+    "backup_uploaded_revision",
+)
+
 NOTES_FRONTMATTER_FIELDS = (
     "id",
     "date",
@@ -35,6 +57,46 @@ NOTES_FRONTMATTER_FIELDS = (
     "speaker_status",
     "summary_status",
 )
+
+
+def render_transcript_stub(
+    meta: MeetingMeta,
+    policy: PostCommitPolicy = PostCommitPolicy(),
+) -> str:
+    """Render the complete schema-v2 stub without provider error details."""
+
+    transcription_status = (
+        MeetingJobState.PENDING if policy.transcription else MeetingJobState.NOT_REQUESTED
+    )
+    backup_status = MeetingJobState.PENDING if policy.backup else MeetingJobState.NOT_REQUESTED
+    frontmatter = dump_frontmatter(
+        {
+            "schema_version": 2,
+            "created_by": "meeting-memory",
+            "id": _safe_text(meta.slug),
+            "date": meta.started_at.isoformat(),
+            "duration_minutes": meta.duration_minutes,
+            "calendar_title": _safe_text(meta.calendar_title),
+            "participants": [],
+            "assemblyai_id": None,
+            "transcription_status": transcription_status.value,
+            "speaker_candidates": [_safe_text(value) for value in meta.speaker_candidates],
+            "speaker_aliases": {},
+            "speaker_status": "not_available",
+            "b2_audio": None,
+            "b2_transcript": None,
+            "backup_status": backup_status.value,
+            "backup_uploaded_revision": None,
+        },
+        fields=TRANSCRIPT_STUB_FIELDS,
+    )
+    state_text = {
+        MeetingJobState.NOT_REQUESTED: "Transcription has not been requested.",
+        MeetingJobState.PENDING: "Transcription is pending.",
+    }[transcription_status]
+    return "\n".join(
+        [frontmatter, "", "# Transcript", "", f"_Audio saved locally. {state_text}_", ""]
+    )
 
 
 def render_meeting_markdown(
@@ -197,3 +259,13 @@ def _clean_aliases(speaker_aliases: Mapping[str, str] | None) -> dict[str, str]:
         for label, alias in speaker_aliases.items()
         if str(label).strip() and str(alias).strip()
     }
+
+
+def _safe_text(value: str) -> str:
+    """Keep generated metadata single-purpose and free of control characters."""
+
+    without_controls = "".join(
+        " " if unicodedata.category(character).startswith("C") else character
+        for character in value
+    )
+    return re.sub(r"\s+", " ", without_controls).strip()

@@ -53,6 +53,30 @@ def replace_frontmatter(markdown: str, values: Mapping[str, object]) -> str:
     return f"{dump_frontmatter(values)}\n{body}"
 
 
+def merge_frontmatter_fields(markdown: str, updates: Mapping[str, object]) -> str:
+    """Replace selected top-level scalar fields while preserving all other text."""
+
+    split_frontmatter(markdown)
+    lines = markdown.splitlines(keepends=True)
+    closing_index = next(
+        index for index, line in enumerate(lines[1:], start=1) if line.rstrip("\r\n") == "---"
+    )
+    remaining = dict(updates)
+    for index in range(1, closing_index):
+        line = lines[index]
+        if line[:1].isspace() or ":" not in line:
+            continue
+        key = line.split(":", 1)[0]
+        if key not in remaining:
+            continue
+        ending = "\r\n" if line.endswith("\r\n") else "\n"
+        lines[index] = f"{key}: {_format_value(remaining.pop(key))}{ending}"
+    for key, value in remaining.items():
+        lines.insert(closing_index, f"{key}: {_format_value(value)}\n")
+        closing_index += 1
+    return "".join(lines)
+
+
 def _format_value(value: object) -> str:
     if value is None:
         return "null"

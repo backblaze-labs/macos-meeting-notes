@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from meeting_memory.service.markdown import render_notes_markdown, render_transcript_markdown
-from meeting_memory.types.meeting import MeetingMeta
+from meeting_memory.service.markdown import (
+    render_notes_markdown,
+    render_transcript_markdown,
+    render_transcript_stub,
+)
+from meeting_memory.types.meeting import MeetingMeta, PostCommitPolicy
 from meeting_memory.types.summary import ActionItem, SummaryResult
 from meeting_memory.types.transcript import TranscriptResult, TranscriptSegment
 
@@ -68,6 +72,50 @@ def test_render_notes_markdown_uses_placeholders_for_empty_sections() -> None:
     assert "_Summarization skipped._" in markdown
     assert markdown.count("_None identified._") == 2
     assert 'summary_status: "skipped"' in markdown
+
+
+def test_render_transcript_stub_is_exact_schema_v2_and_sanitized() -> None:
+    meta = MeetingMeta(
+        slug="2026-06-10_09-00_product-sync",
+        started_at=datetime(2026, 6, 10, 9, 0, tzinfo=UTC),
+        calendar_title="Product\nSync\u200b",
+        duration_minutes=42,
+        speaker_candidates=(" Alex\tSmith ",),
+    )
+
+    markdown = render_transcript_stub(
+        meta, PostCommitPolicy(transcription=True, backup=False)
+    )
+
+    assert markdown == "\n".join(
+        [
+            "---",
+            "schema_version: 2",
+            'created_by: "meeting-memory"',
+            'id: "2026-06-10_09-00_product-sync"',
+            'date: "2026-06-10T09:00:00+00:00"',
+            "duration_minutes: 42",
+            'calendar_title: "Product Sync"',
+            "participants: []",
+            "assemblyai_id: null",
+            'transcription_status: "pending"',
+            'speaker_candidates: ["Alex Smith"]',
+            "speaker_aliases: {}",
+            'speaker_status: "not_available"',
+            "b2_audio: null",
+            "b2_transcript: null",
+            'backup_status: "not_requested"',
+            "backup_uploaded_revision: null",
+            "---",
+            "",
+            "# Transcript",
+            "",
+            "_Audio saved locally. Transcription is pending._",
+            "",
+        ]
+    )
+    assert "b2_status" not in markdown
+    assert "\u200b" not in markdown
 
 
 def _meta() -> MeetingMeta:

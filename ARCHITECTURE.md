@@ -28,6 +28,9 @@ Cross-cutting modules live directly under `meeting_memory`: `__main__.py`,
 and readiness report used by the local-first transition. The composition rules
 and phase boundaries are canonical in
 [`docs/local-first-contract.md`](docs/local-first-contract.md).
+`types/artifacts.py`, `types/meeting.py`, and the local-first event objects define
+the pure artifact, job-owner, post-commit policy, and worker-to-UI boundaries
+without activating them.
 
 ## Capability Composition
 
@@ -50,6 +53,17 @@ The current runtime still constructs the cloud adapters from one fail-fast
 `Settings` object. That legacy coupling is characterized by tests and is
 scheduled for replacement in the next implementation phase; the architecture
 above is the accepted target, not a claim that the transition is complete.
+
+The inactive Stage 2A substrate is split by filesystem responsibility:
+`service/atomic_io.py` owns fsync and macOS no-clobber rename primitives,
+`meeting_locks.py` owns per-meeting serialization, `meeting_paths.py` validates
+the direct-child/no-symlink state boundary, and `meeting_store.py` assembles and
+publishes complete local directories. `meeting_state.py` and
+`meeting_state_fields.py` own CAS transitions, immutable identity, field-owner
+merges, same-write Backup reconciliation, and revision-checked Backup
+completion. `ownership.py` provides read-only legacy mapping, while
+`backup_revision.py` provides revision and file-backed snapshot primitives.
+None is connected to the legacy recorder, pipeline, or tray yet.
 
 ## Native Audio Boundary
 
