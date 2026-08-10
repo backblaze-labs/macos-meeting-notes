@@ -1,6 +1,6 @@
 # Local-First Capability Contract
 
-**Status:** Accepted product contract; implementation is phased  
+**Status:** Accepted product contract; implemented through Phase 3
 **Canonical for:** onboarding, capability readiness, data lifecycle, migration,
 and optional-service behavior
 
@@ -81,9 +81,9 @@ MUST validate only the requirements for the selected audio mode.
 A future explicit strict/integration verification mode MAY exit non-zero for a
 selected optional capability. The default doctor MUST remain core-oriented.
 
-The current implementation still treats B2, AssemblyAI, and Google setup as
-global readiness requirements. Characterization tests preserve that legacy
-behavior only until the runtime transition replaces it.
+The active runtime and readiness report keep these capabilities independent.
+Characterization tests retain only the isolated legacy APIs that remain for
+compatible historical artifact and CLI behavior.
 
 ## Durable Audio Lifecycle
 
@@ -247,7 +247,7 @@ changes the contract and test vocabulary, not secret storage behavior.
 
 ## Phase Acceptance Criteria
 
-### Phase 1 — Contract and characterization (this stage)
+### Phase 1 — Contract and characterization (complete)
 
 - This document is canonical and linked from product, spec, architecture, and
   contributor-facing docs.
@@ -257,7 +257,7 @@ changes the contract and test vocabulary, not secret storage behavior.
 - macOS CI runs lint/tests/structure and builds the Swift helper.
 - No runtime behavior, secret, `.env`, or user data is migrated.
 
-### Phase 2 — Local core and optional adapters
+### Phase 2 — Local core and optional adapters (complete)
 
 - The app starts and records without cloud credentials or Google auth.
 - Local audio is committed before optional work.
@@ -271,7 +271,7 @@ changes the contract and test vocabulary, not secret storage behavior.
   and disable-at-safe-boundary behavior follow the deterministic rules above;
   no separate manifest is introduced.
 
-### Phase 3 — Coherent setup and doctor
+### Phase 3 — Coherent setup and doctor (complete)
 
 - In-app setup and doctor render the same capability report.
 - Default doctor success depends only on Recording Core.

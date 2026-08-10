@@ -6,10 +6,12 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from meeting_memory.doctor import CheckResult, run_checks
+from meeting_memory.service.readiness import checking_readiness_report
+from meeting_memory.types.capabilities import ReadinessReport
 from meeting_memory.types.events import (
     MeetingDetected,
     NotifyEvent,
+    ReadinessChecked,
     RecordingTitleNeeded,
 )
 from meeting_memory.ui import load_rumps, menu
@@ -32,6 +34,7 @@ from meeting_memory.ui.notifications import (
 from meeting_memory.ui.preferences import open_known_speakers_window, open_preferences_window
 from meeting_memory.ui.recording_health import RecordingHealthMonitor
 from meeting_memory.ui.runtime_events import runtime_notification
+from meeting_memory.ui.setup_readiness import ReadinessCheck, readiness_notification_body
 from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
 from meeting_memory.ui.submenus import (
     ConfigurationActions,
@@ -49,12 +52,13 @@ class RumpsTrayApp:
         self,
         controller: TrayController,
         *,
-        doctor_results: list[CheckResult] | None = None,
+        readiness_report: ReadinessReport | None = None,
         rumps_module=None,
     ) -> None:
         self.rumps = rumps_module or load_rumps()
         self.controller = controller
-        self.doctor_results = doctor_results or []
+        self.readiness_report = readiness_report
+        self.readiness_check = ReadinessCheck(controller.event_queue.put)
         if rumps_module is None:
             configure_background_app_identity(LOGGER)
             allow_foreground_notifications(LOGGER)
@@ -126,7 +130,7 @@ class RumpsTrayApp:
             self.rumps,
             processing_tasks=self.controller.pending_processing_tasks(),
             recovered_recordings=self.controller.recovered_recordings(),
-            doctor_results=self.doctor_results,
+            readiness_report=self.readiness_report,
             actions=DebuggingActions(
                 review_speakers=self.open_speaker_review,
                 generate_notes=self.controller.generate_notes,
@@ -168,16 +172,9 @@ class RumpsTrayApp:
         self.rebuild_menu()
 
     def run_diagnostics(self, _sender=None) -> None:
-        self.doctor_results = run_checks()
-        failures = [result for result in self.doctor_results if not result.ok or result.warning]
-        if failures:
-            body = "; ".join(f"{result.name}: {result.message}" for result in failures[:3])
-            if len(failures) > 3:
-                body = f"{body}; {len(failures) - 3} more"
-        else:
-            body = "All checks passed."
-        self._send_notification("Meeting Memory diagnostics", "", body)
+        self.readiness_report = checking_readiness_report()
         self.rebuild_menu()
+        self.readiness_check.start()
 
     def send_test_notification(self, _sender=None) -> None:
         LOGGER.info("Test macOS Notifications selected")
@@ -219,6 +216,13 @@ class RumpsTrayApp:
         self.recording_label = label
 
     def handle_event(self, event: object) -> None:
+        if isinstance(event, ReadinessChecked):
+            self.readiness_report = event.report
+            self._send_notification(
+                "Meeting Memory setup", "", readiness_notification_body(event.report)
+            )
+            self.rebuild_menu()
+            return
         runtime_event = runtime_notification(event)
         if runtime_event is not None:
             self.notify_event(runtime_event)

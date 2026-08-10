@@ -33,8 +33,8 @@ Naming boundaries:
 - `src/meeting_memory/repo/`: external adapters. This is the only layer allowed
   to import external SDKs such as `boto3`, `assemblyai`, `anthropic`,
   `googleapiclient`, `google_auth_oauthlib`, `google`, or `sounddevice`.
-- `src/meeting_memory/service/`: orchestration and local behavior. No SDKs and
-  no `rumps`.
+- `src/meeting_memory/service/`: orchestration, local behavior, and capability
+  readiness. No SDKs and no `rumps`.
 - `src/meeting_memory/ui/`: tray UI. This is the only layer allowed to import
   `rumps`.
 - `src/meeting_memory/doctor.py`: preflight checks that can run before optional

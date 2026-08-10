@@ -17,6 +17,7 @@ from meeting_memory.types.capabilities import (
 from meeting_memory.types.events import (
     MeetingDetected,
     NotifyEvent,
+    ReadinessChecked,
     RecordingCommitted,
     RecordingStateChanged,
     RecordingTitleNeeded,
@@ -63,6 +64,7 @@ __all__ = [
     "ProcessingTask",
     "RecentMeeting",
     "RecordingContext",
+    "ReadinessChecked",
     "RecordingCommitted",
     "RecordingStateChanged",
     "RecordingTitleNeeded",

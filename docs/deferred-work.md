@@ -18,7 +18,7 @@ without Terminal, cloud accounts, API keys, Google auth, or network access. The
 acceptance path is about 30 seconds of real audio that can be played and
 revealed in Finder within that window.
 
-Outcome through the runtime activation slice: accepted the
+Outcome through the capability-aware setup slice: accepted the
 capability/readiness, durable-audio, privacy, legacy migration, and phased
 acceptance contract in `docs/local-first-contract.md`; added pure boundary
 types, atomic local commit/state primitives, locked transcript and speaker
@@ -26,12 +26,14 @@ transactions, private indexed recovery, stable no-follow reads, and a verified
 cancellable B2 snapshot-upload seam. Runtime startup now composes optional
 adapters independently; capture uses indexed app staging; stopped and recovered
 recordings share the atomic schema-v2 commit path; typed events, v2 retry, safe
-Notes, and ownership-aware Recent/Search are active.
+Notes, and ownership-aware Recent/Search are active. CLI doctor and both tray
+setup surfaces now share one five-capability `ReadinessReport`; only Recording
+Core controls the default exit status, and explicit in-app checks run off the UI
+thread without provider network calls.
 
-Deferred by phase: capability-aware setup/doctor remains
-Phase 3; Keychain-backed progressive configuration and `.env` import remain
-Phase 4; clean-user computer validation remains Phase 5; signed/notarized
-standalone distribution remains Phase 6.
+Deferred by phase: Keychain-backed progressive configuration and explicit
+`.env` import remain Phase 4; clean-user computer validation remains Phase 5;
+signed/notarized standalone distribution remains Phase 6.
 
 Legacy migration is explicitly user-triggered from Debugging. A successful
 empty scan writes the durable once marker immediately. A nonempty result stays

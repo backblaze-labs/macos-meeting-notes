@@ -3,10 +3,11 @@
 This tutorial gets Meeting Memory running as a local macOS menu-bar app from a
 fresh clone of the `macos-meeting-notes` repository.
 
-This is the current legacy-checkout setup. The accepted local-first target
-requires none of these integrations for a first recording; see
-[`local-first-contract.md`](local-first-contract.md). Runtime and native
-onboarding changes are delivered in later phases.
+This is the current source-checkout setup. Recording Core requires no cloud
+integration for a first recording; see
+[`local-first-contract.md`](local-first-contract.md). App-managed Keychain
+configuration, native onboarding validation, and standalone distribution are
+delivered in later phases.
 
 ## 1. Install System Requirements
 
@@ -15,10 +16,13 @@ You need:
 - macOS 15 Sequoia or later
 - Python 3.11 or later
 - Xcode Command Line Tools
-- A Google account with Calendar access
-- AssemblyAI API key
-- Backblaze B2 bucket and S3-compatible application key
-- Optional Anthropic API key for generated notes
+
+Only configure the optional services you want:
+
+- Google account with Calendar access for context and reminders
+- AssemblyAI API key for diarized transcription
+- Backblaze B2 bucket and S3-compatible application key for private backup
+- Anthropic API key for generated notes after speaker review
 
 Install the system build tools once if they are not already present:
 
@@ -55,9 +59,10 @@ The app never changes macOS input or output selection. BlackHole, Aggregate
 Devices, and Multi-Output Devices are not required. On first use, allow the
 Microphone and Screen & System Audio permissions requested by macOS.
 
-## 4. Create Service Credentials
+## 4. Optionally Create Service Credentials
 
-Create credentials for each external service before filling `.env`.
+Skip this section if you only want local recording. Create credentials only for
+the capabilities you want to enable before filling their `.env` group.
 
 Backblaze B2:
 
@@ -89,9 +94,11 @@ Google Calendar:
 `credentials.json` is ignored by git. OAuth tokens are stored in macOS Keychain,
 not in the repository.
 
-## 5. Fill Local Configuration
+## 5. Optionally Enable Integrations
 
-If `make setup` created `.env`, edit it and set:
+If `make setup` created `.env`, edit only the groups you want to enable. Leave
+the other values blank or as placeholders; they will report `unconfigured` and
+will not block recording.
 
 ```bash
 B2_APPLICATION_KEY_ID=...
@@ -124,13 +131,18 @@ commit `.env`.
 make doctor
 ```
 
-`make doctor` checks configuration, B2, AssemblyAI, Google credentials/auth,
-the bundled native audio helper, and local files. Some failures are expected
-until credentials are complete. B2 is required before Meeting Memory is ready
-to record in the current legacy runtime; it is optional in the accepted
-local-first target.
+`make doctor` renders Recording Core, Transcription, Backup, Calendar, and Notes
+independently. Its exit status depends only on whether Recording Core has a
+compatible runtime/helper and passes its durable storage probe. Missing
+optional configuration is `unconfigured`; invalid
+local configuration or Calendar authorization affects only that capability.
+The check makes no provider network request. You can rerun the same report from
+**Debugging › Check Setup & Dependencies** without blocking the tray UI.
+The check verifies the helper and durable local storage but does not request
+macOS capture permissions; those remain mode-specific and are validated when a
+recording starts.
 
-## 7. Authorize Google Calendar
+## 7. Authorize Google Calendar, Optional
 
 ```bash
 .venv/bin/meeting-memory auth
@@ -170,8 +182,9 @@ make PYTHON=.venv/bin/python reload-macos-app
    through your current output.
 5. Stop recording, then repeat with `Silent System Only`; confirm the microphone
    is not recorded and playback is muted during capture.
-6. Wait for transcription.
-7. Open the created meeting folders under `MEETINGS_DIR`.
+6. Open the created meeting folders under `MEETINGS_DIR` and play
+   `recording.m4a`.
+7. If Transcription is configured, wait for `transcript.md` to update.
 
 Expected files:
 
@@ -181,8 +194,8 @@ transcript.md
 notes.md
 ```
 
-`notes.md` appears after speaker aliases are confirmed and Anthropic is
-configured.
+`transcript.md` always exists as the local metadata stub. `notes.md` appears
+after transcription, speaker review, and optional Anthropic Notes generation.
 
 For a fuller checklist, use [manual-validation.md](manual-validation.md).
 

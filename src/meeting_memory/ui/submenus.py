@@ -7,18 +7,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from meeting_memory.doctor import CheckResult
+from meeting_memory.types.capabilities import ReadinessReport
 from meeting_memory.types.processing import ProcessingTask
 from meeting_memory.ui import menu
 from meeting_memory.ui.audio_modes import AudioModeMenu
 from meeting_memory.ui.processing_actions import run_processing_task
+from meeting_memory.ui.setup_readiness import readiness_menu_label, readiness_tooltip
 
 B2_SYNC_TOOLTIP = "Upload meetings whose B2 backup is pending or failed."
 TRANSCRIPTION_RETRY_TOOLTIP = (
     "Re-run AssemblyAI transcription using the saved local audio."
 )
 DIAGNOSTICS_TOOLTIP = (
-    "Check credentials, dependencies, native audio capture, and app configuration."
+    "Check all five capabilities without making optional services block recording."
 )
 TEST_NOTIFICATION_TOOLTIP = (
     "Send a local notification to verify macOS notification permissions."
@@ -62,7 +63,7 @@ def debugging_submenu(
     *,
     processing_tasks: Sequence[ProcessingTask],
     recovered_recordings: Sequence[Any],
-    doctor_results: Sequence[CheckResult],
+    readiness_report: ReadinessReport | None,
     actions: DebuggingActions,
 ) -> Any:
     submenu = rumps.MenuItem(menu.DEBUGGING_LABEL)
@@ -93,13 +94,13 @@ def debugging_submenu(
         )
     )
     submenu.add(None)
-    for result in doctor_results:
-        if not result.ok or result.warning:
+    if readiness_report is not None:
+        for status in readiness_report.statuses:
             submenu.add(
                 _menu_item(
                     rumps,
-                    f"Setup issue: {result.name}",
-                    tooltip=result.message,
+                    readiness_menu_label(status),
+                    tooltip=readiness_tooltip(status),
                 )
             )
     submenu.add(

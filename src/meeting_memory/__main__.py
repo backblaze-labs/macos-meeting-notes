@@ -114,20 +114,18 @@ def run_setup() -> int:
     app_path = install(project_dir=project_dir)
     sys.stdout.write(f"[ok] macos-app: installed {app_path}\n\n")
 
-    results = run_checks()
-    sys.stdout.write(render_results(results))
-    failures = [result for result in results if not result.ok and not result.warning]
-    if failures:
-        sys.stdout.write("\nNext steps:\n")
-        for result in failures:
-            if result.fix:
-                sys.stdout.write(f"- {result.name}: {result.fix}\n")
-        sys.stdout.write(
-            "\nRecording Core can still run; listed optional capabilities remain unavailable.\n"
-        )
-        return 0
+    report = run_checks()
+    sys.stdout.write(render_results(report))
+    if not report.recording_ready:
+        from meeting_memory.types.capabilities import Capability
 
-    sys.stdout.write("\nSetup checks passed. Open Meeting Memory from Spotlight or Finder.\n")
+        core = report.status_for(Capability.RECORDING_CORE)
+        sys.stdout.write(f"\nRecording Core needs attention: {core.action}\n")
+        return 1
+
+    sys.stdout.write(
+        "\nRecording Core is usable. Optional capabilities can be configured independently.\n"
+    )
     return 0
 
 
@@ -237,12 +235,11 @@ def run_app() -> int:
 
 
 def run_setup_required_app() -> int:
-    from meeting_memory.doctor import run_checks
     from meeting_memory.logging_config import configure_logging
     from meeting_memory.ui.setup_tray import RumpsSetupApp
 
     configure_logging()
-    RumpsSetupApp(doctor_results=run_checks()).run()
+    RumpsSetupApp(readiness_report=None).run()
     return 0
 
 

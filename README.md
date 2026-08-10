@@ -62,9 +62,15 @@ core app immediately:
 make PYTHON=.venv/bin/python open-macos-app
 ```
 
-`make doctor` remains the explicit detailed setup diagnostic. Missing optional
-integration reports do not make B2, AssemblyAI, Calendar, or Notes prerequisites
-for local recording.
+`make doctor` renders one status for Recording Core, Transcription, Backup,
+Calendar, and Notes. It exits successfully whenever Recording Core is usable;
+missing optional integrations are `unconfigured`, not app failures. The tray's
+**Debugging › Check Setup & Dependencies** action renders the same report on a
+background worker. Neither path contacts a provider; configured Calendar may
+read its existing OAuth token from Keychain during the explicit check. The
+local check does not request macOS capture permissions, so Recording Core may
+remain `degraded` until the selected mode validates permissions at recording
+start.
 
 The clickable app is installed at `~/Applications/Meeting Memory.app` so it can
 be launched from Finder or found with Cmd+Space by searching for

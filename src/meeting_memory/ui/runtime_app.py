@@ -101,7 +101,7 @@ def run_runtime_app() -> int:
             watcher.start()
         except Exception:
             LOGGER.warning("Calendar watcher could not start")
-    RumpsTrayApp(controller, doctor_results=[]).run()
+    RumpsTrayApp(controller, readiness_report=None).run()
     return 0
 
 
@@ -208,8 +208,6 @@ def _retry_backups(settings, jobs, client) -> None:
 
 
 def _run_setup_app() -> int:
-    from meeting_memory.doctor import run_checks
-
     configure_logging()
-    RumpsSetupApp(doctor_results=run_checks()).run()
+    RumpsSetupApp(readiness_report=None).run()
     return 0

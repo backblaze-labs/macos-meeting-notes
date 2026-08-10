@@ -1,20 +1,20 @@
 # Manual Validation Checklist
 
-This checklist is the real-world validation path. It requires real macOS audio
-setup and real service credentials.
+This checklist is the real-world validation path. Recording Core requires real
+macOS audio setup; validate only the optional services you configured.
 
 ## Preconditions
 
 - macOS 15 or later
 - Python virtualenv active
 - `make setup` completed
-- `.env` exists and contains real values
 - Xcode Command Line Tools installed
-- Google Calendar OAuth credentials JSON exists
-- `.venv/bin/meeting-memory auth` completed successfully
-- AssemblyAI account has available credit
-- B2 bucket exists and credentials have S3 write access
-- Optional: Anthropic key set for summaries
+- A writable local `MEETINGS_DIR`
+- Optional Calendar: OAuth credentials JSON plus successful
+  `.venv/bin/meeting-memory auth`
+- Optional Transcription: AssemblyAI account with available credit
+- Optional Backup: B2 bucket and S3-compatible write credentials
+- Optional Notes: Anthropic key
 
 ## 1. Doctor
 
@@ -26,13 +26,15 @@ make doctor
 
 Pass criteria:
 
-- Python is supported.
-- macOS is supported.
-- `.env` exists.
-- Required env values are not placeholders.
-- Google OAuth credentials file exists.
-- The native audio helper is installed, reports the current microphone, and
-  provides capture plus M4A conversion.
+- Recording Core, Transcription, Backup, Calendar, and Notes each appear once.
+- Recording Core is `ready` or `degraded`, and the command exits `0`.
+- The local meetings folder passes the temporary write and durability check.
+- The native audio helper is installed and reports local hardware support.
+- The doctor explains that mode-specific macOS capture permissions are checked
+  when a recording starts; it does not claim to pre-authorize them.
+- Missing optional groups appear as `unconfigured`, not as app failures.
+- Invalid configured integrations show their own action without changing the
+  Recording Core state or doctor exit code.
 
 ## 2. Auth
 
@@ -211,7 +213,7 @@ Pass criteria:
 - The next notes generation uses the edited prompt without restarting the app.
 - Restoring the default replaces the editor contents with the built-in prompt.
 
-## 10. Auto-Stop, Recovery, Diagnostics, and Search
+## 11. Auto-Stop, Recovery, Diagnostics, and Search
 
 Auto-stop:
 
@@ -238,8 +240,10 @@ Pass criteria:
 Diagnostics:
 
 - `Debugging › Test macOS Notifications` shows a local notification.
-- `Debugging › Check Setup & Dependencies` reports either `All checks passed.` or
-  actionable setup failures.
+- `Debugging › Check Setup & Dependencies` immediately shows all five
+  capabilities as `checking`, keeps recording controls available, and settles
+  to the same capability states/actions as `make doctor` without freezing the
+  tray.
 
 Search:
 
@@ -252,7 +256,7 @@ Pass criteria:
 - Matching meetings print date, title, path, and excerpt.
 - A no-match query prints `No matching meetings found.`
 
-## 11. Local App and Login Item
+## 12. Local App and Login Item
 
 Run:
 

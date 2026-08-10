@@ -15,6 +15,18 @@ class Capability(StrEnum):
     CALENDAR = "calendar"
     NOTES = "notes"
 
+    @property
+    def label(self) -> str:
+        """Stable human-facing capability name."""
+
+        return {
+            Capability.RECORDING_CORE: "Recording Core",
+            Capability.TRANSCRIPTION: "Transcription",
+            Capability.BACKUP: "Backup",
+            Capability.CALENDAR: "Calendar",
+            Capability.NOTES: "Notes",
+        }[self]
+
 
 class CapabilityState(StrEnum):
     """Shared lifecycle states for every capability."""
@@ -79,6 +91,12 @@ class ReadinessReport:
         if missing:
             labels = ", ".join(sorted(capability.value for capability in missing))
             raise ValueError(f"readiness report is missing capabilities: {labels}")
+        by_capability = {status.capability: status for status in self.statuses}
+        object.__setattr__(
+            self,
+            "statuses",
+            tuple(by_capability[capability] for capability in Capability),
+        )
 
     def status_for(self, capability: Capability) -> CapabilityStatus:
         """Return the status for a capability in the complete report."""

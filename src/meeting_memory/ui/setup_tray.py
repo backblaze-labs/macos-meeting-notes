@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import logging
+import queue
 
-from meeting_memory.doctor import CheckResult, run_checks
+from meeting_memory.service.readiness import checking_readiness_report
+from meeting_memory.types.capabilities import ReadinessReport
+from meeting_memory.types.events import NotifyEvent, ReadinessChecked
 from meeting_memory.ui import menu
 from meeting_memory.ui.icons import tray_icon_path
 from meeting_memory.ui.macos import (
@@ -13,16 +16,29 @@ from meeting_memory.ui.macos import (
     configure_modern_notifications,
 )
 from meeting_memory.ui.notifications import send_notification
+from meeting_memory.ui.setup_readiness import (
+    ReadinessCheck,
+    readiness_menu_label,
+    readiness_notification_body,
+    readiness_tooltip,
+)
 
 LOGGER = logging.getLogger(__name__)
 SETUP_HEADER = "Setup Required"
-SETUP_HINT = "Run make setup, fill .env, then Check Setup & Dependencies"
+SETUP_HINT = "Fix Recording Core locally; cloud integrations are optional"
 
 
 class RumpsSetupApp:
-    def __init__(self, *, doctor_results: list[CheckResult] | None = None, rumps_module=None):
+    def __init__(
+        self,
+        *,
+        readiness_report: ReadinessReport | None = None,
+        rumps_module=None,
+    ):
         self.rumps = rumps_module or _load_rumps()
-        self.doctor_results = doctor_results or []
+        self.readiness_report = readiness_report
+        self.event_queue: queue.Queue[object] = queue.Queue()
+        self.readiness_check = ReadinessCheck(self.event_queue.put)
         if rumps_module is None:
             configure_background_app_identity(LOGGER)
             allow_foreground_notifications(LOGGER)
@@ -34,9 +50,11 @@ class RumpsSetupApp:
             template=True,
             quit_button=None,
         )
+        self.timer = self.rumps.Timer(self.drain_events, 0.25)
         self.rebuild_menu()
 
     def run(self) -> None:
+        self.timer.start()
         self.app.run()
 
     def rebuild_menu(self, _sender=None) -> None:
@@ -46,11 +64,13 @@ class RumpsSetupApp:
         self.app.menu.add(self.rumps.MenuItem(SETUP_HEADER, callback=None))
         self.app.menu.add(self.rumps.MenuItem(SETUP_HINT, callback=None))
         self.app.menu.add(None)
-        failures = [result for result in self.doctor_results if not result.ok or result.warning]
-        for result in failures:
-            self.app.menu.add(self.rumps.MenuItem(f"Setup: {result.name}", callback=None))
-        if not failures:
-            self.app.menu.add(self.rumps.MenuItem("All checks passed. Restart app.", callback=None))
+        if self.readiness_report is None:
+            self.app.menu.add(self.rumps.MenuItem("Run Check Setup below", callback=None))
+        else:
+            for status in self.readiness_report.statuses:
+                item = self.rumps.MenuItem(readiness_menu_label(status), callback=None)
+                item.tooltip = readiness_tooltip(status)
+                self.app.menu.add(item)
         self.app.menu.add(None)
         self.app.menu.add(self.rumps.MenuItem(menu.RUN_DIAGNOSTICS_LABEL, self.run_diagnostics))
         self.app.menu.add(
@@ -59,16 +79,26 @@ class RumpsSetupApp:
         self.app.menu.add(self.rumps.MenuItem(menu.QUIT_LABEL, self.rumps.quit_application))
 
     def run_diagnostics(self, _sender=None) -> None:
-        self.doctor_results = run_checks()
-        failures = [result for result in self.doctor_results if not result.ok or result.warning]
-        if failures:
-            body = "; ".join(f"{result.name}: {result.message}" for result in failures[:3])
-            if len(failures) > 3:
-                body = f"{body}; {len(failures) - 3} more"
-        else:
-            body = "All checks passed. Restart Meeting Memory."
-        self._send_notification("Meeting Memory setup", "", body)
+        self.readiness_report = checking_readiness_report()
         self.rebuild_menu()
+        self.readiness_check.start()
+
+    def drain_events(self, _timer=None) -> None:
+        while True:
+            try:
+                event = self.event_queue.get_nowait()
+            except queue.Empty:
+                return
+            if isinstance(event, ReadinessChecked):
+                self.readiness_report = event.report
+                self._send_notification(
+                    "Meeting Memory setup",
+                    "",
+                    readiness_notification_body(event.report),
+                )
+                self.rebuild_menu()
+            elif isinstance(event, NotifyEvent):
+                self._send_notification(event.title, "", event.body)
 
     def send_test_notification(self, _sender=None) -> None:
         self._send_notification("Meeting Memory test", "", "Notifications are working.")

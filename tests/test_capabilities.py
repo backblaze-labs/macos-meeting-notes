@@ -86,6 +86,20 @@ def test_readiness_report_requires_each_capability_once() -> None:
         ReadinessReport((*complete.statuses, complete.statuses[0]))
 
 
+def test_readiness_report_canonicalizes_capability_order() -> None:
+    report = _report(
+        CapabilityStatus(
+            Capability.RECORDING_CORE,
+            CapabilityState.READY,
+            "Local recording is ready.",
+        )
+    )
+
+    shuffled = ReadinessReport(tuple(reversed(report.statuses)))
+
+    assert [status.capability for status in shuffled.statuses] == list(Capability)
+
+
 def test_capability_status_rejects_blank_user_facing_text() -> None:
     with pytest.raises(ValueError, match="summary"):
         CapabilityStatus(Capability.BACKUP, CapabilityState.FAILED, " ")

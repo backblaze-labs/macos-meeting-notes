@@ -16,7 +16,7 @@ types <- config <- repo <- service <- ui
 | Layer | Package | Responsibility |
 | --- | --- | --- |
 | types | `types/` | Pure data models and UI event objects. |
-| config | `config/` | Settings loading and fail-fast validation. |
+| config | `config/` | Capability-scoped settings loading plus isolated legacy validation. |
 | repo | `repo/` | External service and hardware adapters. |
 | service | `service/` | Local behavior and orchestration. |
 | ui | `ui/` | `rumps` tray UI and menu handling. |
@@ -127,6 +127,14 @@ directory. Legacy Notes compatibility uses the same private metadata snapshot
 and compare-before-write boundary without routing legacy files through a v2
 state writer.
 
+`service/readiness.py` builds the complete typed `ReadinessReport` and owns
+Recording Core checks. `service/readiness_integrations.py` evaluates optional
+legacy configuration groups independently and short-circuits Calendar before
+any Keychain read when its local opt-in or credentials file is absent. The CLI
+doctor and `ui/setup_readiness.py` consume that same report. Explicit in-app
+checks run on a worker and return `ReadinessChecked` to the main thread; normal
+startup performs no readiness, native-helper, Keychain, or provider probe.
+
 Before publication, a private app-owned journal binds source provenance and
 commit-time policy to an opaque token. MeetingStore puts that token inside the
 hidden stage before the same atomic directory rename. Both app and legacy
@@ -182,5 +190,6 @@ alone translates those typed events into the separate Recording saved,
 Transcript ready, and Transcription failed notifications.
 
 Runtime startup follows the same boundary and isolates optional adapter
-construction failures from Recording Core. Updating setup/doctor to render the
-same capability-scoped readiness remains Phase 3 work.
+construction failures from Recording Core. Capability-aware setup/doctor is
+active; Keychain-backed progressive configuration and explicit `.env` import
+remain Phase 4 work.

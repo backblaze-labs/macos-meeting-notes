@@ -713,11 +713,11 @@ The codebase is organized into five strictly-ordered layers under `src/meeting_m
 | Layer | Package | Components (file → responsibility) |
 |---|---|---|
 | **types** | `types/` | `capabilities.py` (`Capability`, `CapabilityState`, `CapabilityStatus`, `MeetingJobState`, `ReadinessReport`) · `meeting.py` (`MeetingMeta`, slug helpers-as-data) · `transcript.py` (`TranscriptResult`, `TranscriptSegment`) · `summary.py` (`SummaryResult` with decisions + action items) · `events.py` (UI events emitted to the tray: `MeetingDetected`, `NotifyEvent`, `RecordingStateChanged`). Pure data — **no SDK imports, no cross-layer imports.** |
-| **config** | `config/` | Capability-scoped settings and precedence from §8; depends only on `types`. The current `settings.py` global fail-fast model remains a characterized migration boundary until Phase 2. |
+| **config** | `config/` | Capability-scoped settings and precedence from §8; depends only on `types`. `runtime.py` is the active local-first composition path; `settings.py` retains characterized legacy APIs for compatible CLI behavior. |
 | **repo** | `repo/` | `b2_client.py` (boto3 S3 adapter) · `transcription.py` (AssemblyAI adapter; `transcribe(audio_path) -> TranscriptResult`) · `summarizer.py` (Anthropic adapter; `summarize(text) -> SummaryResult`) · `calendar_client.py` (Google Calendar OAuth + Keychain + event list) · `native_audio.py` (native helper build/process adapter) · `native/*.swift` (ScreenCaptureKit/Core Audio capture and WAV writing) · `retry.py` (repo-adapter retry policy). **The only layer permitted to import external SDKs.** |
-| **service** | `service/` | `storage.py` (atomic local commit, listing, frontmatter, ownership) · `markdown.py` (renders metadata/transcript and notes) · `transcript_review.py` (local relabel + derived notes generation) · `summary_prompt.py` (prompt-file storage) · `processing_state.py` (durable optional-job detection) · `recorder.py` (native capture → app staging WAV → M4A) · `audio_modes.py` (capture policies) · `pipeline.py` (optional transcription/backup after commit) · `calendar_watcher.py` (daemon poll loop) · `recording_context.py` (nearby-calendar context) · `recovery.py` (staging and legacy-temp recovery) · `processing_retry.py` (frontmatter retry) · `search.py` (local search) · `speaker_mapping.py` (local label replacement) · `sync.py` (explicit B2 rescan) · `macos_app.py` / `launch_agent.py` (local wrapper/login item). Calls `repo`, returns `types`; **no `rumps`, no SDKs.** |
-| **ui** | `ui/` | `tray.py` (`rumps.App` subclass; menu state, action dispatch, notifications, status timer, `rumps.Timer` draining the event queue) · `controller.py` (recording/pipeline/sync handoff) · `menu.py` (menu label helpers) · `submenus.py` (Configuration and Debugging menu composition) · `preferences.py` (minimal settings window) · `notes_prompt.py` (native prompt editor) · `notifications.py` (rumps notification wrapper + fallback) · `title_prompt.py` (ad-hoc title prompt) · `macos.py` / `icons.py` (macOS UI helpers). **The only layer permitted to import `rumps`.** |
-| *cross-cutting* | — | `__main__.py` (entrypoint; `auth` subcommand; loads `.env`; logging; doctor-lite; starts tray) · `doctor.py` (preflight, §7.6) · `logging_config.py` (logs → `~/Library/Logs/meeting-memory/app.log`). |
+| **service** | `service/` | `readiness.py` / `readiness_integrations.py` (typed local readiness) · `storage.py` (atomic local commit, listing, frontmatter, ownership) · `markdown.py` (renders metadata/transcript and notes) · `transcript_review.py` (local relabel + derived notes generation) · `summary_prompt.py` (prompt-file storage) · `processing_state.py` (durable optional-job detection) · `recorder.py` (native capture → app staging WAV → M4A) · `audio_modes.py` (capture policies) · `pipeline.py` (optional transcription/backup after commit) · `calendar_watcher.py` (daemon poll loop) · `recording_context.py` (nearby-calendar context) · `recovery.py` (staging and legacy-temp recovery) · `processing_retry.py` (frontmatter retry) · `search.py` (local search) · `speaker_mapping.py` (local label replacement) · `sync.py` (explicit B2 rescan) · `macos_app.py` / `launch_agent.py` (local wrapper/login item). Calls `repo`, returns `types`; **no `rumps`, no SDKs.** |
+| **ui** | `ui/` | `tray.py` (`rumps.App` subclass; menu state, action dispatch, notifications, status timer, `rumps.Timer` draining the event queue) · `setup_readiness.py` (background setup check + UI rendering) · `controller.py` (recording/pipeline/sync handoff) · `menu.py` (menu label helpers) · `submenus.py` (Configuration and Debugging menu composition) · `preferences.py` (minimal settings window) · `notes_prompt.py` (native prompt editor) · `notifications.py` (rumps notification wrapper + fallback) · `title_prompt.py` (ad-hoc title prompt) · `macos.py` / `icons.py` (macOS UI helpers). **The only layer permitted to import `rumps`.** |
+| *cross-cutting* | — | `__main__.py` (entrypoint; subcommands; logging; starts the capability-scoped runtime) · `doctor.py` (typed preflight renderer, §7.6) · `logging_config.py` (logs → `~/Library/Logs/meeting-memory/app.log`). |
 
 ### 7.2 Processing Sequence (Happy Path)
 
@@ -784,7 +784,7 @@ only the tray renders the REQ-F9-04, REQ-F9-01, and REQ-F9-03 notifications.
 macos-meeting-notes/
   src/
     meeting_memory/
-      __main__.py            # entrypoint; `auth` subcommand; .env + logging + doctor-lite; starts tray
+      __main__.py            # entrypoint; subcommands + logging; starts capability-scoped runtime
       doctor.py              # preflight checks (§7.6)
       logging_config.py      # logging → ~/Library/Logs/meeting-memory/app.log
       types/                 # boundary models — no SDKs, no cross-layer imports
@@ -808,6 +808,8 @@ macos-meeting-notes/
         retry.py             # retry/backoff helper for external adapter calls
       service/               # orchestration; no rumps, no SDKs
         __init__.py
+        readiness.py         # complete Recording Core + optional capability report
+        readiness_integrations.py # isolated local checks for optional integrations
         storage.py
         markdown.py
         recorder.py
@@ -826,6 +828,7 @@ macos-meeting-notes/
       ui/                    # the only layer that imports rumps
         __init__.py
         tray.py
+        setup_readiness.py   # background explicit check + typed UI handoff
         controller.py
         menu.py
         preferences.py
@@ -890,13 +893,14 @@ A first-class design goal (alongside the user-facing app) is that **the reposito
 - `test_file_size_limits` — every `.py` file is ≤ 300 lines.
 - `test_required_modules_exist` — the §7.1 component files are all present (an agent cannot silently drop one).
 
-**Preflight — `python -m meeting_memory.doctor`** is transitioning from a
-legacy flat checklist to the typed report in REQ-LF-04. The target verifies
-Recording Core requirements and independently checks configured integrations;
-each problem says what is wrong and how to fix it. A doctor-lite subset runs at
-app startup and surfaces results through the tray rather than crashing
-(REQ-EXT-18). Until Phase 3, the implementation still checks `.env`, provider
-credentials, the native helper, and Google credentials globally.
+**Preflight — `python -m meeting_memory.doctor`** and the tray's explicit
+**Check Setup & Dependencies** action render the same typed report from
+REQ-LF-04. The report checks Recording Core requirements and each configured
+integration independently; every problem says what is wrong and how to fix it.
+The in-app check runs on a worker and returns a typed event to the main thread.
+Normal app startup does not run readiness, provider, native-helper, or Keychain
+probes. Readiness makes no provider network request; configured Calendar may
+read its existing OAuth token from Keychain only during the explicit check.
 
 **Tooling & commands** — `ruff` (lint + format; rule `T20` forbids bare `print()` — use std `logging`), `pytest`, `pre-commit`. A `Makefile` exposes the predictable command set: `make setup | install | run | auth | doctor | install-macos-app | reload-macos-app | open-macos-app | quit-macos-app | install-launch-agent | uninstall-launch-agent | lint | format | test | check:structure | check`, where `check` = lint + tests + structure (the full gate `AGENTS.md` tells agents to run before finishing). The installed CLI also exposes `meeting-memory setup` and `meeting-memory search <query>`.
 
@@ -909,8 +913,8 @@ credentials, the native helper, and Google credentials globally.
 The current compatibility path reads environment variables with `.env` support
 through `python-dotenv`. The target app-managed flow stores secrets in Keychain
 and imports legacy values per REQ-LF-08. Variables marked "Integration" below
-are required only when that optional capability is enabled; the legacy runtime
-still validates B2 and AssemblyAI globally until Phase 2.
+are required only when that optional capability is enabled; missing groups are
+reported as `unconfigured` and never gate Recording Core.
 
 | Variable | Capability | Default | Description |
 |---|---|---|---|

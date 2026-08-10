@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from meeting_memory.types.capabilities import ReadinessReport
 from meeting_memory.types.meeting import MeetingMeta, MeetingRef
 from meeting_memory.types.recovery import RecoveryIndexEntry
 
@@ -78,3 +79,10 @@ class TranscriptionFailed:
     """Transcription failed while the committed local audio remains safe."""
 
     meeting: MeetingRef
+
+
+@dataclass(frozen=True)
+class ReadinessChecked:
+    """An explicit background readiness check completed."""
+
+    report: ReadinessReport

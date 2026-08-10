@@ -8,8 +8,8 @@ class Tray:
     controller = None
     ran = False
 
-    def __init__(self, controller, *, doctor_results) -> None:
-        assert doctor_results == []
+    def __init__(self, controller, *, readiness_report) -> None:
+        assert readiness_report is None
         self.__class__.controller = controller
 
     def run(self) -> None:
@@ -25,7 +25,7 @@ def test_fresh_profile_starts_normal_core_without_optional_adapters(
     Tray.ran = False
     monkeypatch.setattr(runtime_app, "load_runtime_settings", lambda: settings)
     monkeypatch.setattr(runtime_app, "RumpsTrayApp", Tray)
-    assert not hasattr(runtime_app, "run_checks")
+    assert not hasattr(runtime_app, "load_readiness_report")
     monkeypatch.setattr(
         runtime_app,
         "AssemblyAITranscriptionClient",

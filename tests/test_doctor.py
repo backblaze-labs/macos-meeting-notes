@@ -1,86 +1,74 @@
-"""Tests for preflight diagnostics."""
+"""Tests for capability-aware doctor output and exit semantics."""
 
 from __future__ import annotations
 
+import pytest
+
 from meeting_memory import doctor
-from meeting_memory.repo.native_audio import NativeAudioCaptureError
+from meeting_memory.types.capabilities import (
+    Capability,
+    CapabilityState,
+    CapabilityStatus,
+    ReadinessReport,
+)
 
 
-def test_b2_env_check_reports_missing_b2_values() -> None:
-    result = doctor.check_b2_env({"B2_BUCKET_NAME": "replace-me"})
+def test_doctor_renders_all_capabilities_and_actions() -> None:
+    report = _report(CapabilityState.READY)
 
-    assert result.ok is False
-    assert result.name == "b2-env"
-    assert "B2_APPLICATION_KEY_ID" in result.message
-    assert "B2_BUCKET_NAME" in result.message
-    assert result.fix is not None
-    assert "B2 bucket/key" in result.fix
+    rendered = doctor.render_results(report)
 
-
-def test_assemblyai_env_check_reports_missing_key() -> None:
-    result = doctor.check_assemblyai_env({})
-
-    assert result.ok is False
-    assert result.name == "assemblyai-env"
-    assert "ASSEMBLYAI_API_KEY" in result.message
+    assert [line for line in rendered.splitlines() if line.startswith("[")] == [
+        "[READY] Recording Core: Recording Core summary.",
+        "[UNCONFIGURED] Transcription: Transcription summary.",
+        "[UNCONFIGURED] Backup: Backup summary.",
+        "[UNCONFIGURED] Calendar: Calendar summary.",
+        "[UNCONFIGURED] Notes: Notes summary.",
+    ]
+    assert rendered.count("action:") == 4
 
 
-def test_google_token_check_passes_when_keychain_has_token(monkeypatch) -> None:
-    class TokenStore:
-        def read_token(self) -> str:
-            return "token"
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [
+        (CapabilityState.READY, 0),
+        (CapabilityState.DEGRADED, 0),
+        (CapabilityState.FAILED, 1),
+        (CapabilityState.CHECKING, 1),
+    ],
+)
+def test_default_doctor_exit_depends_only_on_recording_core(
+    state: CapabilityState,
+    expected: int,
+    monkeypatch,
+) -> None:
+    report = _report(state, optional_state=CapabilityState.FAILED)
+    monkeypatch.setattr(doctor, "run_checks", lambda: report)
 
-    monkeypatch.setattr(doctor, "_keychain_token_store_cls", lambda: TokenStore)
-
-    result = doctor.check_google_token()
-
-    assert result.ok is True
-    assert result.warning is False
-    assert result.name == "google-token"
+    assert doctor.main(()) == expected
 
 
-def test_native_audio_check_passes_with_current_microphone(monkeypatch) -> None:
-    monkeypatch.setattr(
-        doctor,
-        "check_native_capture",
-        lambda: {"event": "supported", "microphone": "AirPods"},
+def _report(
+    core_state: CapabilityState,
+    *,
+    optional_state: CapabilityState = CapabilityState.UNCONFIGURED,
+) -> ReadinessReport:
+    def status(capability: Capability, state: CapabilityState) -> CapabilityStatus:
+        action = None
+        if state in {
+            CapabilityState.UNCONFIGURED,
+            CapabilityState.DEGRADED,
+            CapabilityState.FAILED,
+        }:
+            action = f"Repair {capability.label}."
+        return CapabilityStatus(capability, state, f"{capability.label} summary.", action)
+
+    return ReadinessReport(
+        tuple(
+            status(
+                capability,
+                core_state if capability is Capability.RECORDING_CORE else optional_state,
+            )
+            for capability in Capability
+        )
     )
-
-    result = doctor.check_native_audio()
-
-    assert result.ok is True
-    assert result.warning is False
-    assert result.name == "native-audio"
-    assert "AirPods" in result.message
-
-
-def test_native_audio_check_warns_when_full_meeting_has_no_microphone(monkeypatch) -> None:
-    monkeypatch.setattr(
-        doctor,
-        "check_native_capture",
-        lambda: {"event": "supported", "microphone": "none"},
-    )
-
-    result = doctor.check_native_audio()
-
-    assert result.ok is True
-    assert result.warning is True
-    assert "Full Meeting has no microphone" in result.message
-    assert result.fix is not None
-    assert "input device" in result.fix
-
-
-def test_native_audio_check_reports_missing_helper(monkeypatch) -> None:
-    monkeypatch.setattr(
-        doctor,
-        "check_native_capture",
-        lambda: (_ for _ in ()).throw(NativeAudioCaptureError("helper missing")),
-    )
-
-    result = doctor.check_native_audio()
-
-    assert result.ok is False
-    assert result.warning is False
-    assert "helper missing" in result.message
-    assert result.fix is not None
-    assert "make setup" in result.fix
