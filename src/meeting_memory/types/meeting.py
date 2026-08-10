@@ -53,10 +53,19 @@ class MeetingFiles:
     markdown_path: Path
     notes_path: Path | None = None
     extra_audio_paths: tuple[Path, ...] = ()
+    directory_identity: MeetingDirectoryIdentity | None = None
 
     @property
     def transcript_path(self) -> Path:
         return self.markdown_path
+
+
+@dataclass(frozen=True)
+class MeetingDirectoryIdentity:
+    """Pinned filesystem identity for one runtime-owned meeting directory."""
+
+    device: int
+    inode: int
 
 
 @dataclass(frozen=True)

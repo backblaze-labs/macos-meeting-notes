@@ -9,6 +9,7 @@ from pathlib import Path
 
 from meeting_memory.service.frontmatter import replace_frontmatter, split_frontmatter
 from meeting_memory.service.markdown import render_notes_markdown, render_transcript_markdown
+from meeting_memory.service.ownership import inspect_meeting_artifact, inspect_meeting_snapshot
 from meeting_memory.types.meeting import MeetingFiles, MeetingMeta, RecentMeeting
 from meeting_memory.types.summary import SummaryResult
 from meeting_memory.types.transcript import TranscriptResult
@@ -131,14 +132,9 @@ def update_b2_frontmatter(
 
 
 def is_ours(meeting_dir: Path) -> bool:
-    markdown_path = meeting_dir / MEETING_MARKDOWN
-    if not markdown_path.exists():
-        return False
-    try:
-        frontmatter = read_frontmatter(markdown_path)
-    except (OSError, ValueError):
-        return False
-    return bool(frontmatter.get("assemblyai_id"))
+    """Recognize owned schema-v2 artifacts and explicit legacy compatibility data."""
+
+    return inspect_meeting_artifact(meeting_dir) is not None
 
 
 def list_recent_meetings(meetings_dir: Path, limit: int = 3) -> list[RecentMeeting]:
@@ -147,11 +143,19 @@ def list_recent_meetings(meetings_dir: Path, limit: int = 3) -> list[RecentMeeti
 
     recent: list[RecentMeeting] = []
     for meeting_dir in meetings_dir.iterdir():
-        if not meeting_dir.is_dir() or not is_ours(meeting_dir):
+        snapshot = inspect_meeting_snapshot(meeting_dir)
+        if snapshot is None:
             continue
-        markdown_path = meeting_dir / MEETING_MARKDOWN
-        frontmatter = read_frontmatter(markdown_path)
-        recent.append(_recent_from_frontmatter(meeting_dir, markdown_path, frontmatter))
+        try:
+            recent.append(
+                _recent_from_frontmatter(
+                    meeting_dir,
+                    snapshot.artifact.transcript_path,
+                    snapshot.frontmatter,
+                )
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
 
     return sorted(recent, key=lambda item: item.started_at, reverse=True)[:limit]
 

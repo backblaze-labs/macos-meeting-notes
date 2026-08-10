@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from meeting_memory.service import recovery_index
 from meeting_memory.service.meeting_store import MeetingStore
 from meeting_memory.service.recovery_cleanup import cleanup_recovery_after_commit
 from meeting_memory.service.recovery_commit import commit_recovery
@@ -30,6 +31,7 @@ def test_create_is_private_unique_atomic_and_discovery_is_read_only(tmp_path: Pa
     assert first.session_directory.stat().st_mode & 0o077 == 0
     assert json.loads(first.index_path.read_text())["wav_file"] == "recording.wav"
     first.source_path.write_bytes(b"wav data")
+    first = pin_recovery_source(first)
     before = _tree_times(root)
 
     entries = discover_indexed_recoveries(root)
@@ -37,6 +39,26 @@ def test_create_is_private_unique_atomic_and_discovery_is_read_only(tmp_path: Pa
     assert [entry.meta.slug for entry in entries] == [first.meta.slug]
     assert entries[0].source_device is not None
     assert _tree_times(root) == before
+
+
+def test_discovery_never_hashes_unfinished_capture_on_menu_thread(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    root = tmp_path / "staging"
+    entry = create_recovery_session(root, _meta())
+    entry.source_path.write_bytes(b"unfinished capture")
+    monkeypatch.setattr(
+        recovery_index,
+        "_source_sha256",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("discovery hashed audio")),
+    )
+
+    recovered = discover_indexed_recoveries(root)
+
+    assert len(recovered) == 1
+    assert recovered[0].source_device is None
+    assert recovered[0].source_sha256 is None
 
 
 @pytest.mark.parametrize(

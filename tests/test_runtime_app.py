@@ -1,0 +1,170 @@
+from pathlib import Path
+
+from meeting_memory.config.runtime import RuntimeSettings
+from meeting_memory.ui import runtime_app
+
+
+class Tray:
+    controller = None
+    ran = False
+
+    def __init__(self, controller, *, doctor_results) -> None:
+        assert doctor_results == []
+        self.__class__.controller = controller
+
+    def run(self) -> None:
+        self.__class__.ran = True
+
+
+def test_fresh_profile_starts_normal_core_without_optional_adapters(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = RuntimeSettings(meetings_dir=tmp_path / "meetings")
+    Tray.controller = None
+    Tray.ran = False
+    monkeypatch.setattr(runtime_app, "load_runtime_settings", lambda: settings)
+    monkeypatch.setattr(runtime_app, "RumpsTrayApp", Tray)
+    assert not hasattr(runtime_app, "run_checks")
+    monkeypatch.setattr(
+        runtime_app,
+        "AssemblyAITranscriptionClient",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("AssemblyAI built")),
+    )
+    monkeypatch.setattr(
+        runtime_app,
+        "B2S3Client",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("B2 built")),
+    )
+    monkeypatch.setattr(
+        runtime_app,
+        "GoogleCalendarClient",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("Calendar built")),
+    )
+    monkeypatch.setattr(
+        runtime_app,
+        "ClaudeSummarizer",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("Notes built")),
+    )
+
+    assert runtime_app.run_runtime_app() == 0
+
+    assert Tray.ran is True
+    assert Tray.controller is not None
+    assert Tray.controller.pipeline is None
+    assert Tray.controller.committer is not None
+    assert Tray.controller.recorder.temp_dir == (
+        settings.meetings_dir_path / ".meeting-memory-staging" / "recordings"
+    )
+
+
+def test_optional_constructor_failures_do_not_block_core(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    credentials = tmp_path / "calendar.json"
+    credentials.write_text("{}", encoding="utf-8")
+    settings = RuntimeSettings(
+        meetings_dir=tmp_path / "meetings",
+        assemblyai_api_key="assembly-key",
+        b2_application_key_id="id",
+        b2_application_key="key",
+        b2_endpoint="https://s3.example.invalid",
+        b2_region="region",
+        b2_bucket_name="bucket",
+        google_calendar_credentials_file=credentials,
+        anthropic_api_key="notes-key",
+    )
+    Tray.ran = False
+    monkeypatch.setattr(runtime_app, "load_runtime_settings", lambda: settings)
+    monkeypatch.setattr(runtime_app, "RumpsTrayApp", Tray)
+
+    def fail(*_args, **_kwargs):
+        raise RuntimeError("provider constructor failed")
+
+    monkeypatch.setattr(runtime_app, "AssemblyAITranscriptionClient", fail)
+    monkeypatch.setattr(runtime_app, "B2S3Client", fail)
+    monkeypatch.setattr(runtime_app, "GoogleCalendarClient", fail)
+    monkeypatch.setattr(runtime_app, "ClaudeSummarizer", fail)
+
+    assert runtime_app.run_runtime_app() == 0
+    assert Tray.ran is True
+    assert Tray.controller.committer.policy_provider().transcription is False
+    assert Tray.controller.committer.policy_provider().backup is False
+    assert Tray.controller.notes_generator is None
+
+
+def test_invalid_optional_settings_never_route_core_to_setup(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = RuntimeSettings(
+        meetings_dir=tmp_path / "meetings",
+        google_calendar_credentials_file=tmp_path / "calendar.json",
+        calendar_poll_interval=0,
+        anthropic_api_key="notes-key",
+        anthropic_model=" ",
+    )
+    Tray.ran = False
+    monkeypatch.setattr(runtime_app, "load_runtime_settings", lambda: settings)
+    monkeypatch.setattr(runtime_app, "RumpsTrayApp", Tray)
+    monkeypatch.setattr(
+        runtime_app,
+        "RumpsSetupApp",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("setup opened")),
+    )
+    monkeypatch.setattr(
+        runtime_app,
+        "GoogleCalendarClient",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("Calendar built")),
+    )
+    monkeypatch.setattr(
+        runtime_app,
+        "ClaudeSummarizer",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("Notes built")),
+    )
+
+    assert runtime_app.run_runtime_app() == 0
+    assert Tray.ran is True
+    assert Tray.controller.recorder.temp_dir.is_relative_to(settings.meetings_dir_path)
+
+
+def test_explicit_retry_actions_combine_v2_and_isolated_legacy_scanners(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    settings = RuntimeSettings(meetings_dir=tmp_path / "meetings")
+    calls: list[str] = []
+    jobs = object()
+    transcription = object()
+    backup = object()
+    monkeypatch.setattr(
+        runtime_app,
+        "retry_v2_transcriptions",
+        lambda meetings, runtime_jobs: calls.append("v2-transcription"),
+    )
+    monkeypatch.setattr(
+        runtime_app,
+        "retry_failed_processing",
+        lambda meetings, client: calls.append("legacy-transcription"),
+    )
+    monkeypatch.setattr(
+        runtime_app,
+        "retry_v2_backups",
+        lambda meetings, runtime_jobs: calls.append("v2-backup"),
+    )
+    monkeypatch.setattr(
+        runtime_app,
+        "sync_pending_meetings",
+        lambda meetings, client: calls.append("legacy-backup"),
+    )
+
+    runtime_app._retry_transcriptions(settings, jobs, transcription)
+    runtime_app._retry_backups(settings, jobs, backup)
+
+    assert calls == [
+        "v2-transcription",
+        "legacy-transcription",
+        "v2-backup",
+        "legacy-backup",
+    ]

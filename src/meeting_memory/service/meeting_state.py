@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
@@ -11,11 +10,14 @@ from meeting_memory.service.frontmatter import merge_frontmatter_fields
 from meeting_memory.service.meeting_document import (
     MeetingDocument,
     open_meeting_document,
+    require_meeting_directory_identity,
     validate_meeting_document,
 )
 from meeting_memory.service.meeting_locks import meeting_lock
 from meeting_memory.service.meeting_state_fields import (
     changed_fields,
+    validate_backup_completion_keys,
+    validate_backup_revision,
     validate_core_identity,
     validate_owned_fields,
 )
@@ -25,6 +27,7 @@ from meeting_memory.types.artifacts import (
     MeetingJob,
 )
 from meeting_memory.types.capabilities import MeetingJobState
+from meeting_memory.types.meeting import MeetingDirectoryIdentity
 
 VALID_TRANSITIONS = {
     MeetingJobState.NOT_REQUESTED: frozenset({MeetingJobState.PENDING}),
@@ -82,6 +85,8 @@ class MeetingStateStore:
         expected: MeetingJobState,
         target: MeetingJobState,
         updates: Mapping[str, object] | None = None,
+        *,
+        expected_directory_identity: MeetingDirectoryIdentity | None = None,
     ) -> dict[str, object]:
         owner, state_field = _job_owner_and_field(job)
         owned_updates = dict(updates or {})
@@ -90,7 +95,10 @@ class MeetingStateStore:
         self._validate_reference(meeting_dir)
 
         with meeting_lock(self.meetings_dir, meeting_dir.name):
-            with self._document(meeting_dir) as document:
+            with self._document(
+                meeting_dir,
+                expected_directory_identity,
+            ) as document:
                 frontmatter = document.frontmatter
                 current = _state(frontmatter.get(state_field))
                 if current is not expected:
@@ -119,14 +127,22 @@ class MeetingStateStore:
         revision: str,
         audio_key: str,
         transcript_key: str,
+        *,
+        expected_directory_identity: MeetingDirectoryIdentity | None = None,
     ) -> BackupCompletionResult:
         """Atomically record a complete matching snapshot or return it to pending."""
-
-        _validate_revision(revision)
+        validate_backup_revision(revision)
         self._validate_reference(meeting_dir)
         with meeting_lock(self.meetings_dir, meeting_dir.name):
-            with self._document(meeting_dir) as document:
-                _validate_completion_keys(document.path.name, audio_key, transcript_key)
+            with self._document(
+                meeting_dir,
+                expected_directory_identity,
+            ) as document:
+                validate_backup_completion_keys(
+                    document.path.name,
+                    audio_key,
+                    transcript_key,
+                )
                 current = _state(document.frontmatter.get("backup_status"))
                 if current is not MeetingJobState.RUNNING:
                     raise MeetingStateConflict(
@@ -168,7 +184,6 @@ class MeetingStateStore:
         expected_status: str | None = None,
     ) -> Path:
         """Atomically relabel one schema-v2 transcript under its meeting lock."""
-
         from meeting_memory.service.speaker_state import confirm_v2_speakers
 
         return confirm_v2_speakers(
@@ -226,13 +241,24 @@ class MeetingStateStore:
             raise MeetingStateError(str(exc)) from exc
 
     @contextmanager
-    def _document(self, meeting_dir: Path) -> Iterator[MeetingDocument]:
+    def _document(
+        self,
+        meeting_dir: Path,
+        expected_directory_identity: MeetingDirectoryIdentity | None = None,
+    ) -> Iterator[MeetingDocument]:
         manager = open_meeting_document(self.meetings_dir, meeting_dir)
         try:
             document = manager.__enter__()
         except (OSError, UnicodeError, ValueError) as exc:
             raise MeetingStateError(str(exc)) from exc
         try:
+            try:
+                require_meeting_directory_identity(
+                    document,
+                    expected_directory_identity,
+                )
+            except ValueError as exc:
+                raise MeetingStateConflict(str(exc)) from exc
             yield document
         finally:
             manager.__exit__(None, None, None)
@@ -272,17 +298,3 @@ def _state(value: object) -> MeetingJobState:
         return MeetingJobState(str(value))
     except ValueError as exc:
         raise MeetingStateError(f"invalid stored meeting job state: {value!r}") from exc
-
-
-def _validate_revision(revision: str) -> None:
-    if not isinstance(revision, str) or re.fullmatch(r"[0-9a-f]{64}", revision) is None:
-        raise ValueError("backup revision must be 64 lowercase hexadecimal characters")
-
-
-def _validate_completion_keys(slug: str, audio_key: str, transcript_key: str) -> None:
-    expected_audio = f"meetings/{slug}/recording.m4a"
-    expected_transcript = f"meetings/{slug}/transcript.md"
-    if audio_key != expected_audio:
-        raise ValueError(f"backup audio key must be {expected_audio}")
-    if transcript_key != expected_transcript:
-        raise ValueError(f"backup transcript key must be {expected_transcript}")

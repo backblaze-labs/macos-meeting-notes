@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-import tempfile
+import os
+import stat
 import threading
+import wave
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -11,8 +13,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from meeting_memory.config.defaults import DEFAULT_MEETINGS_DIR
 from meeting_memory.repo.native_audio import convert_native_audio, start_native_capture
+from meeting_memory.service.recovery_index import (
+    create_recovery_session,
+    pin_recovery_source,
+    update_recovery_session_meta,
+)
 from meeting_memory.types.meeting import MeetingMeta, build_meeting_slug
+from meeting_memory.types.recovery import RecoveryIndexEntry
 
 DEFAULT_CAPTURE_MODE = "full-meeting"
 
@@ -21,6 +30,7 @@ DEFAULT_CAPTURE_MODE = "full-meeting"
 class RecordingSession:
     meta: MeetingMeta
     wav_path: Path
+    recovery: RecoveryIndexEntry | None = None
 
 
 @dataclass(frozen=True)
@@ -28,21 +38,23 @@ class RecordingResult:
     meta: MeetingMeta
     audio_path: Path
     wav_path: Path
+    recovery: RecoveryIndexEntry | None = None
 
 
 @dataclass
 class RecorderService:
     capture_mode: str = DEFAULT_CAPTURE_MODE
-    temp_dir: Path = field(default_factory=lambda: Path(tempfile.gettempdir()))
+    temp_dir: Path = field(
+        default_factory=lambda: Path(DEFAULT_MEETINGS_DIR).expanduser()
+        / ".meeting-memory-staging"
+        / "recordings"
+    )
     now: Callable[[], datetime] = field(
         default_factory=lambda: lambda: datetime.now().astimezone()
     )
     capture_starter: Callable[[str, Path], Any] = start_native_capture
-    converter: Callable[[Path, Path], None] = field(default=None)
-
+    converter: Callable[[Path, Path], None] | None = None
     def __post_init__(self) -> None:
-        if self.converter is None:
-            self.converter = convert_wav_to_m4a
         self._lock = threading.RLock()
         self._capture_io_lock = threading.Lock()
         self._capture = None
@@ -77,25 +89,25 @@ class RecorderService:
             started_at = self.now()
             title = calendar_title or "Untitled"
             slug = build_meeting_slug(started_at, title)
-            wav_path = self.temp_dir / f"meeting-memory-{slug}.wav"
-
-            self.temp_dir.mkdir(parents=True, exist_ok=True)
+            meta = MeetingMeta(
+                slug=slug,
+                started_at=started_at,
+                calendar_title=title,
+                speaker_candidates=speaker_candidates,
+            )
+            recovery = create_recovery_session(self.temp_dir, meta)
+            wav_path = recovery.source_path
             try:
                 self._capture = self.capture_starter(self.capture_mode, wav_path)
             except Exception:
                 self._capture = None
-                with suppress(OSError):
-                    wav_path.unlink()
+                _discard_empty_session(recovery)
                 raise
 
             session = RecordingSession(
-                meta=MeetingMeta(
-                    slug=slug,
-                    started_at=started_at,
-                    calendar_title=title,
-                    speaker_candidates=speaker_candidates,
-                ),
+                meta=meta,
                 wav_path=wav_path,
+                recovery=recovery,
             )
             self._session = session
             return session
@@ -124,11 +136,21 @@ class RecorderService:
                 duration_minutes=duration_minutes,
                 speaker_candidates=session.meta.speaker_candidates,
             )
-            m4a_path = session.wav_path.with_suffix(".m4a")
-            self.converter(session.wav_path, m4a_path)
-            with suppress(OSError):
-                session.wav_path.unlink()
-            return RecordingResult(meta=meta, audio_path=m4a_path, wav_path=session.wav_path)
+            if session.recovery is None:
+                raise RuntimeError("recording session has no recovery index")
+            recovery = update_recovery_session_meta(session.recovery, meta)
+            if self.converter is not None:
+                m4a_path = recovery.source_path.with_suffix(".m4a")
+                self.converter(recovery.source_path, m4a_path)
+                recovery.source_path.unlink()
+                return RecordingResult(meta, m4a_path, recovery.source_path)
+            recovery = pin_recovery_source(recovery)
+            return RecordingResult(
+                meta=meta,
+                audio_path=recovery.source_path,
+                wav_path=recovery.source_path,
+                recovery=recovery,
+            )
         finally:
             with self._lock:
                 if self._session is session:
@@ -170,5 +192,38 @@ class RecorderService:
                     raise
 
 
+def _discard_empty_session(entry: RecoveryIndexEntry) -> None:
+    """Remove only a session with no recoverable recorded frames."""
+
+    try:
+        source = os.stat(entry.source_path, follow_symlinks=False)
+    except FileNotFoundError:
+        source = None
+    except OSError:
+        return
+    if source is not None:
+        if not stat.S_ISREG(source.st_mode):
+            return
+        if source.st_size > 0 and _wav_has_frames(entry.source_path):
+            return
+        with suppress(OSError):
+            entry.source_path.unlink()
+    with suppress(OSError):
+        entry.index_path.unlink()
+    with suppress(OSError):
+        entry.session_directory.rmdir()
+
+
+def _wav_has_frames(path: Path) -> bool:
+    try:
+        with wave.open(str(path), "rb") as audio:
+            return audio.getnframes() > 0
+    except (EOFError, OSError, wave.Error):
+        # A malformed non-empty file may contain recoverable partial audio.
+        return True
+
+
 def convert_wav_to_m4a(wav_path: Path, m4a_path: Path) -> None:
+    """Legacy compatibility wrapper; runtime conversion happens during commit."""
+
     convert_native_audio(wav_path, m4a_path)

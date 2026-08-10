@@ -7,6 +7,7 @@ import threading
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import BinaryIO
 
 from meeting_memory.types.capabilities import MeetingJobState
 from meeting_memory.types.meeting import MeetingRef, validate_meeting_slug
@@ -59,6 +60,32 @@ class BackupCompletionResult:
     status: MeetingJobState
     captured_revision: str
     current_revision: str
+
+
+@dataclass(frozen=True)
+class LegacyUploadObject:
+    """One private read-only legacy object stream and its original filename."""
+
+    filename: str
+    stream: BinaryIO
+
+    def __post_init__(self) -> None:
+        if Path(self.filename).name != self.filename or not self.filename:
+            raise ValueError("legacy upload filename must be one path component")
+
+
+@dataclass(frozen=True)
+class LegacyBackupUpload:
+    """Pinned legacy bytes crossing into the B2 adapter."""
+
+    meeting_slug: str
+    audio: tuple[LegacyUploadObject, ...]
+    transcript: LegacyUploadObject
+
+    def __post_init__(self) -> None:
+        validate_meeting_slug(self.meeting_slug)
+        if not self.audio:
+            raise ValueError("legacy backup requires at least one audio object")
 
 
 @dataclass(frozen=True)

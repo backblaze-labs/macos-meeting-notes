@@ -13,7 +13,10 @@ from meeting_memory.service.backup_snapshot_fs import (
     cleanup_snapshot_directory,
     create_snapshot_files,
 )
-from meeting_memory.service.meeting_document import open_meeting_document
+from meeting_memory.service.meeting_document import (
+    open_meeting_document,
+    require_meeting_directory_identity,
+)
 from meeting_memory.types.artifacts import BackupSnapshotUpload
 from meeting_memory.types.backup import (
     backup_revision_bytes,
@@ -21,6 +24,7 @@ from meeting_memory.types.backup import (
     normalize_backup_transcript,
     owned_backup_transcript_slug,
 )
+from meeting_memory.types.meeting import MeetingDirectoryIdentity
 
 
 @dataclass(frozen=True)
@@ -105,10 +109,13 @@ def compute_backup_revision_from_audio_fd(
 def capture_backup_snapshot(
     meeting_dir: Path,
     snapshot_root: Path | None = None,
+    *,
+    expected_directory_identity: MeetingDirectoryIdentity | None = None,
 ) -> BackupSnapshot:
     """Copy both artifacts through one pinned owned meeting directory."""
 
     with open_meeting_document(meeting_dir.parent, meeting_dir) as document:
+        require_meeting_directory_identity(document, expected_directory_identity)
         audio_fd, audio_size = _regular_at(document.directory_fd, "recording.m4a")
         try:
             transcript = document.text.encode("utf-8")

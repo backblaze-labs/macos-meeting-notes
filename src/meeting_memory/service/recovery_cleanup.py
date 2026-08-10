@@ -84,11 +84,14 @@ def _cleanup_indexed_source(entry: RecoveryIndexEntry) -> None:
     parent_fd = open_directory_tree(session.parent)
     session_fd = -1
     try:
-        session_fd = os.open(
-            session.name,
-            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-            dir_fd=parent_fd,
-        )
+        try:
+            session_fd = os.open(
+                session.name,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=parent_fd,
+            )
+        except FileNotFoundError:
+            return
         _require_identity(session_fd, entry.session_device, entry.session_inode, "session")
         _unlink_same_regular(
             session_fd,
@@ -135,11 +138,14 @@ def _unlink_same_regular(
     expected_size: int | None,
     expected_sha256: str | None,
 ) -> None:
-    descriptor = os.open(
-        filename,
-        os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
-        dir_fd=directory_fd,
-    )
+    try:
+        descriptor = os.open(
+            filename,
+            os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+            dir_fd=directory_fd,
+        )
+    except FileNotFoundError:
+        return
     try:
         opened = os.fstat(descriptor)
         current = os.stat(filename, dir_fd=directory_fd, follow_symlinks=False)

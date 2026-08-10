@@ -16,7 +16,7 @@ from meeting_memory.service.atomic_io import (
 from meeting_memory.service.frontmatter import split_frontmatter
 from meeting_memory.service.pinned_fs import open_directory_tree
 from meeting_memory.types.backup import backup_revision_stream
-from meeting_memory.types.meeting import validate_meeting_slug
+from meeting_memory.types.meeting import MeetingDirectoryIdentity, validate_meeting_slug
 
 
 @dataclass
@@ -118,6 +118,19 @@ def validate_meeting_document(meetings_dir: Path, meeting_dir: Path) -> None:
 
     with open_meeting_document(meetings_dir, meeting_dir):
         return
+
+
+def require_meeting_directory_identity(
+    document: MeetingDocument,
+    expected: MeetingDirectoryIdentity | None,
+) -> None:
+    """Reject a path-replacement clone while operating on a pinned document."""
+
+    if expected is None:
+        return
+    info = os.fstat(document.directory_fd)
+    if (info.st_dev, info.st_ino) != (expected.device, expected.inode):
+        raise ValueError("meeting directory identity changed")
 
 
 def _open_regular_at(directory_fd: int, filename: str) -> int:

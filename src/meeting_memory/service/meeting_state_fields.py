@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 
 from meeting_memory.types.artifacts import ArtifactFieldOwner
@@ -50,6 +51,24 @@ def changed_fields(
     updates: Mapping[str, object],
 ) -> dict[str, object]:
     return {key: value for key, value in updates.items() if current.get(key) != value}
+
+
+def validate_backup_revision(revision: str) -> None:
+    if not isinstance(revision, str) or re.fullmatch(r"[0-9a-f]{64}", revision) is None:
+        raise ValueError("backup revision must be 64 lowercase hexadecimal characters")
+
+
+def validate_backup_completion_keys(
+    slug: str,
+    audio_key: str,
+    transcript_key: str,
+) -> None:
+    expected_audio = f"meetings/{slug}/recording.m4a"
+    expected_transcript = f"meetings/{slug}/transcript.md"
+    if audio_key != expected_audio:
+        raise ValueError(f"backup audio key must be {expected_audio}")
+    if transcript_key != expected_transcript:
+        raise ValueError(f"backup transcript key must be {expected_transcript}")
 
 
 def _validate_field_value(field: str, value: object) -> None:

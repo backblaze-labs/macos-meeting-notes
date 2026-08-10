@@ -5,109 +5,43 @@ from __future__ import annotations
 import hashlib
 import os
 import stat
-from dataclasses import dataclass
+from collections.abc import Callable
 from pathlib import Path
 
-from meeting_memory.service.meeting_store import CommitDurabilityUncertain, MeetingStore
+from meeting_memory.service.meeting_store import (
+    CommitDurabilityUncertain,
+    MeetingPublicationIntegrityError,
+    MeetingStore,
+)
 from meeting_memory.service.pinned_fs import open_directory_tree
 from meeting_memory.service.recovery_audio import (
     RecoveryAudioConverter,
     RecoveryM4AValidator,
     recovery_audio_plan,
 )
-from meeting_memory.types.meeting import MeetingFiles, PostCommitPolicy
+from meeting_memory.service.recovery_outcomes import (
+    RecoveryCleanupReceipt,
+    RecoveryCommitCleanupUncertain,
+    RecoveryCommitDurabilityUncertain,
+    RecoveryCommitResult,
+    RecoveryPublicationIdentity,
+    RecoveryPublicationRejected,
+    issue_recovery_result,
+)
+from meeting_memory.service.stage_integrity import PublishedStageIdentity
+from meeting_memory.types.meeting import MeetingFiles, MeetingMeta, PostCommitPolicy
 from meeting_memory.types.recovery import RecoveryIndexEntry
 
-_RECEIPT_SEAL = object()
-
-
-@dataclass(frozen=True, slots=True, init=False)
-class RecoveryCleanupReceipt:
-    """Sealed capability issued only for a published recovery commit."""
-
-    entry: RecoveryIndexEntry
-    committed_directory: Path
-    committed_slug: str
-    committed_device: int
-    committed_inode: int
-    audio_device: int
-    audio_inode: int
-    audio_size: int
-    audio_sha256: str
-    cleanup_allowed: bool
-    __seal: object
-
-    def __init__(
-        self,
-        seal: object,
-        entry: RecoveryIndexEntry,
-        files: MeetingFiles,
-        identity: _PublicationIdentity,
-        cleanup_allowed: bool,
-    ) -> None:
-        if seal is not _RECEIPT_SEAL:
-            raise TypeError("recovery cleanup receipts can only be issued by commit_recovery")
-        values = {
-            "entry": entry,
-            "committed_directory": files.directory,
-            "committed_slug": files.meta.slug,
-            "committed_device": identity.directory_device,
-            "committed_inode": identity.directory_inode,
-            "audio_device": identity.audio_device,
-            "audio_inode": identity.audio_inode,
-            "audio_size": identity.audio_size,
-            "audio_sha256": identity.audio_sha256,
-            "cleanup_allowed": cleanup_allowed,
-            "_RecoveryCleanupReceipt__seal": seal,
-        }
-        for name, value in values.items():
-            object.__setattr__(self, name, value)
-
-    def require_issued(self) -> None:
-        if self.__seal is not _RECEIPT_SEAL:
-            raise TypeError("recovery cleanup receipt is not authentic")
-
-
-@dataclass(frozen=True)
-class RecoveryCommitResult:
-    files: MeetingFiles
-    receipt: RecoveryCleanupReceipt
-
-
-@dataclass(frozen=True)
-class _PublicationIdentity:
-    directory_device: int
-    directory_inode: int
-    audio_device: int
-    audio_inode: int
-    audio_size: int
-    audio_sha256: str
-
-
-class RecoveryCommitDurabilityUncertain(RuntimeError):
-    """Recovery was published and receipted, but parent durability is uncertain."""
-
-    def __init__(
-        self,
-        result: RecoveryCommitResult,
-        cause: CommitDurabilityUncertain,
-    ) -> None:
-        self.result = result
-        self.cause = cause
-        self.durability_uncertain = True
-        self.cleanup_error: OSError | None = None
-        super().__init__(str(cause))
-
-
-class RecoveryCommitCleanupUncertain(RuntimeError):
-    """Recovery is published and receipted, but closing its source failed."""
-
-    def __init__(self, result: RecoveryCommitResult, cause: OSError) -> None:
-        self.result = result
-        self.cause = cause
-        super().__init__(
-            f"recovery committed at {result.files.directory}; source cleanup failed"
-        )
+__all__ = [
+    "RecoveryCleanupReceipt",
+    "RecoveryCommitCleanupUncertain",
+    "RecoveryCommitDurabilityUncertain",
+    "RecoveryCommitResult",
+    "RecoveryPublicationIdentity",
+    "RecoveryPublicationRejected",
+    "commit_recovery",
+    "issue_recovery_result",
+]
 
 
 def commit_recovery(
@@ -117,6 +51,8 @@ def commit_recovery(
     *,
     validate_m4a: RecoveryM4AValidator,
     converter: RecoveryAudioConverter | None = None,
+    prepare_publication: Callable[[Path, MeetingMeta], None] | None = None,
+    reject_publication: Callable[[Path], None] | None = None,
 ) -> RecoveryCommitResult:
     """Publish bytes from the exact pinned source and issue the only cleanup receipt."""
 
@@ -127,19 +63,27 @@ def commit_recovery(
         materializer, validate_output = recovery_audio_plan(
             entry, source_fd, converter, validate_m4a
         )
-        publication: list[_PublicationIdentity] = []
+        publication: list[RecoveryPublicationIdentity] = []
 
-        def validate_and_capture(path: Path) -> None:
+        def validate_snapshot(path: Path) -> None:
             validate_output(path)
-            identity = _capture_publication_identity(path)
-            if entry.source_path.suffix.casefold() == ".m4a" and (
-                identity.audio_size != entry.source_size
-                or identity.audio_sha256 != entry.source_sha256
-            ):
-                raise ValueError(
-                    "materialized M4A does not match the pinned recovery source"
+            if entry.source_path.suffix.casefold() == ".m4a":
+                _validate_snapshot_matches_source(path, entry)
+
+        def observe_publication(
+            _files: MeetingFiles,
+            identity: PublishedStageIdentity,
+        ) -> None:
+            publication.append(
+                RecoveryPublicationIdentity(
+                    identity.directory_device,
+                    identity.directory_inode,
+                    identity.audio.device,
+                    identity.audio.inode,
+                    identity.audio.size,
+                    identity.audio.sha256,
                 )
-            publication.append(identity)
+            )
 
         try:
             files = store.commit_pinned_audio(
@@ -150,10 +94,24 @@ def commit_recovery(
                 validate_source=lambda descriptor: _validate_exact_source(
                     entry, descriptor
                 ),
-                validate_materialized=validate_and_capture,
+                validate_materialized=validate_snapshot,
+                prepare_publication=prepare_publication,
+                observe_publication=observe_publication,
             )
+        except MeetingPublicationIntegrityError as exc:
+            quarantine_error: BaseException | None = None
+            if reject_publication is not None:
+                try:
+                    reject_publication(exc.destination)
+                except BaseException as quarantine_exc:
+                    quarantine_error = quarantine_exc
+            raise RecoveryPublicationRejected(
+                exc.destination,
+                exc.cause,
+                quarantine_error,
+            ) from exc
         except CommitDurabilityUncertain as exc:
-            result = _issued_result(
+            result = issue_recovery_result(
                 entry,
                 exc.files,
                 publication[0],
@@ -162,7 +120,7 @@ def commit_recovery(
             published = result
             durability_outcome = RecoveryCommitDurabilityUncertain(result, exc)
             raise durability_outcome from exc
-        published = _issued_result(
+        published = issue_recovery_result(
             entry,
             files,
             publication[0],
@@ -181,57 +139,23 @@ def commit_recovery(
                 raise
 
 
-def _issued_result(
+def _validate_snapshot_matches_source(
+    snapshot_path: Path,
     entry: RecoveryIndexEntry,
-    files: MeetingFiles,
-    identity: _PublicationIdentity,
-    *,
-    cleanup_allowed: bool,
-) -> RecoveryCommitResult:
-    return RecoveryCommitResult(
-        files,
-        RecoveryCleanupReceipt(
-            _RECEIPT_SEAL,
-            entry,
-            files,
-            identity,
-            cleanup_allowed,
-        ),
+) -> None:
+    descriptor = os.open(
+        snapshot_path,
+        os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
     )
-
-
-def _capture_publication_identity(audio_path: Path) -> _PublicationIdentity:
-    directory_fd = os.open(
-        audio_path.parent,
-        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-    )
-    audio_fd = -1
     try:
-        audio_fd = os.open(
-            audio_path.name,
-            os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
-            dir_fd=directory_fd,
-        )
-        audio_info = os.fstat(audio_fd)
-        visible = os.stat(audio_path.name, dir_fd=directory_fd, follow_symlinks=False)
-        if not stat.S_ISREG(audio_info.st_mode) or (
-            audio_info.st_dev,
-            audio_info.st_ino,
-        ) != (visible.st_dev, visible.st_ino):
-            raise ValueError("recovery materialized audio changed before publication")
-        directory_info = os.fstat(directory_fd)
-        return _PublicationIdentity(
-            directory_info.st_dev,
-            directory_info.st_ino,
-            audio_info.st_dev,
-            audio_info.st_ino,
-            audio_info.st_size,
-            _source_sha256(audio_fd, audio_info.st_size),
-        )
+        info = os.fstat(descriptor)
+        if (
+            info.st_size != entry.source_size
+            or _source_sha256(descriptor, info.st_size) != entry.source_sha256
+        ):
+            raise ValueError("materialized M4A does not match the pinned recovery source")
     finally:
-        if audio_fd >= 0:
-            os.close(audio_fd)
-        os.close(directory_fd)
+        os.close(descriptor)
 
 
 def _open_exact_source(entry: RecoveryIndexEntry) -> int:

@@ -1,4 +1,4 @@
-"""Inactive app-staging recovery index and explicit legacy discovery primitives."""
+"""App-staging recovery index and explicit legacy discovery primitives."""
 
 from __future__ import annotations
 
@@ -20,8 +20,13 @@ from meeting_memory.service.pinned_fs import (
     read_regular_text_at,
     same_open_directory,
 )
+from meeting_memory.service.recovery_provenance import source_provenance_from_payload
+from meeting_memory.service.recovery_publication import publication_from_payload
 from meeting_memory.types.meeting import MeetingMeta, validate_meeting_slug
-from meeting_memory.types.recovery import RecoveryIndexEntry, RecoveryOrigin
+from meeting_memory.types.recovery import (
+    RecoveryIndexEntry,
+    RecoveryOrigin,
+)
 
 INDEX_FILENAME = "recovery.json"
 WAV_FILENAME = "recording.wav"
@@ -37,15 +42,7 @@ def create_recovery_session(staging_root: Path, meta: MeetingMeta) -> RecoveryIn
     session = root / name
     index_path = session / INDEX_FILENAME
     wav_path = session / WAV_FILENAME
-    payload = {
-        "version": 1,
-        "wav_file": WAV_FILENAME,
-        "slug": meta.slug,
-        "started_at": meta.started_at.isoformat(),
-        "calendar_title": meta.calendar_title,
-        "duration_minutes": meta.duration_minutes,
-        "speaker_candidates": list(meta.speaker_candidates),
-    }
+    payload = _index_payload(meta)
     try:
         atomic_replace_text_at(
             session_fd,
@@ -77,6 +74,30 @@ def create_recovery_session(staging_root: Path, meta: MeetingMeta) -> RecoveryIn
         session_device=session_info.st_dev,
         session_inode=session_info.st_ino,
     )
+
+
+def update_recovery_session_meta(
+    entry: RecoveryIndexEntry,
+    meta: MeetingMeta,
+) -> RecoveryIndexEntry:
+    """Durably update final capture metadata inside the same pinned session."""
+
+    _validate_meta(meta)
+    session_fd = open_directory_tree(entry.session_directory)
+    try:
+        info = os.fstat(session_fd)
+        if (info.st_dev, info.st_ino) != (entry.session_device, entry.session_inode):
+            raise ValueError("recovery session changed before metadata update")
+        atomic_replace_text_at(
+            session_fd,
+            INDEX_FILENAME,
+            json.dumps(_index_payload(meta, entry), sort_keys=True),
+        )
+        if not same_open_directory(entry.session_directory, session_fd):
+            raise ValueError("recovery session changed during metadata update")
+    finally:
+        os.close(session_fd)
+    return replace(entry, meta=meta)
 
 
 def discover_indexed_recoveries(staging_root: Path) -> tuple[RecoveryIndexEntry, ...]:
@@ -124,13 +145,16 @@ def pin_recovery_source(entry: RecoveryIndexEntry) -> RecoveryIndexEntry:
         if "descriptor" in locals():
             os.close(descriptor)
         os.close(session_fd)
-    return replace(
+    pinned = replace(
         entry,
         source_device=info.st_dev,
         source_inode=info.st_ino,
         source_size=info.st_size,
         source_sha256=digest,
     )
+    if pinned.origin is RecoveryOrigin.APP_STAGING and pinned.index_path is not None:
+        _persist_pinned_index(pinned)
+    return pinned
 
 
 def _ensure_private_root(root: Path) -> Path:
@@ -159,6 +183,7 @@ def _indexed_entry(root_fd: int, root: Path, name: str) -> RecoveryIndexEntry | 
         if payload.get("version") != 1 or payload.get("wav_file") != WAV_FILENAME:
             return None
         meta = _meta_from_payload(payload)
+        publication = publication_from_payload(payload.get("publication"))
         source_fd = os.open(
             WAV_FILENAME,
             os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
@@ -166,11 +191,11 @@ def _indexed_entry(root_fd: int, root: Path, name: str) -> RecoveryIndexEntry | 
         )
         try:
             source_info = os.fstat(source_fd)
-            source_digest = _source_sha256(source_fd, source_info.st_size)
         finally:
             os.close(source_fd)
         if not stat.S_ISREG(source_info.st_mode) or source_info.st_size == 0:
             return None
+        provenance = source_provenance_from_payload(payload, source_info)
     except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError, UnicodeError):
         return None
     finally:
@@ -184,10 +209,11 @@ def _indexed_entry(root_fd: int, root: Path, name: str) -> RecoveryIndexEntry | 
         origin=RecoveryOrigin.APP_STAGING,
         session_device=session_info.st_dev,
         session_inode=session_info.st_ino,
-        source_device=source_info.st_dev,
-        source_inode=source_info.st_ino,
-        source_size=source_info.st_size,
-        source_sha256=source_digest,
+        source_device=(publication.source_device if publication else provenance[0]),
+        source_inode=(publication.source_inode if publication else provenance[1]),
+        source_size=(publication.source_size if publication else provenance[2]),
+        source_sha256=(publication.source_sha256 if publication else provenance[3]),
+        publication=publication,
     )
 
 
@@ -213,6 +239,52 @@ def _validate_meta(meta: MeetingMeta) -> None:
         isinstance(item, str) for item in meta.speaker_candidates
     ):
         raise ValueError("recovery speaker_candidates must be a tuple of strings")
+
+
+def _index_payload(
+    meta: MeetingMeta,
+    entry: RecoveryIndexEntry | None = None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "version": 1,
+        "wav_file": WAV_FILENAME,
+        "slug": meta.slug,
+        "started_at": meta.started_at.isoformat(),
+        "calendar_title": meta.calendar_title,
+        "duration_minutes": meta.duration_minutes,
+        "speaker_candidates": list(meta.speaker_candidates),
+    }
+    if entry is not None and all(
+        value is not None
+        for value in (
+            entry.source_device,
+            entry.source_inode,
+            entry.source_size,
+            entry.source_sha256,
+        )
+    ):
+        payload["source"] = {
+            "device": entry.source_device,
+            "inode": entry.source_inode,
+            "size": entry.source_size,
+            "sha256": entry.source_sha256,
+        }
+    return payload
+
+
+def _persist_pinned_index(entry: RecoveryIndexEntry) -> None:
+    session_fd = open_directory_tree(entry.session_directory)
+    try:
+        info = os.fstat(session_fd)
+        if (info.st_dev, info.st_ino) != (entry.session_device, entry.session_inode):
+            raise ValueError("recovery session changed before provenance update")
+        atomic_replace_text_at(
+            session_fd,
+            INDEX_FILENAME,
+            json.dumps(_index_payload(entry.meta, entry), sort_keys=True),
+        )
+    finally:
+        os.close(session_fd)
 
 
 def _source_sha256(descriptor: int, size: int) -> str:

@@ -37,6 +37,7 @@ class DebuggingActions:
     review_speakers: Callable[[Path], None]
     generate_notes: Callable[[Path], None]
     process_recovered_recording: Callable[[Any], None]
+    scan_legacy_recoveries: Callable[[], None]
     sync_to_b2: Callable[[], None]
     retry_failed_processing: Callable[[], None]
     run_diagnostics: Callable[..., None]
@@ -67,6 +68,14 @@ def debugging_submenu(
     submenu = rumps.MenuItem(menu.DEBUGGING_LABEL)
     _add_processing_tasks(rumps, submenu, processing_tasks, actions)
     _add_recovered_recordings(rumps, submenu, recovered_recordings, actions)
+    submenu.add(
+        _menu_item(
+            rumps,
+            menu.LEGACY_RECOVERY_SCAN_LABEL,
+            lambda _sender: actions.scan_legacy_recoveries(),
+            tooltip="Explicitly scan the old macOS temp location once.",
+        )
+    )
     submenu.add(
         _menu_item(
             rumps,

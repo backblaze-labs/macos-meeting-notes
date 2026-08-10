@@ -20,9 +20,8 @@ value. Its composition and durable lifecycle are defined in
 
 ## Outputs
 
-- Current legacy runtime: temporary WAV in the system temp directory
-- Accepted target: recoverable WAV in app-owned staging on the
-  `MEETINGS_DIR` filesystem
+- Recoverable WAV in a unique private indexed session on the `MEETINGS_DIR`
+  filesystem
 - `recording.m4a` in the meeting directory
 - Schema-v2 `transcript.md` metadata stub published atomically with the audio
 - `MeetingMeta` passed to the pipeline
@@ -57,24 +56,44 @@ workers and emit typed events for the tray main thread to render.
 - `MAX_RECORDING_MINUTES` is enforced as a hard safety limit. When reached, the
   controller stops the active recording, atomically commits local artifacts,
   and starts only configured optional jobs.
-- Interrupted temp WAV files without a matching M4A sibling appear in the tray
-  as recovered recordings and can be processed by the user.
-- The accepted target commits `recording.m4a` locally before starting any
+- Interrupted indexed WAV files appear in the tray as recovered recordings and
+  can be committed by the user.
+- The runtime commits `recording.m4a` locally before starting any
   optional provider work. A missing or failed Transcription, Backup, Calendar,
   or Notes capability must not discard or hide the recording.
-- The accepted target assembles audio plus metadata in a same-filesystem staging
+- It assembles audio plus metadata in a same-filesystem staging
   directory and publishes the complete meeting directory with one atomic
-  rename. Legacy system-temp files are discovered locally once and never start
-  provider work without an explicit recovery action.
+  rename. **Debugging › Find Legacy Recordings...** can scan legacy system-temp
+  files once, but normal launch never scans them or starts provider work for
+  them.
+- MeetingStore pins the stage directory and materialized audio before invoking
+  the path-based native validator. Whole-stage or child replacement is rejected
+  by identity, size, and digest checks before rename, and the same exact objects
+  are checked again at the published destination before a cleanup receipt can
+  be issued.
 - Private indexed capture sessions, component-wise no-follow discovery, and
-  identity-safe post-commit cleanup now exist as inactive service primitives.
+  identity-safe post-commit cleanup are active in the runtime.
   Indexed WAV recovery uses an injected path-based converter with a verified
   private input snapshot. Both converted WAV and direct M4A recovery require a
   caller-supplied validator for a complete AAC-bearing M4A; the service has no
   weak signature fallback, and RIFF bytes are never relabeled as
-  `recording.m4a`.
-  Recorder startup/stop still follows the current legacy path until the atomic
-  runtime cutover activates the complete flow together.
+  `recording.m4a`. The native validator inherits a read-only descriptor for the
+  exact pinned candidate, copies those bytes to a private 0600 temporary M4A so
+  AVFoundation can inspect them, and deletes the copy before returning. The
+  store revalidates identity, size, and digest across that boundary. Python owns
+  and cleans the helper's private temporary directory even if the helper times
+  out. Declared packet sizes are capped, packet counts must fit the audio byte
+  count and integer range, and the subprocess has a fixed timeout so corrupt
+  recovery input cannot consume unbounded memory or block a commit indefinitely.
+- A capture starter failure removes its private session only when the WAV is
+  absent or an empty regular file. Any nonempty source remains indexed for
+  recovery. Already pinned source provenance is never refreshed at commit, so
+  inode replacement or same-inode byte mutation is rejected.
+- A visible publication whose parent fsync is uncertain is not announced as a
+  saved recording and starts no optional work. Its pre-publication journal token
+  identifies the exact visible directory; explicit reconciliation verifies and
+  fsyncs it without creating a collision suffix before normal completion
+  continues.
 
 ## Related Files
 
@@ -84,6 +103,8 @@ workers and emit typed events for the tray main thread to render.
 - `src/meeting_memory/service/recovery_audio.py`
 - `src/meeting_memory/service/recovery_commit.py`
 - `src/meeting_memory/service/recovery_cleanup.py`
+- `src/meeting_memory/service/recovery_reconcile.py`
+- `src/meeting_memory/service/runtime_legacy_recovery.py`
 - `src/meeting_memory/service/recording_context.py`
 - `src/meeting_memory/ui/controller.py`
 - `src/meeting_memory/ui/processing_launch.py`

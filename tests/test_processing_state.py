@@ -45,6 +45,22 @@ def test_processing_tasks_retry_failed_or_skipped_notes(tmp_path: Path) -> None:
     ]
 
 
+def test_corrupt_owned_v2_is_contained_per_artifact(tmp_path: Path) -> None:
+    healthy = _write_meeting(tmp_path, "2026-06-22_15-00_healthy", "Healthy")
+    corrupt = tmp_path / "meetings" / "2026-06-22_16-00_corrupt"
+    corrupt.mkdir()
+    (corrupt / "recording.m4a").write_bytes(b"audio")
+    (corrupt / "transcript.md").write_text(
+        "---\ncreated_by: meeting-memory\nschema_version: 2\n"
+        "id: 2026-06-22_16-00_corrupt\n---\n**Speaker A** (0:00:00): broken",
+        encoding="utf-8",
+    )
+
+    tasks = list_pending_processing_tasks(tmp_path / "meetings")
+
+    assert [task.meeting.slug for task in tasks] == [healthy.meta.slug]
+
+
 def _write_meeting(tmp_path: Path, slug: str, title: str):
     audio = tmp_path / f"{slug}.m4a"
     audio.write_bytes(b"audio")

@@ -47,6 +47,7 @@ REQUIRED_SOURCE_FILES = (
     "types/speakers.py",
     "config/__init__.py",
     "config/settings.py",
+    "config/runtime.py",
     "repo/__init__.py",
     "repo/b2_client.py",
     "repo/b2_snapshot.py",
@@ -56,8 +57,10 @@ REQUIRED_SOURCE_FILES = (
     "repo/calendar_client.py",
     "repo/google_http.py",
     "repo/native_audio.py",
+    "repo/native_audio_validation.py",
     "service/__init__.py",
     "service/storage.py",
+    "service/stage_integrity.py",
     "service/atomic_io.py",
     "service/meeting_locks.py",
     "service/meeting_document.py",
@@ -70,6 +73,12 @@ REQUIRED_SOURCE_FILES = (
     "service/recovery_cleanup.py",
     "service/recovery_audio.py",
     "service/recovery_commit.py",
+    "service/recovery_journal.py",
+    "service/recovery_marker.py",
+    "service/recovery_provenance.py",
+    "service/recovery_quarantine.py",
+    "service/recovery_outcomes.py",
+    "service/recovery_publication.py",
     "service/meeting_state.py",
     "service/meeting_state_fields.py",
     "service/transcript_state.py",
@@ -79,6 +88,16 @@ REQUIRED_SOURCE_FILES = (
     "service/backup_snapshot_fs.py",
     "service/markdown.py",
     "service/recorder.py",
+    "service/local_commit.py",
+    "service/runtime_jobs.py",
+    "service/runtime_legacy_recovery.py",
+    "service/recovery_reconcile.py",
+    "service/runtime_transcription.py",
+    "service/runtime_files.py",
+    "service/transcription_audio.py",
+    "service/legacy_snapshot.py",
+    "service/runtime_notes.py",
+    "service/runtime_retry.py",
     "service/audio_modes.py",
     "service/native_audio_setup.py",
     "service/summary_prompt.py",
@@ -91,6 +110,10 @@ REQUIRED_SOURCE_FILES = (
     "ui/audio_modes.py",
     "ui/notes_prompt.py",
     "ui/processing_launch.py",
+    "ui/legacy_processing.py",
+    "ui/recovery_actions.py",
+    "ui/runtime_events.py",
+    "ui/runtime_app.py",
     "ui/recording_health.py",
     "ui/recording_transitions.py",
     "ui/submenus.py",
@@ -120,6 +143,7 @@ REQUIRED_REPO_FILES = (
 REQUIRED_NATIVE_SOURCE_FILES = (
     "repo/native/CLI.swift",
     "repo/native/NativeCapture.swift",
+    "repo/native/NativeValidation.swift",
     "repo/native/ScreenCaptureRecorder.swift",
     "repo/native/SilentSystemRecorder.swift",
 )
@@ -243,3 +267,13 @@ def test_required_modules_exist() -> None:
     assert missing_source == []
     assert missing_native == []
     assert missing_repo == []
+
+
+def test_native_validator_bounds_untrusted_packet_metadata() -> None:
+    source = (
+        SRC_ROOT / "repo/native/NativeValidation.swift"
+    ).read_text(encoding="utf-8")
+
+    assert "packetCount <= audioByteCount" in source
+    assert "packetCount <= UInt64(Int64.max)" in source
+    assert "maximumPacketSize <= maximumValidationPacketSize" in source

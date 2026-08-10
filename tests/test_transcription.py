@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.repo import transcription
@@ -54,6 +57,24 @@ def test_assemblyai_transcription_returns_error_result(monkeypatch) -> None:
     assert result.segments == ()
 
 
+def test_legacy_transcription_passes_binary_stream_to_sdk(monkeypatch) -> None:
+    fake_aai = FakeAssemblyAI(
+        response=SimpleNamespace(
+            id="tx-stream",
+            status="completed",
+            utterances=(SimpleNamespace(speaker="A", start=0, text="Ready."),),
+        )
+    )
+    monkeypatch.setattr(transcription, "_load_assemblyai", lambda: fake_aai)
+    audio = BytesIO(b"private audio")
+
+    result = AssemblyAITranscriptionClient(api_key="assembly-key").transcribe(audio)
+
+    assert result.assemblyai_id == "tx-stream"
+    assert fake_aai.last_transcriber.audio_path is audio
+    assert not isinstance(fake_aai.last_transcriber.audio_path, str)
+
+
 def test_assemblyai_transcription_retries_transient_errors(tmp_path: Path, monkeypatch) -> None:
     fake_aai = FakeAssemblyAI(
         response=SimpleNamespace(
@@ -91,6 +112,43 @@ def test_assemblyai_client_from_settings() -> None:
     assert AssemblyAITranscriptionClient.from_settings(settings).api_key == "assembly-key"
 
 
+def test_runtime_submit_returns_job_id_before_resume(monkeypatch) -> None:
+    fake_aai = FakeSplitAssemblyAI(
+        SimpleNamespace(
+            id="tx-split",
+            status="completed",
+            utterances=(SimpleNamespace(speaker="A", start=0, text="Ready."),),
+        )
+    )
+    monkeypatch.setattr(transcription, "_load_assemblyai", lambda: fake_aai)
+    client = AssemblyAITranscriptionClient(api_key="assembly-key")
+
+    assert client.submit(BytesIO(b"audio")) == "tx-split"
+    assert fake_aai.resumed_ids == []
+    assert client.resume("tx-split").assemblyai_id == "tx-split"
+    assert fake_aai.resumed_ids == ["tx-split"]
+
+
+def test_runtime_submit_does_not_retry_ambiguous_create_timeout(monkeypatch) -> None:
+    attempts = 0
+
+    class TimeoutTranscriber:
+        def submit(self, _audio, *, config):
+            nonlocal attempts
+            attempts += 1
+            assert config.speaker_labels is True
+            raise TimeoutError("job may already exist")
+
+    fake_aai = FakeSplitAssemblyAI(SimpleNamespace(id="unused"))
+    fake_aai.Transcriber = TimeoutTranscriber
+    monkeypatch.setattr(transcription, "_load_assemblyai", lambda: fake_aai)
+
+    with pytest.raises(TimeoutError, match="may already exist"):
+        AssemblyAITranscriptionClient(api_key="key").submit(BytesIO(b"audio"))
+
+    assert attempts == 1
+
+
 class FakeConfig:
     def __init__(self, *, speaker_labels: bool):
         self.speaker_labels = speaker_labels
@@ -101,10 +159,10 @@ class FakeTranscriber:
         self.response = response
         self.failures = list(failures)
         self.attempts = 0
-        self.audio_path: str | None = None
+        self.audio_path = None
         self.config = None
 
-    def transcribe(self, audio_path: str, *, config):
+    def transcribe(self, audio_path, *, config):
         self.attempts += 1
         self.audio_path = audio_path
         self.config = config
@@ -133,3 +191,30 @@ class FakeAssemblyAI:
     def Transcriber(self):
         self.last_transcriber = FakeTranscriber(self.response, self.failures)
         return self.last_transcriber
+
+
+class FakeSplitTranscriber:
+    def __init__(self, response):
+        self.response = response
+
+    def submit(self, _audio_path: str, *, config):
+        assert config.speaker_labels is True
+        return self.response
+
+
+class FakeSplitAssemblyAI(FakeAssemblyAI):
+    def __init__(self, response):
+        super().__init__(response)
+        self.resumed_ids: list[str] = []
+        owner = self
+
+        class Transcript:
+            @staticmethod
+            def get_by_id(job_id: str):
+                owner.resumed_ids.append(job_id)
+                return owner.response
+
+        self.Transcript = Transcript
+
+    def Transcriber(self):
+        return FakeSplitTranscriber(self.response)

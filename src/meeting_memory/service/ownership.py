@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import os
 import stat
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 from meeting_memory.service.frontmatter import split_frontmatter
+from meeting_memory.service.pinned_fs import open_directory_tree
 from meeting_memory.types.artifacts import ArtifactOwnership, MeetingArtifact
 from meeting_memory.types.capabilities import MeetingJobState
 from meeting_memory.types.meeting import MeetingRef
@@ -26,32 +28,61 @@ LEGACY_B2_STATUSES = {
 }
 
 
+@dataclass(frozen=True)
+class MeetingArtifactSnapshot:
+    artifact: MeetingArtifact
+    frontmatter: dict[str, object]
+    body: str
+
+
 def inspect_meeting_artifact(meeting_dir: Path) -> MeetingArtifact | None:
     """Read an artifact without normalizing or writing any local file."""
 
-    if meeting_dir.is_symlink() or not meeting_dir.is_dir():
-        return None
-    transcript_path = _metadata_path(meeting_dir)
-    if transcript_path is None:
-        return None
+    snapshot = inspect_meeting_snapshot(meeting_dir)
+    return snapshot.artifact if snapshot is not None else None
+
+
+def inspect_meeting_snapshot(meeting_dir: Path) -> MeetingArtifactSnapshot | None:
+    """Classify and read metadata/body once through one pinned meeting descriptor."""
+
+    directory_fd = root_fd = -1
     try:
-        frontmatter, _ = split_frontmatter(_read_regular_text(transcript_path))
+        candidate = Path(os.path.abspath(meeting_dir.expanduser()))
+        root = candidate.parent.resolve(strict=True)
+        root_fd = open_directory_tree(root)
+        directory_fd = os.open(
+            candidate.name,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+            dir_fd=root_fd,
+        )
+        filename, markdown = _read_metadata_at(directory_fd)
+        frontmatter, body = split_frontmatter(markdown)
+        audio_paths = _audio_paths_at(directory_fd, candidate)
     except (OSError, UnicodeError, ValueError):
         return None
+    finally:
+        if directory_fd >= 0:
+            os.close(directory_fd)
+        if root_fd >= 0:
+            os.close(root_fd)
 
-    ownership = classify_ownership(frontmatter, transcript_path.name)
+    ownership = classify_ownership(frontmatter, filename)
     if ownership is ArtifactOwnership.FOREIGN:
         return None
     slug = str(frontmatter.get("id") or meeting_dir.name)
     title = str(frontmatter.get("calendar_title") or "Untitled")
-    return MeetingArtifact(
-        meeting=MeetingRef(slug=slug, calendar_title=title, directory=meeting_dir),
-        ownership=ownership,
-        transcript_path=transcript_path,
-        audio_paths=legacy_audio_paths(meeting_dir),
-        transcription_status=map_transcription_status(frontmatter, ownership),
-        backup_status=map_backup_status(frontmatter, ownership),
-        speaker_status=map_speaker_status(frontmatter, ownership),
+    return MeetingArtifactSnapshot(
+        MeetingArtifact(
+            meeting=MeetingRef(slug=slug, calendar_title=title, directory=meeting_dir),
+            ownership=ownership,
+            transcript_path=meeting_dir / filename,
+            audio_paths=audio_paths,
+            transcription_status=map_transcription_status(frontmatter, ownership),
+            backup_status=map_backup_status(frontmatter, ownership),
+            speaker_status=map_speaker_status(frontmatter, ownership),
+        ),
+        frontmatter,
+        body,
     )
 
 
@@ -182,3 +213,41 @@ def _read_regular_text(path: Path) -> str:
         return b"".join(chunks).decode("utf-8")
     finally:
         os.close(descriptor)
+
+
+def _read_metadata_at(directory_fd: int) -> tuple[str, str]:
+    for filename in ("transcript.md", "meeting.md"):
+        try:
+            descriptor = os.open(
+                filename,
+                os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                dir_fd=directory_fd,
+            )
+        except FileNotFoundError:
+            continue
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise ValueError("meeting metadata is not a regular file")
+            chunks: list[bytes] = []
+            while chunk := os.read(descriptor, 1024 * 1024):
+                chunks.append(chunk)
+            return filename, b"".join(chunks).decode("utf-8")
+        finally:
+            os.close(descriptor)
+    raise FileNotFoundError("meeting metadata not found")
+
+
+def _audio_paths_at(directory_fd: int, meeting_dir: Path) -> tuple[Path, ...]:
+    names: list[str] = []
+    for name in os.listdir(directory_fd):
+        if name == "recording.m4a" or (name.startswith("recording") and name.endswith(".m4a")):
+            try:
+                info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+            except OSError:
+                continue
+            if stat.S_ISREG(info.st_mode):
+                names.append(name)
+    return tuple(
+        meeting_dir / name
+        for name in sorted(names, key=lambda value: (value != "recording.m4a", value))
+    )

@@ -18,26 +18,40 @@ without Terminal, cloud accounts, API keys, Google auth, or network access. The
 acceptance path is about 30 seconds of real audio that can be played and
 revealed in Finder within that window.
 
-Outcome through the inactive hardening slice: accepted the
+Outcome through the runtime activation slice: accepted the
 capability/readiness, durable-audio, privacy, legacy migration, and phased
 acceptance contract in `docs/local-first-contract.md`; added pure boundary
 types, atomic local commit/state primitives, locked transcript and speaker
 transactions, private indexed recovery, stable no-follow reads, and a verified
-cancellable B2 snapshot-upload seam. No runtime configuration, startup,
-recorder, pipeline, tray, or secret-storage behavior changed.
+cancellable B2 snapshot-upload seam. Runtime startup now composes optional
+adapters independently; capture uses indexed app staging; stopped and recovered
+recordings share the atomic schema-v2 commit path; typed events, v2 retry, safe
+Notes, and ownership-aware Recent/Search are active.
 
-Deferred by phase: the atomic activation of independent optional adapters,
-app-staged capture/commit, explicit recovery/retry orchestration, and typed tray
-events remains the next Phase 2 slice. Capability-aware setup/doctor remains
+Deferred by phase: capability-aware setup/doctor remains
 Phase 3; Keychain-backed progressive configuration and `.env` import remain
 Phase 4; clean-user computer validation remains Phase 5; signed/notarized
 standalone distribution remains Phase 6.
 
+Legacy migration is explicitly user-triggered from Debugging. A successful
+empty scan writes the durable once marker immediately. A nonempty result stays
+in memory and unmarked until every discovered entry is explicitly committed,
+so a crash before selection intentionally permits a safe rescan. Normal launch
+does not scan the legacy temp root. The real WAV-to-M4A validator test may
+report the host encoder as unavailable inside a restricted sandbox. On the
+same macOS host outside that sandbox, the original AVFoundation exporter and
+strong validator complete successfully. The validator checks M4A type, AAC,
+16 kHz mono, positive packets/duration, and a full packet read; do not weaken it
+to accommodate a sandbox limitation.
+
 First thing to check: read `docs/local-first-contract.md`, then inspect the
-inactive transaction, recovery, and snapshot-upload tests before changing the
-legacy runtime. Activate the seams together; do not layer background scans or
-provider calls onto startup, and do not retain obsolete global-settings
-expectations once the cutover replaces them.
+runtime commit, job, recovery, and snapshot tests. Do not add background scans
+or provider calls to startup.
+
+Runtime configuration canonicalizes the trusted `MEETINGS_DIR` root once, so a
+configured root symlink works while meeting children and artifacts remain
+no-follow. Invalid Calendar or Notes-only values disable only that capability;
+they do not route Recording Core to setup.
 
 ## 2026-06-18 Current Reliability and Product Notes
 

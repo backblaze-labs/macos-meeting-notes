@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from meeting_memory.types.meeting import MeetingMeta, MeetingRef
+from meeting_memory.types.recovery import RecoveryIndexEntry
 
 
 @dataclass(frozen=True)
@@ -27,12 +28,14 @@ class NotifyEvent:
     action: str | None = None
     meeting_directory: Path | None = None
     show_notification: bool = True
+    rebuild_menu: bool = False
 
 
 @dataclass(frozen=True)
 class RecordingTitleNeeded:
     audio_path: Path
     meta: MeetingMeta
+    recovery: RecoveryIndexEntry | None = None
 
 
 @dataclass(frozen=True)
@@ -45,6 +48,20 @@ class RecordingStateChanged:
 @dataclass(frozen=True)
 class RecordingCommitted:
     """A complete local meeting directory was atomically published."""
+
+    meeting: MeetingRef
+
+
+@dataclass(frozen=True)
+class RecordingPublicationUncertain:
+    """A meeting is visible, but parent-directory durability is not confirmed."""
+
+    meeting: MeetingRef
+
+
+@dataclass(frozen=True)
+class RecordingCleanupPending:
+    """A durable meeting is visible, but its recovery source still needs cleanup."""
 
     meeting: MeetingRef
 

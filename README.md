@@ -24,20 +24,12 @@ The app is local-first: each completed recording creates a directory under
 B2 is the durable backup layer. The local files remain the user's readable
 meeting archive.
 
-The accepted local-first contract makes **Recording Core** usable without a
+The local-first runtime makes **Recording Core** usable without a
 Terminal, account, key, or network, with Transcription, Backup, Calendar, and
 Notes enabled progressively. See
-[the capability contract](docs/local-first-contract.md). The runtime transition
-is being delivered in phases: the current checkout still uses the legacy
-`.env` setup below and requires AssemblyAI, B2, and Google configuration to
-launch the full tray. Those requirements are characterized so the next phase
-can remove them without silently breaking existing setups.
-
-The repository now also contains inactive, tested hardening primitives for
-locked schema-v2 transcript/speaker updates, private indexed recovery, and
-verified cancellable B2 snapshots. They deliberately do not change current app
-startup or recording behavior; the runtime cutover remains a separate atomic
-phase.
+[the capability contract](docs/local-first-contract.md). Complete legacy
+`.env` groups opt in to AssemblyAI, B2, Calendar, or Notes independently; a
+missing or broken optional integration does not prevent local recording.
 
 The first-value acceptance test is concrete: record about 30 seconds of real
 audio, stop, play the saved result, and reveal its meeting directory in Finder
@@ -48,9 +40,9 @@ within five minutes of first launch.
 - macOS 15 Sequoia or later
 - Python 3.11 or later
 - Xcode Command Line Tools (`xcode-select --install`)
-- Google Calendar OAuth desktop credentials
-- AssemblyAI API key
-- Dedicated Backblaze B2 bucket and S3-compatible application key
+- Optional Google Calendar OAuth desktop credentials
+- Optional AssemblyAI API key
+- Optional dedicated Backblaze B2 bucket and S3-compatible application key
 - Optional Anthropic API key for summaries
 
 ## Quick Start
@@ -63,20 +55,16 @@ make setup
 ```
 
 `make setup` creates `.venv`, installs dependencies, creates `.env` if needed,
-installs the local app wrapper, and prints a setup checklist. Fill in `.env`,
-then run:
+installs the local app wrapper, and prints a setup checklist. You can open the
+core app immediately:
 
 ```bash
-.venv/bin/meeting-memory auth
-make doctor
 make PYTHON=.venv/bin/python open-macos-app
 ```
 
-`make doctor` checks local setup. It is expected to report failures until
-`.env`, B2 credentials, AssemblyAI, Google credentials/auth, and the native
-audio helper are ready. B2 backup is required before Meeting Memory is ready to
-record **in the current legacy runtime**. The target doctor will gate recording
-only on Recording Core and report optional integrations independently.
+`make doctor` remains the explicit detailed setup diagnostic. Missing optional
+integration reports do not make B2, AssemblyAI, Calendar, or Notes prerequisites
+for local recording.
 
 The clickable app is installed at `~/Applications/Meeting Memory.app` so it can
 be launched from Finder or found with Cmd+Space by searching for
@@ -104,8 +92,9 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
 
 Meeting Memory runs as a menu-bar app. Use `Start Recording` for ad-hoc calls,
 or click `Record` from a pre-meeting notification when the calendar watcher
-detects an upcoming Meet or Zoom event. If no nearby calendar event is found,
-the app asks for a title before starting.
+detects an upcoming Meet or Zoom event. Manual start uses only watcher-cached
+Calendar context; without one, the app records under a provisional title and
+asks for the final title after stop.
 
 Choose the audio mode for the next recording from the tray:
 
@@ -127,7 +116,10 @@ so you can review speaker aliases.
 If the app crashes during recording, restart it and check the tray for
 **Debugging › Interrupted Recordings**. Failed B2 uploads can be retried with
 **Debugging › Retry Pending B2 Backups**, and failed transcription states can
-be retried with **Debugging › Retry Failed Transcriptions**.
+be retried with **Debugging › Retry Failed Transcriptions**. Old recordings
+left in the former macOS temp location are scanned only when you choose
+**Debugging › Find Legacy Recordings...**; the scan itself never starts cloud
+work.
 
 By default, the calendar watcher scans all non-deleted calendars accessible to
 the authenticated Google account. Set `GOOGLE_CALENDAR_ID=primary` or a
@@ -148,29 +140,41 @@ specific calendar ID to narrow the watcher.
 
 The app reads configuration from environment variables or `.env`.
 
-Required:
+Recording Core (all have defaults):
+
+- `MEETINGS_DIR`
+- `MAX_RECORDING_MINUTES`
+
+Optional Transcription:
+
+- `ASSEMBLYAI_API_KEY`
+
+Optional Backup (the complete group enables it):
 
 - `B2_APPLICATION_KEY_ID`
 - `B2_APPLICATION_KEY`
 - `B2_ENDPOINT`
 - `B2_REGION`
 - `B2_BUCKET_NAME`
-- `ASSEMBLYAI_API_KEY`
-- `GOOGLE_CALENDAR_CREDENTIALS_FILE`
 
 Use a bucket dedicated to Meeting Memory and an application key that can read
 and write only that bucket. Do not reuse sample-app buckets.
 
-Optional:
+Optional Calendar:
+
+- `GOOGLE_CALENDAR_CREDENTIALS_FILE`
+- `GOOGLE_CALENDAR_ID`
+
+Optional Notes:
 
 - `ANTHROPIC_API_KEY`
 - `ANTHROPIC_MODEL`
 - `SUMMARY_PROMPT_FILE`
-- `GOOGLE_CALENDAR_ID`
+
+Other optional local settings:
+
 - `KNOWN_SPEAKERS`
-- `MEETINGS_DIR`
 - `NOTIFY_MINUTES_BEFORE`
-- `MAX_RECORDING_MINUTES`
 - `CALENDAR_POLL_INTERVAL`
 
 See [.env.example](.env.example).

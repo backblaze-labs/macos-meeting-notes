@@ -1,4 +1,4 @@
-"""Tests for the inactive atomic local-first meeting store."""
+"""Tests for the atomic local-first meeting store."""
 
 from __future__ import annotations
 
@@ -118,7 +118,7 @@ def test_commit_collision_suffix_is_race_safe(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("failure", ["materialize", "stub", "file_fsync", "rename"])
-def test_pre_publish_failures_leave_no_final_and_keep_recoverable_staging(
+def test_pre_publish_failures_leave_no_final_or_internal_audio_copy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
 ) -> None:
     meetings = tmp_path / "meetings"
@@ -135,8 +135,8 @@ def test_pre_publish_failures_leave_no_final_and_keep_recoverable_staging(
         )
     if failure == "file_fsync":
         monkeypatch.setattr(
-            "meeting_memory.service.meeting_store.fsync_file",
-            lambda _path: (_ for _ in ()).throw(OSError("fsync failed")),
+            "meeting_memory.service.stage_integrity.PinnedMeetingStage.fsync_audio",
+            lambda _stage: (_ for _ in ()).throw(OSError("fsync failed")),
         )
 
     def publish(source: Path, destination: Path) -> None:
@@ -153,7 +153,7 @@ def test_pre_publish_failures_leave_no_final_and_keep_recoverable_staging(
 
     assert not (meetings / _meta().slug).exists()
     stages = list((meetings / ".meeting-memory-staging").iterdir())
-    assert len(stages) == 1
+    assert stages == []
     assert _audio(tmp_path).read_bytes() == b"m4a-audio"
 
 

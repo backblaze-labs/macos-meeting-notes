@@ -1,13 +1,7 @@
-"""Legacy coupling that Phase 2 intentionally replaces.
-
-These passing characterization tests are removal guides, not endorsements of
-the current behavior. Delete or rewrite each test when runtime capabilities are
-made independent according to ``docs/local-first-contract.md``.
-"""
+"""Guards for explicitly retained legacy APIs and the runtime cutover."""
 
 from __future__ import annotations
 
-import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -42,10 +36,14 @@ def test_legacy_global_settings_require_transcription_and_backup_credentials(
     }
 
 
-def test_legacy_recorder_defaults_to_the_shared_system_temp_directory() -> None:
-    """Characterize staging placement before Phase 2 makes it app-owned."""
+def test_runtime_recorder_defaults_to_private_app_owned_staging() -> None:
+    """New captures never use the shared legacy system-temp location."""
 
-    assert RecorderService().temp_dir == Path(tempfile.gettempdir())
+    recorder = RecorderService()
+
+    assert recorder.temp_dir == (
+        recorder.temp_dir.parent.parent / ".meeting-memory-staging" / "recordings"
+    )
 
 
 def test_legacy_pipeline_turns_missing_remote_transcription_into_failure_markdown(

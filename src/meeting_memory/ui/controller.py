@@ -11,24 +11,16 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from meeting_memory.config.runtime import RuntimeSettings
 from meeting_memory.config.settings import Settings
+from meeting_memory.service.local_commit import LocalRecordingCommitter
 from meeting_memory.service.pipeline import Pipeline
-from meeting_memory.service.processing_retry import retry_failed_processing
 from meeting_memory.service.processing_state import list_pending_processing_tasks
 from meeting_memory.service.recorder import RecorderService, RecordingResult
 from meeting_memory.service.recording_context import context_from_meetings
-from meeting_memory.service.recovery import (
-    RecoveredRecording,
-    clear_audio_recovery_marker,
-    convert_recovered_recording,
-    find_recovered_recordings,
-)
+from meeting_memory.service.runtime_legacy_recovery import LegacyRecoveryRuntime
 from meeting_memory.service.storage import list_recent_meetings
-from meeting_memory.service.transcript_review import (
-    confirm_speaker_aliases,
-    generate_notes_from_transcript,
-    load_speaker_review,
-)
+from meeting_memory.service.transcript_review import confirm_speaker_aliases, load_speaker_review
 from meeting_memory.types.events import MeetingDetected, NotifyEvent, RecordingTitleNeeded
 from meeting_memory.types.meeting import (
     CalendarMeeting,
@@ -37,30 +29,33 @@ from meeting_memory.types.meeting import (
     RecordingContext,
 )
 from meeting_memory.types.processing import ProcessingTask
+from meeting_memory.types.recovery import RecoveryIndexEntry, RecoveryOrigin
 from meeting_memory.types.transcript import SpeakerReviewState
+from meeting_memory.ui.legacy_processing import launch_legacy_processing
 from meeting_memory.ui.macos import open_in_finder
-from meeting_memory.ui.processing_launch import launch_processing
 from meeting_memory.ui.recording_transitions import RecordingTransitions
+from meeting_memory.ui.recovery_actions import is_active_recovery, list_recoveries
 
 EventQueue = queue.Queue[object]
 ThreadFactory = Callable[..., threading.Thread]
-RecordingContextProvider = Callable[[], RecordingContext | None]
 LOGGER = logging.getLogger(__name__)
-
 
 @dataclass
 class TrayController:
-    settings: Settings
+    settings: Settings | RuntimeSettings
     recorder: RecorderService
-    pipeline: Pipeline
+    pipeline: Pipeline | None = None
+    committer: LocalRecordingCommitter | None = None
     event_queue: EventQueue = field(default_factory=queue.Queue)
     opener: Callable[[Path], None] = field(default_factory=lambda: open_in_finder)
     sync_runner: Callable[[], object] | None = None
     processing_retry_runner: Callable[[], object] | None = None
+    notes_generator: Callable[[Path], Path] | None = None
+    legacy_recovery: LegacyRecoveryRuntime | None = None
     thread_factory: ThreadFactory = threading.Thread
     timer_thread_factory: ThreadFactory = threading.Thread
     now: Callable[[], datetime] = field(default_factory=lambda: lambda: datetime.now().astimezone())
-    recording_context_provider: RecordingContextProvider | None = None
+    recording_context_provider: Callable[[], RecordingContext | None] | None = None
     sleeper: Callable[[float], None] = time.sleep
     _known_meetings: dict[str, CalendarMeeting] = field(default_factory=dict, init=False)
     _recording_token: object | None = field(default=None, init=False)
@@ -101,29 +96,59 @@ class TrayController:
     def _recording_stopped(self, result: RecordingResult) -> None:
         self._recording_token = None
         if result.meta.needs_title_prompt:
-            self.event_queue.put(RecordingTitleNeeded(result.audio_path, result.meta))
+            self.event_queue.put(
+                RecordingTitleNeeded(result.audio_path, result.meta, result.recovery)
+            )
             return
-        self.process_recording(result.audio_path, result.meta)
+        self.process_recording(result.audio_path, result.meta, recovery=result.recovery)
 
-    def process_recording(self, audio_path: Path, meta: MeetingMeta) -> None:
-        launch_processing(
-            thread_factory=self.thread_factory,
-            event_sink=self.event_queue.put,
-            callback=self.run_pipeline,
-            audio_path=audio_path,
-            meta=meta,
+    def process_recording(
+        self,
+        audio_path: Path,
+        meta: MeetingMeta,
+        *,
+        recovery: RecoveryIndexEntry | None = None,
+    ) -> None:
+        if self.committer is not None and recovery is not None:
+            try:
+                self.thread_factory(
+                    target=self.run_local_commit, args=(recovery, meta), daemon=True
+                ).start()
+            except Exception as exc:
+                LOGGER.exception("Could not launch local commit worker")
+                self.event_queue.put(
+                    NotifyEvent("Recording could not finish", _format_exception(exc))
+                )
+            return
+        if self.pipeline is None:
+            self.event_queue.put(
+                NotifyEvent("Recording could not finish", "Local commit is unavailable")
+            )
+            return
+        launch_legacy_processing(
+            self.pipeline,
+            self.thread_factory,
+            self.event_queue.put,
+            audio_path,
+            meta,
         )
 
-    def run_pipeline(self, audio_path: Path, meta: MeetingMeta) -> bool:
+    def run_local_commit(self, recovery: RecoveryIndexEntry, meta: MeetingMeta) -> bool:
         try:
-            self.pipeline.run(audio_path, meta)
-        except Exception as exc:
-            LOGGER.exception("Meeting processing failed")
+            if self.committer is None:
+                return False
+            if is_active_recovery(self.recorder, recovery):
+                return False
+            return self.committer.commit(recovery, meta) is not None
+        except Exception:
+            LOGGER.exception("Local meeting commit failed")
             self.event_queue.put(
-                NotifyEvent(title="Meeting processing failed", body=_format_exception(exc))
+                NotifyEvent(
+                    title="Recording could not finish",
+                    body="Audio remains available for recovery.",
+                )
             )
             return False
-        return True
 
     def sync_to_b2(self) -> None:
         if self.sync_runner is None:
@@ -131,10 +156,8 @@ class TrayController:
         self.thread_factory(target=self.sync_runner, daemon=True).start()
 
     def retry_failed_processing(self) -> None:
-        runner = self.processing_retry_runner or (
-            lambda: retry_failed_processing(self.settings.meetings_dir_path, self.pipeline)
-        )
-        self.thread_factory(target=runner, daemon=True).start()
+        if self.processing_retry_runner is not None:
+            self.thread_factory(target=self.processing_retry_runner, daemon=True).start()
 
     def recent_meetings(self) -> list[RecentMeeting]:
         return list_recent_meetings(self.settings.meetings_dir_path)
@@ -151,18 +174,22 @@ class TrayController:
     def generate_notes(self, path: Path) -> None:
         self.thread_factory(target=self._generate_notes, args=(path,), daemon=True).start()
 
-    def recovered_recordings(self) -> list[RecoveredRecording]:
-        temp_dir = getattr(self.recorder, "temp_dir", None)
-        if temp_dir is None:
-            return []
-        return find_recovered_recordings(temp_dir)
+    def recovered_recordings(self) -> list[RecoveryIndexEntry]:
+        return list_recoveries(self.recorder, self.legacy_recovery)
 
-    def process_recovered_recording(self, recording: RecoveredRecording) -> None:
+    def process_recovered_recording(self, recording: RecoveryIndexEntry) -> None:
+        if is_active_recovery(self.recorder, recording):
+            return
+        if recording.origin is RecoveryOrigin.LEGACY_TEMP and self.legacy_recovery is not None:
+            self.legacy_recovery.start_commit(recording)
+            return
         self.thread_factory(
-            target=self._process_recovered_recording,
-            args=(recording,),
-            daemon=True,
+            target=self.run_local_commit, args=(recording, recording.meta), daemon=True
         ).start()
+
+    def scan_legacy_recoveries(self) -> None:
+        if self.legacy_recovery is not None:
+            self.legacy_recovery.start_scan()
 
     def remember_meeting(self, event: MeetingDetected) -> None:
         self._known_meetings[event.event_id] = CalendarMeeting(
@@ -213,9 +240,7 @@ class TrayController:
         if ends_at is None or ends_at <= self.now():
             return
         self.thread_factory(
-            target=self._send_stop_reminder,
-            args=(calendar_title, ends_at, token),
-            daemon=True,
+            target=self._send_stop_reminder, args=(calendar_title, ends_at, token), daemon=True
         ).start()
 
     def _send_stop_reminder(self, calendar_title: str, ends_at: datetime, token: object) -> None:
@@ -232,9 +257,7 @@ class TrayController:
 
     def _schedule_auto_stop(self, calendar_title: str, token: object) -> None:
         self.timer_thread_factory(
-            target=self._auto_stop_recording,
-            args=(calendar_title, token),
-            daemon=True,
+            target=self._auto_stop_recording, args=(calendar_title, token), daemon=True
         ).start()
 
     def _auto_stop_recording(self, calendar_title: str, token: object) -> None:
@@ -248,39 +271,18 @@ class TrayController:
             )
             self.stop_recording()
 
-    def _process_recovered_recording(self, recording: RecoveredRecording) -> None:
-        try:
-            audio_path = convert_recovered_recording(recording)
-        except Exception as exc:
-            LOGGER.exception("Recovered recording could not be converted")
-            self.event_queue.put(
-                NotifyEvent(
-                    title="Recovered recording failed",
-                    body=_format_exception(exc),
-                )
-            )
-            return
-
-        self.event_queue.put(
-            NotifyEvent(
-                title="Recovered recording queued",
-                body=f"{recording.meta.calendar_title} · transcribing now",
-            )
-        )
-        if self.run_pipeline(audio_path, recording.meta):
-            clear_audio_recovery_marker(audio_path)
-
     def _generate_notes(self, path: Path) -> None:
-        summarizer = self.pipeline.summarizer_client
-        if summarizer is None:
+        if self.notes_generator is None:
             event = NotifyEvent("Notes generation failed", "Summarizer not configured")
             self.event_queue.put(event)
             return
         try:
-            notes_path = generate_notes_from_transcript(path, summarizer)
-        except Exception as exc:
+            notes_path = self.notes_generator(path)
+        except Exception:
             LOGGER.exception("Notes generation failed")
-            self.event_queue.put(NotifyEvent("Notes generation failed", _format_exception(exc)))
+            self.event_queue.put(
+                NotifyEvent("Notes generation failed", "Transcript remains saved locally")
+            )
             return
         self.event_queue.put(
             NotifyEvent(

@@ -1,4 +1,4 @@
-"""Configured-root behavior for inactive Backup snapshot capture."""
+"""Configured-root behavior for Backup snapshot capture."""
 
 from pathlib import Path
 

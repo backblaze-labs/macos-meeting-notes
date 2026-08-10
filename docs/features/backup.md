@@ -21,9 +21,9 @@ Backup is opt-in and never gates Recording Core; see
 - `meetings/<slug>/recording.m4a`
 - `meetings/<slug>/transcript.md`
 - Updated `b2_*` frontmatter fields
-- Legacy `b2_status: ok` or `b2_status: upload_failed`
+- Schema-v2 `backup_status`, exact object keys, and uploaded revision
 
-The accepted schema-v2 target uploads exactly `recording.m4a` and
+The schema-v2 runtime uploads exactly `recording.m4a` and
 `transcript.md`. `notes.md` remains local unless a future, separately disclosed
 opt-in expands Backup. `backup_status` replaces `b2_status`; the latter remains
 listed here only for legacy runtime compatibility.
@@ -56,10 +56,8 @@ B2 upload runs after the local files and completion event are written. The tray
   directories and recordings split across `recording-part-*.m4a` files.
 - Failed transcription is retried through `Retry Failed Transcriptions`, not
   `Retry Pending B2 Backups`.
-- Missing B2 configuration is `unconfigured`, not an application failure, in
-  the accepted target. The current fail-fast settings behavior remains only
-  until the runtime transition.
-- An inactive snapshot-upload seam now verifies the captured directory
+- Missing B2 configuration is unconfigured and never gates recording.
+- The snapshot-upload seam verifies the captured directory
   identity, owned schema-v2 transcript slug, regular files, and canonical
   revision before constructing a B2 client. Capture accepts one owned meeting
   directory—not independent audio/transcript paths—and the upload request
@@ -76,8 +74,19 @@ B2 upload runs after the local files and completion event are written. The tray
   remains responsible for durable `pending` state. Default snapshot staging is
   rooted under the canonical pinned `MEETINGS_DIR`, so a configured root
   symlink remains compatible; an explicitly supplied snapshot root is still
-  opened component by component without following symlinks. The legacy
-  pipeline still uses its existing whole-meeting upload path.
+  opened component by component without following symlinks.
+- Runtime binds the meeting directory device/inode sealed by local publication,
+  or by an explicit retry scan, before starting a Backup thread. Claim,
+  snapshot capture, pending/failure transitions, revision
+  completion, and explicit retry all require that identity; an owned same-slug
+  clone swapped onto the path causes zero provider calls and zero clone writes.
+- If local content changes while a COMPLETE upload is being reconciled, the
+  durable state returns to pending. After releasing the old cancellation token,
+  the runtime captures and uploads one fresh snapshot when Backup is still
+  enabled; a second revision race remains pending for explicit retry.
+- Legacy retry compatibility also uploads private read-only snapshots. Its slug
+  and metadata bytes come from one captured file, and a failed upload preserves
+  previously recorded remote object keys while changing only the legacy status.
 
 ## Related Files
 
@@ -86,8 +95,11 @@ B2 upload runs after the local files and completion event are written. The tray
 - `src/meeting_memory/types/backup.py`
 - `src/meeting_memory/service/backup_revision.py`
 - `src/meeting_memory/service/backup_snapshot_fs.py`
+- `src/meeting_memory/service/runtime_jobs.py`
+- `src/meeting_memory/service/runtime_retry.py`
 - `src/meeting_memory/service/pipeline.py`
 - `src/meeting_memory/service/sync.py`
+- `src/meeting_memory/service/legacy_snapshot.py`
 - `src/meeting_memory/service/storage.py`
 
 ## Tests
@@ -97,5 +109,6 @@ B2 upload runs after the local files and completion event are written. The tray
 - `tests/test_b2_snapshot_immutability.py`
 - `tests/test_backup_revision.py`
 - `tests/test_backup_snapshot_root.py`
+- `tests/test_runtime_job_identity.py`
 - `tests/test_sync.py`
 - `tests/test_pipeline.py`

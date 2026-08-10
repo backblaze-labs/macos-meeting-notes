@@ -3,23 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import Protocol
+from typing import BinaryIO, Protocol
 
-from meeting_memory.service.storage import (
-    MEETING_MARKDOWN,
-    NOTES_MARKDOWN,
-    RECORDING_AUDIO,
-    is_ours,
-    read_frontmatter,
+from meeting_memory.service.legacy_snapshot import (
+    capture_legacy_snapshot,
+    replace_legacy_metadata,
 )
-from meeting_memory.types.meeting import MeetingFiles, MeetingMeta
+from meeting_memory.service.markdown import render_transcript_markdown
+from meeting_memory.types.transcript import TranscriptResult
 
 
 class MeetingProcessor(Protocol):
-    def process_files(self, files: MeetingFiles):
-        """Re-run processing for an existing meeting directory."""
+    def transcribe(self, audio: BinaryIO) -> TranscriptResult:
+        """Transcribe one private legacy audio snapshot."""
 
 
 @dataclass(frozen=True)
@@ -38,19 +35,42 @@ def retry_failed_processing(
 
     attempted = completed = failed = 0
     for meeting_dir in sorted(path for path in meetings_dir.iterdir() if path.is_dir()):
-        if not is_ours(meeting_dir):
-            continue
-        frontmatter = read_frontmatter(meeting_dir / MEETING_MARKDOWN)
-        if not should_retry_processing(frontmatter):
-            continue
-
-        attempted += 1
         try:
-            processor.process_files(_files_from_frontmatter(meeting_dir, frontmatter))
+            manager = capture_legacy_snapshot(meeting_dir)
+            snapshot = manager.__enter__()
+        except (OSError, TypeError, UnicodeError, ValueError):
+            continue
+        try:
+            if not should_retry_processing(snapshot.frontmatter):
+                continue
+            attempted += 1
+            try:
+                transcript = processor.transcribe(snapshot.audio[0].stream)
+            except Exception as exc:
+                transcript = TranscriptResult(
+                    "transcription-failed",
+                    (),
+                    error=str(exc),
+                )
+            replace_legacy_metadata(
+                snapshot,
+                render_transcript_markdown(
+                    snapshot.meta,
+                    transcript,
+                    speaker_candidates=snapshot.meta.speaker_candidates,
+                    b2_audio=_optional_text(snapshot.frontmatter.get("b2_audio")),
+                    b2_transcript=_optional_text(
+                        snapshot.frontmatter.get("b2_transcript")
+                    ),
+                    b2_status=str(snapshot.frontmatter.get("b2_status") or "pending"),
+                ),
+            )
         except Exception:
             failed += 1
-            continue
-        completed += 1
+        else:
+            completed += 1
+        finally:
+            manager.__exit__(None, None, None)
     return ProcessingRetryResult(attempted=attempted, completed=completed, failed=failed)
 
 
@@ -58,17 +78,6 @@ def should_retry_processing(frontmatter: dict[str, object]) -> bool:
     return frontmatter.get("assemblyai_id") == "transcription-failed"
 
 
-def _files_from_frontmatter(meeting_dir: Path, frontmatter: dict[str, object]) -> MeetingFiles:
-    meta = MeetingMeta(
-        slug=str(frontmatter["id"]),
-        started_at=datetime.fromisoformat(str(frontmatter["date"])),
-        calendar_title=str(frontmatter["calendar_title"]),
-        duration_minutes=int(frontmatter["duration_minutes"]),
-    )
-    return MeetingFiles(
-        meta=meta,
-        directory=meeting_dir,
-        audio_path=meeting_dir / RECORDING_AUDIO,
-        markdown_path=meeting_dir / MEETING_MARKDOWN,
-        notes_path=meeting_dir / NOTES_MARKDOWN,
-    )
+def _optional_text(value: object) -> str | None:
+    text = value.strip() if isinstance(value, str) else ""
+    return text or None

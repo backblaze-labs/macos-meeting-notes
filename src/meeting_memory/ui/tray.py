@@ -7,7 +7,11 @@ from datetime import datetime
 from pathlib import Path
 
 from meeting_memory.doctor import CheckResult, run_checks
-from meeting_memory.types.events import MeetingDetected, NotifyEvent, RecordingTitleNeeded
+from meeting_memory.types.events import (
+    MeetingDetected,
+    NotifyEvent,
+    RecordingTitleNeeded,
+)
 from meeting_memory.ui import load_rumps, menu
 from meeting_memory.ui.audio_modes import AudioModeMenu
 from meeting_memory.ui.controller import TrayController
@@ -27,6 +31,7 @@ from meeting_memory.ui.notifications import (
 )
 from meeting_memory.ui.preferences import open_known_speakers_window, open_preferences_window
 from meeting_memory.ui.recording_health import RecordingHealthMonitor
+from meeting_memory.ui.runtime_events import runtime_notification
 from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
 from meeting_memory.ui.submenus import (
     ConfigurationActions,
@@ -126,6 +131,7 @@ class RumpsTrayApp:
                 review_speakers=self.open_speaker_review,
                 generate_notes=self.controller.generate_notes,
                 process_recovered_recording=self.controller.process_recovered_recording,
+                scan_legacy_recoveries=self.controller.scan_legacy_recoveries,
                 sync_to_b2=self.controller.sync_to_b2,
                 retry_failed_processing=self.controller.retry_failed_processing,
                 run_diagnostics=self.run_diagnostics,
@@ -213,10 +219,15 @@ class RumpsTrayApp:
         self.recording_label = label
 
     def handle_event(self, event: object) -> None:
+        runtime_event = runtime_notification(event)
+        if runtime_event is not None:
+            self.notify_event(runtime_event)
+            self.rebuild_menu()
+            return
         if isinstance(event, NotifyEvent):
             if event.show_notification:
                 self.notify_event(event)
-            if event.meeting_directory is not None:
+            if event.meeting_directory is not None or event.rebuild_menu:
                 self.rebuild_menu()
         elif isinstance(event, RecordingTitleNeeded):
             self.prompt_for_recording_title(event)
@@ -227,7 +238,7 @@ class RumpsTrayApp:
     def prompt_for_recording_title(self, event: RecordingTitleNeeded) -> None:
         title = ask_recording_title(self.rumps, default_title=event.meta.calendar_title)
         meta = event.meta.with_title(title) if title is not None else event.meta
-        self.controller.process_recording(event.audio_path, meta)
+        self.controller.process_recording(event.audio_path, meta, recovery=event.recovery)
 
     def notify_event(self, event: NotifyEvent) -> None:
         self._send_notification(event.title, "", event.body, **notify_event_kwargs(event))

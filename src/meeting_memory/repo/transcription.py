@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import BinaryIO
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.repo.retry import DEFAULT_RETRY_DELAYS, RetryPolicy, is_likely_transient_error
@@ -28,27 +29,70 @@ class AssemblyAITranscriptionClient:
     def from_settings(cls, settings: Settings) -> AssemblyAITranscriptionClient:
         return cls(api_key=settings.assemblyai_api_key)
 
-    def transcribe(self, audio_path: Path) -> TranscriptResult:
+    def transcribe(self, audio_path: Path | BinaryIO) -> TranscriptResult:
+        """Run the legacy synchronous API; runtime uses submit then resume."""
+
         aai = _load_assemblyai()
+        self._configure(aai)
+        config = aai.TranscriptionConfig(speaker_labels=True)
+        transcriber = aai.Transcriber()
+        def transcribe_once():
+            if hasattr(audio_path, "read"):
+                audio_path.seek(0)  # type: ignore[union-attr]
+                return transcriber.transcribe(audio_path, config=config)
+            return transcriber.transcribe(str(audio_path), config=config)
+
+        transcript = self._retry_policy().call(
+            transcribe_once,
+            is_retryable=is_likely_transient_error,
+            timeout_message="AssemblyAI transcription timed out before retry",
+        )
+        return transcript_result_from_response(transcript)
+
+    def submit(self, audio: BinaryIO) -> str:
+        """Create one provider job and return its ID before polling."""
+
+        aai = _load_assemblyai()
+        self._configure(aai)
+        config = aai.TranscriptionConfig(speaker_labels=True)
+        transcriber = aai.Transcriber()
+        audio.seek(0)
+        transcript = transcriber.submit(audio, config=config)
+        job_id = str(getattr(transcript, "id", "") or "").strip()
+        if not job_id:
+            raise RuntimeError("AssemblyAI submission returned no job ID")
+        return job_id
+
+    def resume(self, job_id: str) -> TranscriptResult:
+        """Wait for the exact previously persisted provider job."""
+
+        identifier = job_id.strip()
+        if not identifier:
+            raise ValueError("AssemblyAI job ID must not be blank")
+        aai = _load_assemblyai()
+        self._configure(aai)
+        transcript = self._retry_policy().call(
+            lambda: aai.Transcript.get_by_id(identifier),
+            is_retryable=is_likely_transient_error,
+            timeout_message="AssemblyAI transcription timed out before retry",
+        )
+        return transcript_result_from_response(transcript)
+
+    def _retry_policy(self) -> RetryPolicy:
+        return RetryPolicy(
+            delays=self.retry_delays,
+            sleeper=self.sleeper,
+            clock=self.clock,
+            timeout_seconds=float(self.timeout_seconds),
+        )
+
+    def _configure(self, aai) -> None:
         _configure_assemblyai_settings(
             aai.settings,
             api_key=self.api_key,
             poll_interval_seconds=self.poll_interval_seconds,
             timeout_seconds=self.timeout_seconds,
         )
-        config = aai.TranscriptionConfig(speaker_labels=True)
-        transcriber = aai.Transcriber()
-        transcript = RetryPolicy(
-            delays=self.retry_delays,
-            sleeper=self.sleeper,
-            clock=self.clock,
-            timeout_seconds=float(self.timeout_seconds),
-        ).call(
-            lambda: transcriber.transcribe(str(audio_path), config=config),
-            is_retryable=is_likely_transient_error,
-            timeout_message="AssemblyAI transcription timed out before retry",
-        )
-        return transcript_result_from_response(transcript)
 
 
 def transcript_result_from_response(response) -> TranscriptResult:

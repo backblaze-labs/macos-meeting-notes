@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import queue
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -123,7 +122,9 @@ def run_setup() -> int:
         for result in failures:
             if result.fix:
                 sys.stdout.write(f"- {result.name}: {result.fix}\n")
-        sys.stdout.write("\nB2 remains required before Meeting Memory is ready to record.\n")
+        sys.stdout.write(
+            "\nRecording Core can still run; listed optional capabilities remain unavailable.\n"
+        )
         return 0
 
     sys.stdout.write("\nSetup checks passed. Open Meeting Memory from Spotlight or Finder.\n")
@@ -177,10 +178,10 @@ def uninstall_launch_agent() -> int:
 
 
 def run_search(query: str, *, limit: int) -> int:
-    from meeting_memory.config.settings import validate_or_exit
+    from meeting_memory.config.runtime import load_runtime_settings
     from meeting_memory.service.search import search_meetings
 
-    settings = validate_or_exit()
+    settings = load_runtime_settings()
     results = search_meetings(settings.meetings_dir_path, query, limit=limit)
     if not results:
         sys.stdout.write("No matching meetings found.\n")
@@ -204,76 +205,35 @@ def run_relabel(path: Path) -> int:
 
 
 def run_summarize(path: Path) -> int:
-    from meeting_memory.config.settings import validate_or_exit
+    from meeting_memory.config.runtime import load_runtime_settings
     from meeting_memory.repo.summarizer import ClaudeSummarizer
-    from meeting_memory.service.transcript_review import generate_notes_from_transcript
+    from meeting_memory.service.runtime_notes import generate_owned_notes
 
-    settings = validate_or_exit()
-    notes_path = generate_notes_from_transcript(path, ClaudeSummarizer.from_settings(settings))
+    settings = load_runtime_settings()
+    config = settings.notes
+    if config is None:
+        sys.stderr.write("Notes is not configured. Set ANTHROPIC_API_KEY first.\n")
+        return 2
+    meeting_dir = path.expanduser()
+    if not meeting_dir.is_dir():
+        meeting_dir = meeting_dir.parent
+    notes_path = generate_owned_notes(
+        settings.meetings_dir_path,
+        meeting_dir,
+        ClaudeSummarizer(
+            api_key=config.api_key,
+            model=config.model,
+            prompt_file=config.prompt_file,
+        ),
+    )
     sys.stderr.write(f"Notes written: {notes_path}\n")
     return 0
 
 
 def run_app() -> int:
-    from pydantic import ValidationError
+    from meeting_memory.ui.runtime_app import run_runtime_app
 
-    from meeting_memory.config.settings import format_settings_error, load_settings
-    from meeting_memory.doctor import run_checks
-    from meeting_memory.logging_config import configure_logging
-    from meeting_memory.repo.b2_client import B2S3Client
-    from meeting_memory.repo.calendar_client import GoogleCalendarClient
-    from meeting_memory.repo.summarizer import ClaudeSummarizer
-    from meeting_memory.repo.transcription import AssemblyAITranscriptionClient
-    from meeting_memory.service.calendar_watcher import CalendarWatcher
-    from meeting_memory.service.pipeline import Pipeline
-    from meeting_memory.service.processing_retry import retry_failed_processing
-    from meeting_memory.service.recorder import RecorderService
-    from meeting_memory.service.recording_context import current_recording_context
-    from meeting_memory.service.sync import sync_pending_meetings
-    from meeting_memory.ui.tray import RumpsTrayApp, TrayController
-
-    try:
-        settings = load_settings()
-    except ValidationError as exc:
-        sys.stderr.write(format_settings_error(exc))
-        return run_setup_required_app()
-
-    configure_logging()
-    event_queue: queue.Queue[object] = queue.Queue()
-    b2_client = B2S3Client.from_settings(settings)
-    calendar_client = GoogleCalendarClient.from_settings(settings)
-    pipeline = Pipeline(
-        meetings_dir=settings.meetings_dir_path,
-        transcription_client=AssemblyAITranscriptionClient.from_settings(settings),
-        summarizer_client=ClaudeSummarizer.from_settings(settings),
-        b2_client=b2_client,
-        event_sink=event_queue.put,
-    )
-    recorder = RecorderService()
-    controller = TrayController(
-        settings=settings,
-        recorder=recorder,
-        pipeline=pipeline,
-        event_queue=event_queue,
-        sync_runner=lambda: sync_pending_meetings(settings.meetings_dir_path, b2_client),
-        processing_retry_runner=lambda: retry_failed_processing(
-            settings.meetings_dir_path,
-            pipeline,
-        ),
-        recording_context_provider=lambda: current_recording_context(
-            calendar_client,
-            now=recorder.now(),
-        ),
-    )
-    watcher = CalendarWatcher(
-        client=calendar_client,
-        event_sink=event_queue.put,
-        notify_minutes_before=settings.notify_minutes_before,
-        poll_interval_seconds=settings.calendar_poll_interval,
-    )
-    watcher.start()
-    RumpsTrayApp(controller, doctor_results=run_checks()).run()
-    return 0
+    return run_runtime_app()
 
 
 def run_setup_required_app() -> int:

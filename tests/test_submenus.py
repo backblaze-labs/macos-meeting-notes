@@ -20,6 +20,7 @@ def test_debugging_submenu_uses_explicit_actions_and_hover_help() -> None:
 
     assert list(items) == [
         menu.processing_header_label(0),
+        menu.LEGACY_RECOVERY_SCAN_LABEL,
         menu.SYNC_LABEL,
         menu.RETRY_PROCESSING_LABEL,
         menu.RUN_DIAGNOSTICS_LABEL,
@@ -37,6 +38,7 @@ def _actions() -> DebuggingActions:
         review_speakers=lambda _path: None,
         generate_notes=lambda _path: None,
         process_recovered_recording=lambda _recording: None,
+        scan_legacy_recoveries=lambda: None,
         sync_to_b2=lambda: None,
         retry_failed_processing=lambda: None,
         run_diagnostics=lambda _sender=None: None,

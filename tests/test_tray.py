@@ -188,6 +188,7 @@ def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
     ]
     assert debugging_titles == [
         menu.processing_header_label(0),
+        menu.LEGACY_RECOVERY_SCAN_LABEL,
         menu.SYNC_LABEL,
         menu.RETRY_PROCESSING_LABEL,
         menu.RUN_DIAGNOSTICS_LABEL,
@@ -295,6 +296,5 @@ class ImmediateThread:
         self.target = target
         self.args = args
         self.daemon = daemon
-
     def start(self) -> None:
         self.target(*self.args)

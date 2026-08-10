@@ -29,8 +29,7 @@ and readiness report used by the local-first transition. The composition rules
 and phase boundaries are canonical in
 [`docs/local-first-contract.md`](docs/local-first-contract.md).
 `types/artifacts.py`, `types/meeting.py`, and the local-first event objects define
-the pure artifact, job-owner, post-commit policy, and worker-to-UI boundaries
-without activating them.
+the pure artifact, job-owner, post-commit policy, and worker-to-UI boundaries.
 
 ## Capability Composition
 
@@ -49,23 +48,27 @@ Core assembles `recording.m4a` and the schema-v2 metadata stub in app-owned
 staging on the `MEETINGS_DIR` filesystem, then publishes the complete meeting
 directory with one atomic rename.
 
-The current runtime still constructs the cloud adapters from one fail-fast
-`Settings` object. That legacy coupling is characterized by tests and is
-scheduled for replacement in the next implementation phase; the architecture
-above is the accepted target, not a claim that the transition is complete.
+`config/runtime.py` loads Recording Core independently and treats each complete
+legacy `.env` provider group as an explicit opt-in. `ui/runtime_app.py` is the
+composition root: it builds only configured adapters, starts Calendar only when
+configured, and captures Transcription/Backup policy at local commit time.
 
-The inactive local-first substrate is split by filesystem responsibility:
+The local-first runtime substrate is split by filesystem responsibility:
 `service/atomic_io.py` owns fsync and macOS no-clobber rename primitives,
 `pinned_fs.py` owns component-wise no-follow staging access, and
 `meeting_document.py` pins an owned schema-v2 meeting directory for all state,
 body, and revision operations. `meeting_locks.py` owns per-meeting
 serialization, while `meeting_store.py` assembles and publishes complete local
-directories. `meeting_state.py`, `transcript_state.py`, and `speaker_state.py`
+directories. `stage_integrity.py` pins the private stage and accepted audio
+before any path-based native validation, then revalidates their identities,
+size, and digest immediately before rename and against the published final.
+`meeting_state.py`, `transcript_state.py`, and `speaker_state.py`
 own CAS transitions and whole-document Transcription/speaker transactions with
 same-write Backup reconciliation. `file_snapshot.py` provides stable regular
-file reads for local Notes input. `recovery_index.py`,
-`legacy_recovery_index.py`, `recovery_audio.py`, `recovery_commit.py`, and
-`recovery_cleanup.py` provide private indexed capture sessions, explicit
+file reads for local Notes input. `recovery_index.py`, `recovery_journal.py`,
+`recovery_marker.py`, `legacy_recovery_index.py`, `recovery_audio.py`,
+`recovery_commit.py`, and `recovery_cleanup.py` provide private indexed capture
+sessions, explicit
 once-only legacy discovery, and verified M4A materialization. The trusted
 configured legacy root is canonicalized once so macOS temporary-directory
 aliases remain compatible; candidates beneath it stay no-follow. Recovery
@@ -73,8 +76,14 @@ keeps the exact source pinned while MeetingStore publishes it. Direct M4A
 recovery checks copied size and digest; WAV recovery gives an injected
 converter a verified private snapshot path and removes that snapshot before
 publication. Both paths require a caller-supplied, native-compatible M4A
-validator that establishes a complete container with AAC audio—the inactive
-service intentionally has no signature-only fallback. A successful commit
+validator that establishes a complete container with AAC audio—the service has
+no signature-only fallback. The validator receives a read-only inherited file
+descriptor for the exact pinned candidate; because AVFoundation cannot open
+that descriptor path directly, the native helper copies it to a private 0600
+temporary M4A inside a Python-owned 0700 directory and validates the entire
+copy. Python removes that directory even if the helper times out. The store
+still compares the pinned candidate's identity, size, and digest before and
+after validation and after publication. A successful commit
 issues a sealed cleanup capability binding both the published directory and
 the final audio device/inode, size, and digest.
 `backup_revision.py` and `backup_snapshot_fs.py` capture immutable revision
@@ -86,12 +95,45 @@ the component-wise no-follow boundary.
 `repo/b2_snapshot.py` copies the verified pair through private writers, closes
 those writers, reopens read-only views, and unlinks their names. Identity and
 revision come from those exact anonymous bytes, and only the read-only streams
-reach the inactive per-object adapter. Path or provider mutation therefore
+reach the per-object adapter. Path or provider mutation therefore
 cannot change bytes between validation, upload, or retry. The adapter also honors
 monotonic worker cancellation at provider boundaries. Pure revision framing
-lives in `types/backup.py` so the service and repository cannot drift. None of
-these new activation seams is connected to the legacy recorder, pipeline, or
-tray yet.
+lives in `types/backup.py` so the service and repository cannot drift.
+
+`service/local_commit.py` enforces atomic commit → verified recovery cleanup →
+typed success event → optional worker order. Cleanup failure emits a typed
+pending outcome and starts no provider work. `runtime_transcription.py`,
+`runtime_jobs.py`, and
+`runtime_retry.py` own provider-ID CAS, per-meeting single flight, immutable B2
+snapshots, cancellation, and explicit ownership-aware retries. Schema-v2 work
+never passes through the compatibility `Pipeline` or legacy whole-file writers.
+`runtime_files.py` rejects caller metadata or paths that disagree with the
+single pinned owned meeting before either optional provider runs. MeetingStore
+seals the published directory device/inode in `MeetingFiles`; explicit retries
+seal it from their pinned scan. Runtime then binds that identity into a handle
+before thread start;
+Transcription and Backup require that identity again inside every capture,
+claim, provider-ID CAS, completion, failure, and retry write. Replacing the
+path with an otherwise valid owned clone therefore cannot cause egress or
+mutate the clone.
+`legacy_snapshot.py` keeps compatibility retries isolated: provider bytes and
+identity come from one private read-only snapshot, and the local legacy update
+is allowed only if the pinned directory and metadata remain unchanged.
+`runtime_legacy_recovery.py` owns the explicit, once-only legacy scan session;
+normal startup never scans the old temp root.
+`runtime_notes.py` snapshots a confirmed owned transcript, calls Notes outside
+the meeting lock, then revalidates and atomically publishes through the pinned
+directory. Legacy Notes compatibility uses the same private metadata snapshot
+and compare-before-write boundary without routing legacy files through a v2
+state writer.
+
+Before publication, a private app-owned journal binds source provenance and
+commit-time policy to an opaque token. MeetingStore puts that token inside the
+hidden stage before the same atomic directory rename. Both app and legacy
+retries can therefore locate and validate the exact visible directory/audio
+without republishing, including after an uncertain parent fsync or cleanup
+failure. The tray reports uncertainty/pending state and starts no provider;
+verified cleanup and journal clearing precede `RecordingCommitted` and jobs.
 
 ## Native Audio Boundary
 
@@ -127,18 +169,18 @@ These rules are enforced by `tests/test_structure.py`.
 - Calendar watcher: daemon poll loop.
 - Native audio helper: ScreenCaptureKit/Core Audio capture callbacks and WAV
   writing in a separate process.
-- Pipeline: one worker per recording session.
+- Local commit: one background worker per stopped recording or explicit recovery.
+- Optional jobs: independent per-meeting Transcription and Backup workers.
 
 Background threads must not call UI APIs directly. They emit events, and the UI
 drains those events on the main thread.
 
-In the accepted target, the local-commit worker emits `RecordingCommitted`
+The local-commit worker emits `RecordingCommitted`
 after atomic publication and optional transcription emits `TranscriptReady`
 only after job success or `TranscriptionFailed` on failure. The tray main thread
 alone translates those typed events into the separate Recording saved,
 Transcript ready, and Transcription failed notifications.
 
-Readiness checks follow the same boundary: repositories perform hardware or
-provider checks, services compose typed capability statuses, and the UI only
-renders the resulting report. Default doctor success is determined by Recording
-Core; optional capability failures remain visible but non-blocking.
+Runtime startup follows the same boundary and isolates optional adapter
+construction failures from Recording Core. Updating setup/doctor to render the
+same capability-scoped readiness remains Phase 3 work.

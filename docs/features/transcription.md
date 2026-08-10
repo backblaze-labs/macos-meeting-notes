@@ -6,9 +6,8 @@ Send completed meeting audio to AssemblyAI and write the source-of-truth
 diarized transcript to `transcript.md`.
 
 Transcription is an optional capability under
-[`../local-first-contract.md`](../local-first-contract.md). The current runtime
-still requires its credential globally; that coupling is intentionally
-characterized until the next phase replaces it.
+[`../local-first-contract.md`](../local-first-contract.md). Recording Core runs
+without its credential; a complete legacy environment group opts it in.
 
 ## Inputs
 
@@ -34,7 +33,7 @@ characterized until the next phase replaces it.
 
 ## Threading
 
-Transcription runs inside the background pipeline worker. It must not run on the
+Transcription runs inside a dedicated background worker. It must not run on the
 tray UI thread. Speaker review relabeling is local deterministic code. Notes
 generation runs in a background thread from the tray, or through the local
 `meeting-memory summarize` command.
@@ -43,6 +42,17 @@ generation runs in a background thread from the tray, or through the local
 
 - AssemblyAI is the transcription source of truth and returns diarized speaker
   labels such as `Speaker A`.
+- Runtime submission copies audio through the pinned owned meeting descriptor
+  into a private file reopened read-only and unlinked before the adapter sees
+  it. Later path swaps cannot change or redirect the bytes. Provider job create
+  is attempted once because retrying an ambiguous submit timeout could create
+  an orphan; persisted job-ID resume remains retryable.
+- Before the worker thread starts, runtime binds the meeting directory
+  device/inode sealed by local publication, or by an explicit retry scan. Audio
+  capture and every Transcription claim, job-ID
+  CAS, success, failure, and retry write require that same identity, so an
+  owned same-slug directory replacement reaches neither AssemblyAI nor the
+  replacement transcript.
 - The Stop Recording pipeline writes `transcript.md` only. It does not call
   Anthropic and does not write summaries or decisions.
 - Google Calendar attendees populate `speaker_candidates`. Attendees are shown
@@ -65,17 +75,31 @@ generation runs in a background thread from the tray, or through the local
 - `meeting-memory summarize <meeting-folder>` requires
   `speaker_status: confirmed` and remains available as a backfill/retry command
   for `notes.md`.
-- If AssemblyAI fails, the pipeline still writes a non-empty `transcript.md`
-  with a transcription failure state.
+- If AssemblyAI fails, the worker atomically writes a provider-detail-free
+  transcription failure state while retaining local audio.
 - Failed transcription states can be retried later with `Retry Failed
   Transcriptions`, using transcript frontmatter as durable state.
-- In the accepted local-first target, an unconfigured or failed transcription
+- Before a failed retry submits a replacement provider job, one locked replace
+  moves the job to pending and clears the previous provider ID. The new ID is
+  then persisted before polling, so an old ID cannot orphan a new submission.
+- `Retry Failed Transcriptions` scans only Transcription state; it never starts
+  Backup work.
+- Legacy retry compatibility snapshots the owned legacy metadata and audio into
+  private read-only streams before the adapter runs. The provider job and
+  request identity therefore come from the same captured bytes, and a changed
+  legacy file fails closed instead of letting the compatibility writer touch a
+  schema-v2 or foreign artifact.
+- An unconfigured or failed transcription
   leaves the committed audio usable and reports only Transcription's state.
-- The inactive transition substrate now finishes schema-v2 transcription with
+- The runtime finishes schema-v2 transcription with
   one locked whole-document replace: provider-ID CAS, transcript body, owned
   fields, and Backup revision reconciliation succeed or conflict together.
-  Speaker confirmation uses the same model and stable no-follow Notes reads.
-  The legacy pipeline does not call these transaction APIs yet.
+  Speaker confirmation uses the same model. Notes snapshots a confirmed owned
+  transcript, revalidates it after the provider call, and atomically publishes
+  `notes.md` without following an existing symlink or FIFO. Existing legacy
+  meetings use a separate private metadata snapshot and unchanged-identity
+  check, so the tray action and `meeting-memory summarize` remain compatible
+  without sending legacy artifacts through the schema-v2 writer.
 
 ## Related Files
 
@@ -83,13 +107,17 @@ generation runs in a background thread from the tray, or through the local
 - `src/meeting_memory/repo/summarizer.py`
 - `src/meeting_memory/repo/retry.py`
 - `src/meeting_memory/service/pipeline.py`
+- `src/meeting_memory/service/transcription_audio.py`
 - `src/meeting_memory/service/markdown.py`
 - `src/meeting_memory/service/transcript_review.py`
 - `src/meeting_memory/service/transcript_state.py`
+- `src/meeting_memory/service/runtime_transcription.py`
+- `src/meeting_memory/service/runtime_notes.py`
 - `src/meeting_memory/service/speaker_state.py`
 - `src/meeting_memory/service/file_snapshot.py`
 - `src/meeting_memory/service/summary_prompt.py`
 - `src/meeting_memory/service/processing_retry.py`
+- `src/meeting_memory/service/legacy_snapshot.py`
 - `src/meeting_memory/service/speaker_mapping.py`
 - `src/meeting_memory/ui/notes_prompt.py`
 - `prompts/summary.md`
@@ -105,4 +133,5 @@ generation runs in a background thread from the tray, or through the local
 - `tests/test_summary_prompt.py`
 - `tests/test_pipeline.py`
 - `tests/test_processing_retry.py`
+- `tests/test_runtime_job_identity.py`
 - `tests/test_speaker_mapping.py`

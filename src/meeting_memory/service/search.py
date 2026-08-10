@@ -7,8 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from meeting_memory.service.frontmatter import split_frontmatter
-from meeting_memory.service.storage import MEETING_MARKDOWN, is_ours
+from meeting_memory.service.ownership import inspect_meeting_snapshot
 
 
 @dataclass(frozen=True)
@@ -36,10 +35,17 @@ def search_meetings(
 
     results: list[MeetingSearchResult] = []
     for meeting_dir in expanded_dir.iterdir():
-        if not meeting_dir.is_dir() or not is_ours(meeting_dir):
+        snapshot = inspect_meeting_snapshot(meeting_dir)
+        if snapshot is None:
             continue
 
-        result = _search_one(meeting_dir / MEETING_MARKDOWN, terms, excerpt_radius)
+        result = _search_one(
+            snapshot.artifact.transcript_path,
+            snapshot.frontmatter,
+            snapshot.body,
+            terms,
+            excerpt_radius,
+        )
         if result is not None:
             results.append(result)
 
@@ -48,15 +54,12 @@ def search_meetings(
 
 def _search_one(
     markdown_path: Path,
+    frontmatter: dict[str, object],
+    body: str,
     terms: tuple[str, ...],
     excerpt_radius: int,
 ) -> MeetingSearchResult | None:
-    try:
-        markdown = markdown_path.read_text(encoding="utf-8")
-        frontmatter, body = split_frontmatter(markdown)
-        searchable = _normalize_search_text(f"{frontmatter.get('calendar_title', '')}\n{body}")
-    except (OSError, ValueError):
-        return None
+    searchable = _normalize_search_text(f"{frontmatter.get('calendar_title', '')}\n{body}")
 
     if not all(term in searchable.casefold() for term in terms):
         return None

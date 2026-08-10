@@ -80,7 +80,8 @@ def test_start_is_rejected_until_stop_and_conversion_finish(tmp_path: Path) -> N
 
         second_session = recorder.start("Product Sync")
         assert second_session is not None
-        assert second_session.wav_path == first_session.wav_path
+        assert second_session.wav_path != first_session.wav_path
+        assert second_session.wav_path.parent != first_session.wav_path.parent
         assert len(captures) == 2
         assert second_session.wav_path.read_bytes() == b"capture-2"
         assert m4a_path.read_bytes() == b"capture-1"

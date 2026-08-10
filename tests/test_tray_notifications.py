@@ -194,6 +194,9 @@ class FakeController:
     def process_recovered_recording(self, recording) -> None:
         pass
 
+    def scan_legacy_recoveries(self) -> None:
+        pass
+
     def start_recording(
         self,
         calendar_title: str = "Untitled",

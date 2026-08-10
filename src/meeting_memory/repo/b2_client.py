@@ -13,6 +13,7 @@ from meeting_memory.types.artifacts import (
     BackupSnapshotUploadResult,
     BackupUploadCancellation,
     BackupUploadDisposition,
+    LegacyBackupUpload,
 )
 from meeting_memory.types.meeting import B2UploadResult, MeetingFiles
 
@@ -56,6 +57,19 @@ class B2S3Client:
             transcript_key=transcript_key,
             audio_keys=audio_keys,
         )
+
+    def upload_legacy_snapshot(self, request: LegacyBackupUpload) -> B2UploadResult:
+        """Upload only private pinned legacy streams under their historical keys."""
+
+        client = self._client()
+        audio_keys = tuple(
+            f"meetings/{request.meeting_slug}/{item.filename}" for item in request.audio
+        )
+        transcript_key = f"meetings/{request.meeting_slug}/{TRANSCRIPT_MARKDOWN}"
+        for item, key in zip(request.audio, audio_keys, strict=True):
+            self._upload_stream(client, item.stream, key)
+        self._upload_stream(client, request.transcript.stream, transcript_key)
+        return B2UploadResult(audio_keys[0], transcript_key, audio_keys)
 
     def upload_backup_snapshot(
         self,
@@ -121,6 +135,17 @@ class B2S3Client:
         for attempt, delay in enumerate((*self.retry_delays, None)):
             try:
                 client.upload_file(filename, self.bucket_name, key)
+                return
+            except Exception:
+                if delay is None:
+                    raise
+                self.sleeper(delay)
+
+    def _upload_stream(self, client, stream, key: str) -> None:
+        for delay in (*self.retry_delays, None):
+            try:
+                stream.seek(0)
+                client.upload_fileobj(stream, self.bucket_name, key)
                 return
             except Exception:
                 if delay is None:

@@ -1,4 +1,4 @@
-"""Adversarial tests for inactive recovery audio materialization."""
+"""Adversarial tests for recovery audio materialization."""
 
 from __future__ import annotations
 
