@@ -123,9 +123,7 @@ def _private_copy(source_fd: int) -> BinaryIO:
         ):
             raise ValueError("private backup handle changed before unlink")
         path.unlink()
-        stream = os.fdopen(reader_fd, "rb")
-        reader_fd = -1
-        return stream
+        return os.fdopen(reader_fd, "rb")
     except BaseException:
         if reader_fd >= 0:
             os.close(reader_fd)

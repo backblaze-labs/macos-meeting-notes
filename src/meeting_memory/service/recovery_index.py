@@ -58,6 +58,7 @@ def create_recovery_session(staging_root: Path, meta: MeetingMeta) -> RecoveryIn
         try:
             os.unlink(INDEX_FILENAME, dir_fd=session_fd)
         except FileNotFoundError:
+            # Rollback is idempotent if the index was never published or is gone.
             pass
         os.rmdir(name, dir_fd=root_fd)
         os.fsync(root_fd)

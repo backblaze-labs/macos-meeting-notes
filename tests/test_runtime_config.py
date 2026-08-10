@@ -7,6 +7,16 @@ from meeting_memory.service.recorder import RecorderService
 from meeting_memory.service.summary_prompt import summary_prompt_path
 
 
+@pytest.fixture(autouse=True)
+def isolate_runtime_settings(monkeypatch, tmp_path: Path) -> None:
+    """Keep personal `.env` and process values out of configuration tests."""
+
+    for field_name in RuntimeSettings.model_fields:
+        monkeypatch.delenv(field_name, raising=False)
+        monkeypatch.delenv(field_name.upper(), raising=False)
+    monkeypatch.chdir(tmp_path)
+
+
 def test_fresh_runtime_has_core_and_no_optional_capabilities(tmp_path: Path) -> None:
     settings = load_runtime_settings(tmp_path / "missing.env")
 

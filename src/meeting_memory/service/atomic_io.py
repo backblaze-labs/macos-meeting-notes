@@ -102,6 +102,7 @@ def atomic_replace_text_at(directory_fd: int, filename: str, text: str) -> None:
             try:
                 os.unlink(temporary, dir_fd=directory_fd)
             except FileNotFoundError:
+                # Cleanup is idempotent; a prior failure path may have removed it.
                 pass
         raise
 

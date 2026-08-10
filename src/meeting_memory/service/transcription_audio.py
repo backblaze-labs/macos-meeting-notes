@@ -110,10 +110,7 @@ def private_stable_copy(source_fd: int) -> BinaryIO:
         ):
             raise ValueError("Private snapshot changed before unlink")
         path.unlink()
-        reader = os.fdopen(reader_fd, "rb")
-        # Ownership moved to reader; the exception path must not close it again.
-        reader_fd = -1
-        return reader
+        return os.fdopen(reader_fd, "rb")
     except BaseException:
         if reader_fd >= 0:
             os.close(reader_fd)

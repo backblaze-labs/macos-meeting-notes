@@ -120,6 +120,7 @@ def _cleanup_child_at(parent_fd: int, child_fd: int, child_name: str) -> None:
             if stat.S_ISREG(info.st_mode):
                 os.unlink(filename, dir_fd=child_fd)
         except FileNotFoundError:
+            # A partial snapshot or earlier cleanup may already have removed it.
             pass
     os.fsync(child_fd)
     os.rmdir(child_name, dir_fd=parent_fd)

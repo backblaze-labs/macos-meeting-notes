@@ -38,7 +38,8 @@ def test_commit_publishes_complete_files_before_returning(tmp_path: Path) -> Non
     assert frontmatter["id"] == files.directory.name == files.meta.slug
     assert frontmatter["transcription_status"] == "pending"
     assert frontmatter["backup_status"] == "not_requested"
-    assert files.audio_path.open("rb").read() == b"m4a-audio"
+    audio_bytes = files.audio_path.read_bytes()
+    assert audio_bytes == b"m4a-audio"
 
 
 def test_first_commit_flushes_each_new_directory_entry(tmp_path: Path) -> None:

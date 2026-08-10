@@ -106,6 +106,7 @@ def _stable_wav_snapshot(
         try:
             os.unlink(name, dir_fd=directory_fd)
         except FileNotFoundError:
+            # Snapshot creation may fail before the temporary name is visible.
             pass
         os.close(directory_fd)
         raise
@@ -115,6 +116,7 @@ def _stable_wav_snapshot(
         try:
             snapshot.cleanup()
         except Exception:
+            # Cleanup must not hide the original conversion or validation error.
             pass
         raise
     else:
