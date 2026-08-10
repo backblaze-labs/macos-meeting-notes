@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import stat
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -23,6 +25,9 @@ from meeting_memory.types.meeting import (
 )
 
 AudioMaterializer = Callable[[Path, Path], None]
+PinnedAudioMaterializer = Callable[[int, Path], None]
+PinnedSourceValidator = Callable[[int], None]
+MaterializedAudioValidator = Callable[[Path], None]
 Publisher = Callable[[Path, Path], None]
 DirectorySync = Callable[[Path], None]
 
@@ -67,6 +72,39 @@ class MeetingStore:
 
         self._validate_slug(meta.slug)
         self._validate_source(staged_audio)
+        return self._commit(staged_audio, meta, policy, self.audio_materializer)
+
+    def commit_pinned_audio(
+        self,
+        source_fd: int,
+        meta: MeetingMeta,
+        policy: PostCommitPolicy = PostCommitPolicy(),
+        *,
+        materializer: PinnedAudioMaterializer,
+        validate_source: PinnedSourceValidator,
+        validate_materialized: MaterializedAudioValidator,
+    ) -> MeetingFiles:
+        """Commit bytes from one caller-pinned non-empty regular descriptor."""
+
+        self._validate_slug(meta.slug)
+        info = os.fstat(source_fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_size == 0:
+            raise ValueError("pinned audio must be a non-empty regular file")
+
+        def materialize(_source: Path, destination: Path) -> None:
+            materializer(source_fd, destination)
+            validate_materialized(destination)
+            validate_source(source_fd)
+
+        return self._commit(Path("pinned-audio"), meta, policy, materialize)
+
+    def _commit(
+        self,
+        staged_audio: Path,
+        meta: MeetingMeta,
+        policy: PostCommitPolicy,
+        materializer: AudioMaterializer,
+    ) -> MeetingFiles:
         self._ensure_directory(self.meetings_dir)
         staging_root = self.meetings_dir / ".meeting-memory-staging"
         self._ensure_directory(staging_root)
@@ -76,7 +114,7 @@ class MeetingStore:
             stage = Path(raw_stage)
             self.directory_sync(staging_root)
             audio_path = stage / "recording.m4a"
-            self.audio_materializer(staged_audio, audio_path)
+            materializer(staged_audio, audio_path)
             self._validate_materialized_audio(audio_path)
             fsync_file(audio_path)
 

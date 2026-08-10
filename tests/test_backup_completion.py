@@ -58,8 +58,9 @@ def test_generic_transition_cannot_claim_backup_success(tmp_path: Path) -> None:
 
 def test_complete_backup_stale_revision_returns_to_pending_without_claim(tmp_path: Path) -> None:
     meeting, store = _running_backup(tmp_path)
+    audio_key, transcript_key = _keys(meeting)
 
-    result = store.complete_backup(meeting, "0" * 64, "audio-key", "transcript-key")
+    result = store.complete_backup(meeting, "0" * 64, audio_key, transcript_key)
 
     frontmatter = read_frontmatter(meeting / "transcript.md")
     assert not result.completed
@@ -74,20 +75,21 @@ def test_complete_backup_stale_revision_returns_to_pending_without_claim(tmp_pat
 def test_complete_backup_records_only_matching_snapshot(tmp_path: Path) -> None:
     meeting, store = _running_backup(tmp_path)
     revision = compute_backup_revision(meeting / "recording.m4a", meeting / "transcript.md")
+    audio_key, transcript_key = _keys(meeting)
 
-    result = store.complete_backup(meeting, revision, " audio-key ", " transcript-key ")
+    result = store.complete_backup(meeting, revision, audio_key, transcript_key)
 
     frontmatter = read_frontmatter(meeting / "transcript.md")
     assert result.completed
     assert result.status is MeetingJobState.SUCCEEDED
     assert result.current_revision == revision
     assert frontmatter["backup_status"] == "succeeded"
-    assert frontmatter["b2_audio"] == "audio-key"
-    assert frontmatter["b2_transcript"] == "transcript-key"
+    assert frontmatter["b2_audio"] == audio_key
+    assert frontmatter["b2_transcript"] == transcript_key
     assert frontmatter["backup_uploaded_revision"] == revision
 
     with pytest.raises(MeetingStateConflict):
-        store.complete_backup(meeting, revision, "audio-key", "transcript-key")
+        store.complete_backup(meeting, revision, audio_key, transcript_key)
 
 
 def _running_backup(tmp_path: Path) -> tuple[Path, MeetingStateStore]:
@@ -106,3 +108,8 @@ def _running_backup(tmp_path: Path) -> tuple[Path, MeetingStateStore]:
         meeting, MeetingJob.BACKUP, MeetingJobState.PENDING, MeetingJobState.RUNNING
     )
     return meeting, store
+
+
+def _keys(meeting: Path) -> tuple[str, str]:
+    prefix = f"meetings/{meeting.name}"
+    return f"{prefix}/recording.m4a", f"{prefix}/transcript.md"

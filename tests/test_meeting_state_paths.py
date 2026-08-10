@@ -28,11 +28,40 @@ def test_every_state_entrypoint_rejects_invalid_path_without_mutating_target(
     invalid = _invalid_meeting(tmp_path, meeting, invalid_kind)
     transcript = invalid.resolve() / "transcript.md"
     before = transcript.read_bytes()
+    lock_root = meeting.parent / ".meeting-memory-locks"
+    locks_before = sorted(path.name for path in lock_root.iterdir())
 
     with pytest.raises(MeetingStateError):
         _invoke(store, invalid, entrypoint)
 
     assert transcript.read_bytes() == before
+    assert sorted(path.name for path in lock_root.iterdir()) == locks_before
+
+
+def test_configured_root_symlink_preserves_direct_child_state_updates(
+    tmp_path: Path,
+) -> None:
+    real_root = tmp_path / "real-meetings"
+    meeting, _store = _meeting(tmp_path, real_root)
+    alias = tmp_path / "configured-meetings"
+    alias.symlink_to(real_root, target_is_directory=True)
+    aliased_meeting = alias / meeting.name
+    store = MeetingStateStore(alias)
+
+    result = store.merge_fields(
+        aliased_meeting,
+        ArtifactFieldOwner.CORE,
+        {"calendar_title": "Through Alias"},
+    )
+    store.transition_job(
+        aliased_meeting,
+        MeetingJob.TRANSCRIPTION,
+        MeetingJobState.PENDING,
+        MeetingJobState.RUNNING,
+    )
+
+    assert result["calendar_title"] == "Through Alias"
+    assert (meeting / "transcript.md").read_text().count("Through Alias") == 1
 
 
 def _invoke(store: MeetingStateStore, meeting: Path, entrypoint: str) -> None:

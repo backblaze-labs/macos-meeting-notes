@@ -66,11 +66,24 @@ workers and emit typed events for the tray main thread to render.
   directory and publishes the complete meeting directory with one atomic
   rename. Legacy system-temp files are discovered locally once and never start
   provider work without an explicit recovery action.
+- Private indexed capture sessions, component-wise no-follow discovery, and
+  identity-safe post-commit cleanup now exist as inactive service primitives.
+  Indexed WAV recovery uses an injected path-based converter with a verified
+  private input snapshot. Both converted WAV and direct M4A recovery require a
+  caller-supplied validator for a complete AAC-bearing M4A; the service has no
+  weak signature fallback, and RIFF bytes are never relabeled as
+  `recording.m4a`.
+  Recorder startup/stop still follows the current legacy path until the atomic
+  runtime cutover activates the complete flow together.
 
 ## Related Files
 
 - `src/meeting_memory/service/recorder.py`
 - `src/meeting_memory/service/recovery.py`
+- `src/meeting_memory/service/recovery_index.py`
+- `src/meeting_memory/service/recovery_audio.py`
+- `src/meeting_memory/service/recovery_commit.py`
+- `src/meeting_memory/service/recovery_cleanup.py`
 - `src/meeting_memory/service/recording_context.py`
 - `src/meeting_memory/ui/controller.py`
 - `src/meeting_memory/ui/processing_launch.py`
@@ -85,6 +98,8 @@ workers and emit typed events for the tray main thread to render.
 - `tests/test_recorder.py`
 - `tests/test_native_audio.py`
 - `tests/test_recovery.py`
+- `tests/test_recovery_audio.py`
+- `tests/test_recovery_receipt.py`
 - `tests/test_tray.py`
 - `tests/test_tray_recording_context.py`
 - `tests/test_recording_context.py`

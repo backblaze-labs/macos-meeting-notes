@@ -2,22 +2,25 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
-import re
-import shutil
 import stat
-import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-BACKUP_REVISION_DOMAIN = b"meeting-memory-backup-v2\0"
-EXCLUDED_FRONTMATTER_FIELDS = frozenset(
-    {"backup_status", "b2_audio", "b2_transcript", "backup_uploaded_revision"}
+from meeting_memory.service.backup_snapshot_fs import (
+    cleanup_snapshot_directory,
+    create_snapshot_files,
 )
-TOP_LEVEL_FIELD = re.compile(r"^([A-Za-z0-9_-]+):(?:[ \t]*(.*))?$")
+from meeting_memory.service.meeting_document import open_meeting_document
+from meeting_memory.types.artifacts import BackupSnapshotUpload
+from meeting_memory.types.backup import (
+    backup_revision_bytes,
+    backup_revision_stream,
+    normalize_backup_transcript,
+    owned_backup_transcript_slug,
+)
 
 
 @dataclass(frozen=True)
@@ -25,67 +28,49 @@ class BackupSnapshot:
     """Matching file-backed copies captured for one attempted upload."""
 
     revision: str
+    meeting_slug: str
     audio_path: Path
     transcript_path: Path
     normalized_transcript_path: Path
     directory: Path
+    directory_device: int
+    directory_inode: int
 
     def cleanup(self) -> None:
-        shutil.rmtree(self.directory)
+        cleanup_snapshot_directory(
+            self.directory,
+            self.directory_device,
+            self.directory_inode,
+        )
+
+    def upload_request(self) -> BackupSnapshotUpload:
+        return BackupSnapshotUpload(
+            meeting_slug=self.meeting_slug,
+            revision=self.revision,
+            directory=self.directory,
+            directory_device=self.directory_device,
+            directory_inode=self.directory_inode,
+        )
 
     def __enter__(self) -> BackupSnapshot:
         return self
 
-    def __exit__(self, *_args: object) -> None:
-        self.cleanup()
+    def __exit__(self, exc_type: object, *_args: object) -> None:
+        try:
+            self.cleanup()
+        except Exception:
+            if exc_type is None:
+                raise
 
 
 def normalize_transcript_for_backup(transcript: bytes | str) -> bytes:
     """Remove only Backup bookkeeping fields, normalize LF, end in one LF."""
 
-    raw = transcript.encode("utf-8") if isinstance(transcript, str) else transcript
-    text = raw.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
-    lines = text.split("\n")
-    if not lines or lines[0] != "---":
-        raise ValueError("transcript is missing top-level YAML frontmatter")
-
-    output = ["---"]
-    skipping_field = False
-    closed = False
-    for line in lines[1:]:
-        if line == "---":
-            output.append(line)
-            closed = True
-            break
-        match = TOP_LEVEL_FIELD.match(line)
-        if match:
-            excluded = match.group(1) in EXCLUDED_FRONTMATTER_FIELDS
-            raw_value = (match.group(2) or "").strip()
-            skipping_field = excluded and raw_value.startswith(("|", ">"))
-            if not excluded:
-                output.append(line)
-            continue
-        if skipping_field and (line.startswith((" ", "\t")) or not line):
-            continue
-        skipping_field = False
-        output.append(line)
-    if not closed:
-        raise ValueError("transcript YAML frontmatter is not closed")
-
-    closing_index = lines[1:].index("---") + 1
-    output.extend(lines[closing_index + 1 :])
-    return ("\n".join(output).rstrip("\n") + "\n").encode("utf-8")
+    return normalize_backup_transcript(transcript)
 
 
 def backup_revision(audio: bytes, transcript: bytes | str) -> str:
-    normalized = normalize_transcript_for_backup(transcript)
-    digest = hashlib.sha256()
-    digest.update(BACKUP_REVISION_DOMAIN)
-    digest.update(len(audio).to_bytes(8, "big", signed=False))
-    digest.update(audio)
-    digest.update(len(normalized).to_bytes(8, "big", signed=False))
-    digest.update(normalized)
-    return digest.hexdigest()
+    return backup_revision_bytes(audio, transcript)
 
 
 def compute_backup_revision(audio_path: Path, transcript_path: Path) -> str:
@@ -105,41 +90,48 @@ def compute_backup_revision_with_transcript(
         return _revision_from_fd(audio_fd, audio_size, transcript)
 
 
+def compute_backup_revision_from_audio_fd(
+    audio_fd: int,
+    transcript: bytes | str,
+) -> str:
+    """Hash prospective transcript content against one pinned regular audio fd."""
+
+    info = os.fstat(audio_fd)
+    if not stat.S_ISREG(info.st_mode):
+        raise ValueError("backup audio source is not a regular file")
+    return _revision_from_fd(audio_fd, info.st_size, transcript)
+
+
 def capture_backup_snapshot(
-    audio_path: Path,
-    transcript_path: Path,
+    meeting_dir: Path,
     snapshot_root: Path | None = None,
 ) -> BackupSnapshot:
-    """Copy a stable upload pair; never use hardlinks to mutable originals."""
+    """Copy both artifacts through one pinned owned meeting directory."""
 
-    with _regular_fd(audio_path) as (audio_fd, _):
-        with _regular_fd(transcript_path) as (transcript_fd, _):
-            parent = snapshot_root or (
-                transcript_path.parent.parent
-                / ".meeting-memory-staging"
-                / "backup-snapshots"
-            )
-            parent.mkdir(parents=True, exist_ok=True)
-            directory = Path(tempfile.mkdtemp(prefix="backup.", dir=parent))
-            snapshot_audio = directory / "recording.m4a"
-            snapshot_transcript = directory / "transcript.md"
-            normalized_path = directory / "transcript.normalized.md"
-            try:
-                _copy_fd(audio_fd, snapshot_audio)
-                _copy_fd(transcript_fd, snapshot_transcript)
-                normalized_path.write_bytes(
-                    normalize_transcript_for_backup(snapshot_transcript.read_bytes())
-                )
-                revision = compute_backup_revision(snapshot_audio, snapshot_transcript)
-            except BaseException:
-                shutil.rmtree(directory)
-                raise
+    with open_meeting_document(meeting_dir.parent, meeting_dir) as document:
+        audio_fd, audio_size = _regular_at(document.directory_fd, "recording.m4a")
+        try:
+            transcript = document.text.encode("utf-8")
+            if snapshot_root is None:
+                meetings_root = document.root_path
+                parent = meetings_root / ".meeting-memory-staging" / "backup-snapshots"
+            else:
+                parent = snapshot_root.expanduser()
+            meeting_slug = owned_backup_transcript_slug(transcript)
+            normalized = normalize_transcript_for_backup(transcript)
+            revision = _revision_from_fd(audio_fd, audio_size, transcript)
+            captured = create_snapshot_files(parent, audio_fd, transcript, normalized)
+        finally:
+            os.close(audio_fd)
     return BackupSnapshot(
         revision=revision,
-        audio_path=snapshot_audio,
-        transcript_path=snapshot_transcript,
-        normalized_transcript_path=normalized_path,
-        directory=directory,
+        meeting_slug=meeting_slug,
+        audio_path=captured.audio_path,
+        transcript_path=captured.transcript_path,
+        normalized_transcript_path=captured.normalized_path,
+        directory=captured.directory,
+        directory_device=captured.directory_device,
+        directory_inode=captured.directory_inode,
     )
 
 
@@ -166,6 +158,19 @@ def _read_fd(descriptor: int) -> bytes:
     return b"".join(chunks)
 
 
+def _regular_at(directory_fd: int, filename: str) -> tuple[int, int]:
+    descriptor = os.open(
+        filename,
+        os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+        dir_fd=directory_fd,
+    )
+    info = os.fstat(descriptor)
+    if not stat.S_ISREG(info.st_mode):
+        os.close(descriptor)
+        raise ValueError(f"backup source is not a regular file: {filename}")
+    return descriptor, info.st_size
+
+
 def _copy_fd(descriptor: int, destination: Path) -> None:
     os.lseek(descriptor, 0, os.SEEK_SET)
     with destination.open("xb") as writer:
@@ -176,13 +181,5 @@ def _copy_fd(descriptor: int, destination: Path) -> None:
 
 
 def _revision_from_fd(audio_fd: int, audio_size: int, transcript: bytes | str) -> str:
-    normalized = normalize_transcript_for_backup(transcript)
-    digest = hashlib.sha256()
-    digest.update(BACKUP_REVISION_DOMAIN)
-    digest.update(audio_size.to_bytes(8, "big", signed=False))
-    os.lseek(audio_fd, 0, os.SEEK_SET)
-    while chunk := os.read(audio_fd, 1024 * 1024):
-        digest.update(chunk)
-    digest.update(len(normalized).to_bytes(8, "big", signed=False))
-    digest.update(normalized)
-    return digest.hexdigest()
+    with os.fdopen(os.dup(audio_fd), "rb") as stream:
+        return backup_revision_stream(stream, audio_size, transcript)

@@ -71,6 +71,11 @@ generation runs in a background thread from the tray, or through the local
   Transcriptions`, using transcript frontmatter as durable state.
 - In the accepted local-first target, an unconfigured or failed transcription
   leaves the committed audio usable and reports only Transcription's state.
+- The inactive transition substrate now finishes schema-v2 transcription with
+  one locked whole-document replace: provider-ID CAS, transcript body, owned
+  fields, and Backup revision reconciliation succeed or conflict together.
+  Speaker confirmation uses the same model and stable no-follow Notes reads.
+  The legacy pipeline does not call these transaction APIs yet.
 
 ## Related Files
 
@@ -80,6 +85,9 @@ generation runs in a background thread from the tray, or through the local
 - `src/meeting_memory/service/pipeline.py`
 - `src/meeting_memory/service/markdown.py`
 - `src/meeting_memory/service/transcript_review.py`
+- `src/meeting_memory/service/transcript_state.py`
+- `src/meeting_memory/service/speaker_state.py`
+- `src/meeting_memory/service/file_snapshot.py`
 - `src/meeting_memory/service/summary_prompt.py`
 - `src/meeting_memory/service/processing_retry.py`
 - `src/meeting_memory/service/speaker_mapping.py`
@@ -90,6 +98,9 @@ generation runs in a background thread from the tray, or through the local
 
 - `tests/test_transcription.py`
 - `tests/test_transcript_review.py`
+- `tests/test_transcript_state.py`
+- `tests/test_speaker_state.py`
+- `tests/test_file_snapshot.py`
 - `tests/test_summarizer.py`
 - `tests/test_summary_prompt.py`
 - `tests/test_pipeline.py`

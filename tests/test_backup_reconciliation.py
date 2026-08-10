@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 from meeting_memory.service.backup_revision import compute_backup_revision
-from meeting_memory.service.meeting_state import MeetingStateStore
+from meeting_memory.service.meeting_document import MeetingDocument
+from meeting_memory.service.meeting_state import MeetingStateError, MeetingStateStore
 from meeting_memory.service.meeting_store import MeetingStore
 from meeting_memory.service.storage import read_frontmatter
 from meeting_memory.types.artifacts import ArtifactFieldOwner, MeetingJob
@@ -32,15 +33,13 @@ def test_meaningful_owner_merge_reopens_backup_in_same_atomic_write(
 ) -> None:
     meeting, store = _completed_backup(tmp_path)
     writes: list[str] = []
-    real_replace = __import__(
-        "meeting_memory.service.meeting_state", fromlist=["atomic_replace_text"]
-    ).atomic_replace_text
+    real_replace = MeetingDocument.replace_transcript
 
-    def observe(path: Path, text: str) -> None:
+    def observe(document: MeetingDocument, text: str) -> None:
         writes.append(text)
-        real_replace(path, text)
+        real_replace(document, text)
 
-    monkeypatch.setattr("meeting_memory.service.meeting_state.atomic_replace_text", observe)
+    monkeypatch.setattr(MeetingDocument, "replace_transcript", observe)
     store.merge_fields(meeting, owner, updates)
 
     assert len(writes) == 1
@@ -67,7 +66,8 @@ def test_transcription_transition_reopens_successful_backup(tmp_path: Path) -> N
 def test_noop_owner_merge_does_not_write_or_reopen(tmp_path: Path, monkeypatch) -> None:
     meeting, store = _completed_backup(tmp_path)
     monkeypatch.setattr(
-        "meeting_memory.service.meeting_state.atomic_replace_text",
+        MeetingDocument,
+        "replace_transcript",
         lambda *_args: (_ for _ in ()).throw(AssertionError("unexpected write")),
     )
 
@@ -76,12 +76,15 @@ def test_noop_owner_merge_does_not_write_or_reopen(tmp_path: Path, monkeypatch) 
     assert read_frontmatter(meeting / "transcript.md")["backup_status"] == "succeeded"
 
 
-def test_backup_bookkeeping_merge_does_not_reopen(tmp_path: Path) -> None:
+def test_backup_bookkeeping_merge_is_reserved_for_completion(tmp_path: Path) -> None:
     meeting, store = _completed_backup(tmp_path)
+    before = (meeting / "transcript.md").read_bytes()
 
-    store.merge_fields(meeting, ArtifactFieldOwner.BACKUP, {"b2_audio": "new-key"})
+    with pytest.raises(MeetingStateError, match="does not own"):
+        store.merge_fields(meeting, ArtifactFieldOwner.BACKUP, {"b2_audio": "new-key"})
 
     assert read_frontmatter(meeting / "transcript.md")["backup_status"] == "succeeded"
+    assert (meeting / "transcript.md").read_bytes() == before
 
 
 def _completed_backup(tmp_path: Path) -> tuple[Path, MeetingStateStore]:
@@ -101,5 +104,11 @@ def _completed_backup(tmp_path: Path) -> tuple[Path, MeetingStateStore]:
         meeting, MeetingJob.BACKUP, MeetingJobState.PENDING, MeetingJobState.RUNNING
     )
     revision = compute_backup_revision(meeting / "recording.m4a", meeting / "transcript.md")
-    store.complete_backup(meeting, revision, "audio-key", "transcript-key")
+    prefix = f"meetings/{meeting.name}"
+    store.complete_backup(
+        meeting,
+        revision,
+        f"{prefix}/recording.m4a",
+        f"{prefix}/transcript.md",
+    )
     return meeting, store

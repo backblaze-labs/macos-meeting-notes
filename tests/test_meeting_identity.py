@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from meeting_memory.service.meeting_document import MeetingDocument
 from meeting_memory.service.meeting_state import MeetingStateError, MeetingStateStore
 from meeting_memory.service.meeting_store import MeetingStore
 from meeting_memory.service.storage import read_frontmatter
@@ -32,7 +33,8 @@ def test_core_identity_changes_are_rejected_without_artifact_write(
     meeting, store = _meeting(tmp_path)
     before = (meeting / "transcript.md").read_bytes()
     monkeypatch.setattr(
-        "meeting_memory.service.meeting_state.atomic_replace_text",
+        MeetingDocument,
+        "replace_transcript",
         lambda *_args: (_ for _ in ()).throw(AssertionError("unexpected write")),
     )
 
@@ -49,7 +51,8 @@ def test_identical_core_identity_updates_are_noops(tmp_path: Path, monkeypatch) 
         key: frontmatter[key] for key in ("schema_version", "created_by", "id", "date")
     }
     monkeypatch.setattr(
-        "meeting_memory.service.meeting_state.atomic_replace_text",
+        MeetingDocument,
+        "replace_transcript",
         lambda *_args: (_ for _ in ()).throw(AssertionError("unexpected write")),
     )
 

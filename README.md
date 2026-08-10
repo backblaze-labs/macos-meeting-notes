@@ -33,6 +33,12 @@ is being delivered in phases: the current checkout still uses the legacy
 launch the full tray. Those requirements are characterized so the next phase
 can remove them without silently breaking existing setups.
 
+The repository now also contains inactive, tested hardening primitives for
+locked schema-v2 transcript/speaker updates, private indexed recovery, and
+verified cancellable B2 snapshots. They deliberately do not change current app
+startup or recording behavior; the runtime cutover remains a separate atomic
+phase.
+
 The first-value acceptance test is concrete: record about 30 seconds of real
 audio, stop, play the saved result, and reveal its meeting directory in Finder
 within five minutes of first launch.

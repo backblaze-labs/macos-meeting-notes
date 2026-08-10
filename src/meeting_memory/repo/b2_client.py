@@ -7,6 +7,13 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from meeting_memory.config.settings import Settings
+from meeting_memory.repo.b2_snapshot import open_verified_backup_snapshot
+from meeting_memory.types.artifacts import (
+    BackupSnapshotUpload,
+    BackupSnapshotUploadResult,
+    BackupUploadCancellation,
+    BackupUploadDisposition,
+)
 from meeting_memory.types.meeting import B2UploadResult, MeetingFiles
 
 USER_AGENT_EXTRA = "b2ai-meeting-memory"
@@ -50,6 +57,54 @@ class B2S3Client:
             audio_keys=audio_keys,
         )
 
+    def upload_backup_snapshot(
+        self,
+        request: BackupSnapshotUpload,
+        *,
+        cancellation: BackupUploadCancellation,
+    ) -> BackupSnapshotUploadResult:
+        """Upload at safe boundaries without owning durable meeting state."""
+
+        if cancellation.cancelled:
+            return _stopped_upload(request, BackupUploadDisposition.CANCELLED)
+        audio_key = f"meetings/{request.meeting_slug}/{RECORDING_AUDIO}"
+        transcript_key = f"meetings/{request.meeting_slug}/{TRANSCRIPT_MARKDOWN}"
+        with open_verified_backup_snapshot(request) as snapshot:
+            if cancellation.cancelled:
+                return _stopped_upload(request, BackupUploadDisposition.CANCELLED)
+            client = self._client()
+            if not self._upload_stream_while_enabled(
+                client,
+                snapshot.audio,
+                audio_key,
+                cancellation,
+            ):
+                return _stopped_upload(request, BackupUploadDisposition.CANCELLED)
+            if cancellation.cancelled:
+                return _stopped_upload(
+                    request,
+                    BackupUploadDisposition.PARTIAL,
+                    audio_key=audio_key,
+                )
+            if not self._upload_stream_while_enabled(
+                client,
+                snapshot.transcript,
+                transcript_key,
+                cancellation,
+            ):
+                return _stopped_upload(
+                    request,
+                    BackupUploadDisposition.PARTIAL,
+                    audio_key=audio_key,
+                )
+        return BackupSnapshotUploadResult(
+            disposition=BackupUploadDisposition.COMPLETE,
+            meeting_slug=request.meeting_slug,
+            revision=request.revision,
+            audio_key=audio_key,
+            transcript_key=transcript_key,
+        )
+
     def _client(self):
         boto3 = _load_boto3()
         Config = _load_botocore_config()
@@ -71,6 +126,42 @@ class B2S3Client:
                 if delay is None:
                     raise
                 self.sleeper(delay)
+
+    def _upload_stream_while_enabled(
+        self,
+        client,
+        stream,
+        key: str,
+        cancellation: BackupUploadCancellation,
+    ) -> bool:
+        for delay in (*self.retry_delays, None):
+            if cancellation.cancelled:
+                return False
+            try:
+                stream.seek(0)
+                client.upload_fileobj(stream, self.bucket_name, key)
+                return True
+            except Exception:
+                if delay is None:
+                    raise
+                if cancellation.cancelled:
+                    return False
+                self.sleeper(delay)
+        return False
+
+
+def _stopped_upload(
+    request: BackupSnapshotUpload,
+    disposition: BackupUploadDisposition,
+    *,
+    audio_key: str | None = None,
+) -> BackupSnapshotUploadResult:
+    return BackupSnapshotUploadResult(
+        disposition=disposition,
+        meeting_slug=request.meeting_slug,
+        revision=request.revision,
+        audio_key=audio_key,
+    )
 
 
 def _load_boto3():

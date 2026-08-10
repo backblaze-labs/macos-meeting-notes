@@ -8,14 +8,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
+from meeting_memory.service.file_snapshot import read_regular_text_snapshot
 from meeting_memory.service.frontmatter import dump_frontmatter, split_frontmatter
 from meeting_memory.service.markdown import render_notes_markdown
+from meeting_memory.service.meeting_state import MeetingStateStore
+from meeting_memory.service.ownership import classify_ownership
 from meeting_memory.service.storage import (
     NOTES_MARKDOWN,
     TRANSCRIPT_MARKDOWN,
     is_ours,
     read_frontmatter,
 )
+from meeting_memory.types.artifacts import ArtifactOwnership
 from meeting_memory.types.meeting import MeetingMeta, RecentMeeting
 from meeting_memory.types.summary import SummaryResult
 from meeting_memory.types.transcript import SpeakerReviewState
@@ -44,7 +48,7 @@ def resolve_transcript_path(path: Path) -> Path:
 
 def load_speaker_review(path: Path) -> SpeakerReviewState:
     transcript_path = resolve_transcript_path(path)
-    markdown = transcript_path.read_text(encoding="utf-8")
+    markdown = read_regular_text_snapshot(transcript_path)
     frontmatter, body = split_frontmatter(markdown)
     return SpeakerReviewState(
         meeting_directory=transcript_path.parent,
@@ -58,26 +62,62 @@ def load_speaker_review(path: Path) -> SpeakerReviewState:
 
 
 def confirm_speaker_aliases(path: Path, aliases: Mapping[str, str]) -> Path:
-    state = load_speaker_review(path)
+    transcript_path = resolve_transcript_path(path)
+    markdown = read_regular_text_snapshot(transcript_path)
+    frontmatter, _ = split_frontmatter(markdown)
+    if classify_ownership(frontmatter, transcript_path.name) is ArtifactOwnership.V2:
+        return MeetingStateStore(transcript_path.parent.parent).confirm_speakers(
+            transcript_path.parent,
+            aliases,
+            expected_status=str(frontmatter.get("speaker_status") or "not_available"),
+        )
+    return _confirm_speaker_aliases_legacy(transcript_path, aliases)
+
+
+def _confirm_speaker_aliases_legacy(
+    transcript_path: Path,
+    aliases: Mapping[str, str],
+) -> Path:
+    state = load_speaker_review(transcript_path)
     cleaned = _clean_aliases(aliases)
     missing = [label for label in state.speaker_labels if label not in cleaned]
     if missing:
         raise ValueError(f"missing aliases for: {', '.join(missing)}")
 
-    markdown = state.transcript_path.read_text(encoding="utf-8")
+    markdown = read_regular_text_snapshot(state.transcript_path)
     frontmatter, body = split_frontmatter(markdown)
     frontmatter["speaker_aliases"] = {label: cleaned[label] for label in state.speaker_labels}
     state.transcript_path.write_text(
         f"{dump_frontmatter(frontmatter)}\n{body}",
         encoding="utf-8",
     )
-    return relabel_transcript(state.transcript_path)
+    return _relabel_transcript_legacy(state.transcript_path)
 
 
 def relabel_transcript(path: Path) -> Path:
     transcript_path = resolve_transcript_path(path)
-    markdown = transcript_path.read_text(encoding="utf-8")
+    markdown = read_regular_text_snapshot(transcript_path)
     frontmatter, body = split_frontmatter(markdown)
+    aliases = _speaker_aliases(frontmatter)
+    if classify_ownership(frontmatter, transcript_path.name) is ArtifactOwnership.V2:
+        return MeetingStateStore(transcript_path.parent.parent).confirm_speakers(
+            transcript_path.parent,
+            aliases,
+            expected_status=str(frontmatter.get("speaker_status") or "not_available"),
+        )
+    return _relabel_transcript_legacy(transcript_path, markdown, frontmatter, body)
+
+
+def _relabel_transcript_legacy(
+    transcript_path: Path,
+    markdown: str | None = None,
+    frontmatter: dict[str, object] | None = None,
+    body: str | None = None,
+) -> Path:
+    if markdown is None:
+        markdown = read_regular_text_snapshot(transcript_path)
+    if frontmatter is None or body is None:
+        frontmatter, body = split_frontmatter(markdown)
     aliases = _speaker_aliases(frontmatter)
     participants = _mapped_participants(frontmatter, aliases)
     relabeled_body = SPEAKER_LABEL_RE.sub(lambda match: _replace_label(match, aliases), body)
@@ -119,7 +159,7 @@ def list_speaker_review_meetings(meetings_dir: Path, limit: int = 5) -> list[Rec
 
 def generate_notes_from_transcript(path: Path, summarizer: SummarizerClient) -> Path:
     transcript_path = resolve_transcript_path(path)
-    markdown = transcript_path.read_text(encoding="utf-8")
+    markdown = read_regular_text_snapshot(transcript_path)
     frontmatter, body = split_frontmatter(markdown)
     if frontmatter.get("speaker_status") != "confirmed":
         raise ValueError("speaker aliases must be confirmed before generating notes")

@@ -18,20 +18,26 @@ without Terminal, cloud accounts, API keys, Google auth, or network access. The
 acceptance path is about 30 seconds of real audio that can be played and
 revealed in Finder within that window.
 
-Outcome in this stage: accepted the capability/readiness, durable-audio,
-privacy, legacy migration, and phased acceptance contract in
-`docs/local-first-contract.md`; added pure boundary types and passing legacy
-characterization tests. No runtime configuration or secret storage changed.
+Outcome through the inactive hardening slice: accepted the
+capability/readiness, durable-audio, privacy, legacy migration, and phased
+acceptance contract in `docs/local-first-contract.md`; added pure boundary
+types, atomic local commit/state primitives, locked transcript and speaker
+transactions, private indexed recovery, stable no-follow reads, and a verified
+cancellable B2 snapshot-upload seam. No runtime configuration, startup,
+recorder, pipeline, tray, or secret-storage behavior changed.
 
-Deferred by phase: independent optional adapters and local commit behavior
-(Phase 2, including same-filesystem staging and atomic directory publication),
-capability-aware setup/doctor (Phase 3), Keychain-backed progressive
-configuration and `.env` import (Phase 4), clean-user computer validation
-(Phase 5), and signed/notarized standalone distribution (Phase 6).
+Deferred by phase: the atomic activation of independent optional adapters,
+app-staged capture/commit, explicit recovery/retry orchestration, and typed tray
+events remains the next Phase 2 slice. Capability-aware setup/doctor remains
+Phase 3; Keychain-backed progressive configuration and `.env` import remain
+Phase 4; clean-user computer validation remains Phase 5; signed/notarized
+standalone distribution remains Phase 6.
 
-First thing to check: read `docs/local-first-contract.md`, then find the legacy
-tests in `tests/test_legacy_local_first_characterization.py`. Replace those
-expectations rather than layering exceptions onto the global `Settings` model.
+First thing to check: read `docs/local-first-contract.md`, then inspect the
+inactive transaction, recovery, and snapshot-upload tests before changing the
+legacy runtime. Activate the seams together; do not layer background scans or
+provider calls onto startup, and do not retain obsolete global-settings
+expectations once the cutover replaces them.
 
 ## 2026-06-18 Current Reliability and Product Notes
 

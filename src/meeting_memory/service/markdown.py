@@ -73,14 +73,16 @@ def render_transcript_stub(
         {
             "schema_version": 2,
             "created_by": "meeting-memory",
-            "id": _safe_text(meta.slug),
+            "id": safe_frontmatter_text(meta.slug),
             "date": meta.started_at.isoformat(),
             "duration_minutes": meta.duration_minutes,
-            "calendar_title": _safe_text(meta.calendar_title),
+            "calendar_title": safe_frontmatter_text(meta.calendar_title),
             "participants": [],
             "assemblyai_id": None,
             "transcription_status": transcription_status.value,
-            "speaker_candidates": [_safe_text(value) for value in meta.speaker_candidates],
+            "speaker_candidates": [
+                safe_frontmatter_text(value) for value in meta.speaker_candidates
+            ],
             "speaker_aliases": {},
             "speaker_status": "not_available",
             "b2_audio": None,
@@ -149,17 +151,35 @@ def render_transcript_markdown(
         },
         fields=TRANSCRIPT_FRONTMATTER_FIELDS,
     )
+    return f"{frontmatter}\n\n{render_transcript_body(meta, rendered_transcript)}"
+
+
+def render_transcript_body(meta: MeetingMeta, transcript: TranscriptResult) -> str:
+    """Render only the transcript body for an atomic schema-v2 state update."""
+
     return "\n".join(
         [
-            frontmatter,
-            "",
             "# Transcript",
             "",
             f"**Date:** {_human_date(meta.started_at)}",
             f"**Duration:** {meta.duration_minutes} minutes",
-            f"**Participants:** {_participants(rendered_transcript)}",
+            f"**Participants:** {_participants(transcript)}",
             "",
-            _transcript_text(rendered_transcript),
+            _transcript_text(transcript),
+            "",
+        ]
+    )
+
+
+def render_transcription_failure_body() -> str:
+    """Render a provider-detail-free retry state for a committed recording."""
+
+    return "\n".join(
+        [
+            "# Transcript",
+            "",
+            "_Transcription failed. Audio remains saved locally._",
+            "_Use Retry Failed Transcriptions to try again._",
             "",
         ]
     )
@@ -261,7 +281,7 @@ def _clean_aliases(speaker_aliases: Mapping[str, str] | None) -> dict[str, str]:
     }
 
 
-def _safe_text(value: str) -> str:
+def safe_frontmatter_text(value: str) -> str:
     """Keep generated metadata single-purpose and free of control characters."""
 
     without_controls = "".join(

@@ -15,6 +15,7 @@ from meeting_memory.service.backup_revision import (
     compute_backup_revision_with_transcript,
     normalize_transcript_for_backup,
 )
+from meeting_memory.types.backup import backup_revision_bytes
 
 LF_TRANSCRIPT = b"""---
 schema_version: 2
@@ -32,9 +33,9 @@ backup_status: body text remains
 
 
 def test_backup_revision_golden_vector_and_line_endings() -> None:
-    assert backup_revision(b"audio\x00bytes", LF_TRANSCRIPT) == (
-        "fe05ee6cc4c556db72b4b540e59e7ca7eeced82c216aac5c6ae7e05093f0f4b9"
-    )
+    expected = "fe05ee6cc4c556db72b4b540e59e7ca7eeced82c216aac5c6ae7e05093f0f4b9"
+    assert backup_revision(b"audio\x00bytes", LF_TRANSCRIPT) == expected
+    assert backup_revision_bytes(b"audio\x00bytes", LF_TRANSCRIPT) == expected
     crlf_revision = backup_revision(
         b"audio\x00bytes", LF_TRANSCRIPT.replace(b"\n", b"\r\n")
     )
@@ -61,17 +62,20 @@ def test_only_four_backup_fields_are_revision_neutral() -> None:
 
 
 def test_file_revision_matches_bytes_and_snapshot_is_immutable_copy(tmp_path: Path) -> None:
-    audio = tmp_path / "recording.m4a"
-    transcript = tmp_path / "transcript.md"
+    meeting = tmp_path / "sample"
+    meeting.mkdir()
+    audio = meeting / "recording.m4a"
+    transcript = meeting / "transcript.md"
     audio.write_bytes(b"original audio")
     transcript.write_bytes(LF_TRANSCRIPT)
     expected = backup_revision(audio.read_bytes(), transcript.read_bytes())
 
-    snapshot = capture_backup_snapshot(audio, transcript, tmp_path / "snapshots")
+    snapshot = capture_backup_snapshot(meeting, tmp_path / "snapshots")
     audio.write_bytes(b"mutated audio")
     transcript.write_bytes(LF_TRANSCRIPT + b"mutated\n")
 
     assert snapshot.revision == expected
+    assert snapshot.meeting_slug == "sample"
     assert compute_backup_revision(snapshot.audio_path, snapshot.transcript_path) == expected
     assert snapshot.audio_path.read_bytes() == b"original audio"
     assert snapshot.transcript_path.read_bytes() == LF_TRANSCRIPT
@@ -153,8 +157,10 @@ def test_revision_and_snapshot_never_follow_private_source_symlinks(
 ) -> None:
     private = tmp_path / "PRIVATE"
     private.write_bytes(LF_TRANSCRIPT if invalid_source == "transcript-symlink" else b"secret")
-    audio = tmp_path / "recording.m4a"
-    transcript = tmp_path / "transcript.md"
+    meeting = tmp_path / "sample"
+    meeting.mkdir()
+    audio = meeting / "recording.m4a"
+    transcript = meeting / "transcript.md"
     audio.write_bytes(b"audio")
     transcript.write_bytes(LF_TRANSCRIPT)
     target = audio if invalid_source == "audio-symlink" else transcript
@@ -168,11 +174,36 @@ def test_revision_and_snapshot_never_follow_private_source_symlinks(
         with pytest.raises((OSError, ValueError)):
             compute_backup_revision_with_transcript(audio, LF_TRANSCRIPT)
     with pytest.raises((OSError, ValueError)):
-        capture_backup_snapshot(audio, transcript, snapshot_root)
+        capture_backup_snapshot(meeting, snapshot_root)
 
     assert private.read_bytes() == (
         LF_TRANSCRIPT if invalid_source == "transcript-symlink" else b"secret"
     )
+    assert not snapshot_root.exists()
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        (b"created_by: meeting-memory", b"created_by: another-app"),
+        (b"schema_version: 2", b"schema_version: 1"),
+        (b"id: sample", b"id: ../escape"),
+    ],
+)
+def test_snapshot_capture_requires_owned_schema_v2_identity(
+    tmp_path: Path, replacement: tuple[bytes, bytes]
+) -> None:
+    meeting = tmp_path / "sample"
+    meeting.mkdir()
+    audio = meeting / "recording.m4a"
+    transcript = meeting / "transcript.md"
+    audio.write_bytes(b"audio")
+    transcript.write_bytes(LF_TRANSCRIPT.replace(*replacement))
+    snapshot_root = tmp_path / "snapshots"
+
+    with pytest.raises(ValueError):
+        capture_backup_snapshot(meeting, snapshot_root)
+
     assert not snapshot_root.exists()
 
 
@@ -181,8 +212,10 @@ def test_nonregular_sources_are_rejected_without_snapshot_artifacts(
     tmp_path: Path,
     nonregular: str,
 ) -> None:
-    audio = tmp_path / "recording.m4a"
-    transcript = tmp_path / "transcript.md"
+    meeting = tmp_path / "sample"
+    meeting.mkdir()
+    audio = meeting / "recording.m4a"
+    transcript = meeting / "transcript.md"
     transcript.write_bytes(LF_TRANSCRIPT)
     if nonregular == "fifo":
         os.mkfifo(audio)
@@ -193,6 +226,61 @@ def test_nonregular_sources_are_rejected_without_snapshot_artifacts(
     with pytest.raises((OSError, ValueError)):
         compute_backup_revision(audio, transcript)
     with pytest.raises((OSError, ValueError)):
-        capture_backup_snapshot(audio, transcript, snapshot_root)
+        capture_backup_snapshot(meeting, snapshot_root)
 
     assert not snapshot_root.exists()
+
+
+@pytest.mark.parametrize("root_kind", ["direct", "intermediate"])
+def test_snapshot_root_rejects_symlink_without_outside_copy(
+    tmp_path: Path,
+    root_kind: str,
+) -> None:
+    meeting = tmp_path / "sample"
+    meeting.mkdir()
+    audio = meeting / "recording.m4a"
+    transcript = meeting / "transcript.md"
+    audio.write_bytes(b"private audio")
+    transcript.write_bytes(LF_TRANSCRIPT)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    link = tmp_path / "link"
+    link.symlink_to(outside, target_is_directory=True)
+
+    snapshot_root = link if root_kind == "direct" else link / "nested"
+    with pytest.raises(OSError):
+        capture_backup_snapshot(meeting, snapshot_root)
+
+    assert not any(outside.iterdir())
+
+
+def test_snapshot_parent_swap_uses_pinned_directory_and_writes_nothing_outside(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    meeting = tmp_path / "sample"
+    meeting.mkdir()
+    audio = meeting / "recording.m4a"
+    transcript = meeting / "transcript.md"
+    audio.write_bytes(b"private audio")
+    transcript.write_bytes(LF_TRANSCRIPT)
+    parent = tmp_path / "snapshots"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    moved = tmp_path / "original-snapshots"
+    from meeting_memory.service import backup_snapshot_fs
+
+    original = backup_snapshot_fs.create_private_child
+
+    def swap_after_child(parent_fd: int, prefix: str):
+        result = original(parent_fd, prefix)
+        parent.rename(moved)
+        parent.symlink_to(outside, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(backup_snapshot_fs, "create_private_child", swap_after_child)
+
+    with pytest.raises(ValueError, match="changed during capture"):
+        capture_backup_snapshot(meeting, parent)
+
+    assert not any(outside.iterdir())
+    assert not any(moved.iterdir())

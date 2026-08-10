@@ -33,19 +33,12 @@ def test_valid_and_invalid_job_transitions(tmp_path: Path) -> None:
         MeetingJobState.RUNNING,
         {"assemblyai_id": "tx-123"},
     )
-    store.transition_job(
-        meeting,
-        MeetingJob.TRANSCRIPTION,
-        MeetingJobState.RUNNING,
-        MeetingJobState.SUCCEEDED,
-    )
-
-    with pytest.raises(InvalidMeetingTransition):
+    with pytest.raises(InvalidMeetingTransition, match="TranscriptStateStore"):
         store.transition_job(
             meeting,
             MeetingJob.TRANSCRIPTION,
+            MeetingJobState.RUNNING,
             MeetingJobState.SUCCEEDED,
-            MeetingJobState.PENDING,
         )
     store.transition_job(
         meeting,
@@ -90,10 +83,11 @@ def test_concurrent_owner_merges_preserve_each_other(tmp_path: Path) -> None:
 
     def backup_update() -> None:
         barrier.wait()
-        store.merge_fields(
+        store.transition_job(
             meeting,
-            ArtifactFieldOwner.BACKUP,
-            {"b2_audio": "meetings/example/recording.m4a"},
+            MeetingJob.BACKUP,
+            MeetingJobState.PENDING,
+            MeetingJobState.RUNNING,
         )
 
     threads = [
@@ -108,7 +102,7 @@ def test_concurrent_owner_merges_preserve_each_other(tmp_path: Path) -> None:
     frontmatter = read_frontmatter(meeting / "transcript.md")
     assert frontmatter["assemblyai_id"] == "tx-concurrent"
     assert frontmatter["participants"] == ["Speaker A"]
-    assert frontmatter["b2_audio"] == "meetings/example/recording.m4a"
+    assert frontmatter["backup_status"] == "running"
 
 
 def test_owner_cannot_write_another_owner_or_bypass_state_graph(tmp_path: Path) -> None:
@@ -119,21 +113,77 @@ def test_owner_cannot_write_another_owner_or_bypass_state_graph(tmp_path: Path) 
         store.merge_fields(meeting, ArtifactFieldOwner.BACKUP, {"assemblyai_id": "wrong"})
     with pytest.raises(MeetingStateError):
         store.merge_fields(meeting, ArtifactFieldOwner.BACKUP, {"backup_status": "succeeded"})
+    with pytest.raises(MeetingStateError, match="does not own"):
+        store.merge_fields(
+            meeting,
+            ArtifactFieldOwner.SPEAKERS,
+            {"speaker_status": "confirmed"},
+        )
 
 
-def test_backup_owner_merge_does_not_change_content_revision(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("owner", "updates"),
+    [
+        (ArtifactFieldOwner.CORE, {"duration_minutes": -1}),
+        (ArtifactFieldOwner.CORE, {"calendar_title": 7}),
+        (ArtifactFieldOwner.TRANSCRIPTION, {"participants": "Speaker A"}),
+        (ArtifactFieldOwner.TRANSCRIPTION, {"assemblyai_id": ""}),
+        (ArtifactFieldOwner.SPEAKERS, {"speaker_candidates": "Alex"}),
+    ],
+)
+def test_generic_merge_validates_remaining_field_values(
+    tmp_path: Path,
+    owner: ArtifactFieldOwner,
+    updates: dict[str, object],
+) -> None:
+    meeting = _meeting(tmp_path)
+    before = (meeting / "transcript.md").read_bytes()
+
+    with pytest.raises(MeetingStateError):
+        MeetingStateStore(tmp_path / "meetings").merge_fields(meeting, owner, updates)
+
+    assert (meeting / "transcript.md").read_bytes() == before
+
+
+def test_backup_keys_are_exclusive_to_completion_cas(tmp_path: Path) -> None:
+    meeting = _meeting(tmp_path)
+    store = MeetingStateStore(tmp_path / "meetings")
+    before = (meeting / "transcript.md").read_bytes()
+
+    with pytest.raises(MeetingStateError, match="does not own"):
+        store.merge_fields(
+            meeting,
+            ArtifactFieldOwner.BACKUP,
+            {"b2_audio": f"meetings/{meeting.name}/recording.m4a"},
+        )
+    with pytest.raises(MeetingStateError, match="does not own"):
+        store.transition_job(
+            meeting,
+            MeetingJob.BACKUP,
+            MeetingJobState.PENDING,
+            MeetingJobState.RUNNING,
+            {"backup_uploaded_revision": "a" * 64},
+        )
+
+    assert (meeting / "transcript.md").read_bytes() == before
+
+
+def test_backup_owner_merge_cannot_write_completion_fields(tmp_path: Path) -> None:
     meeting = _meeting(tmp_path)
     store = MeetingStateStore(tmp_path / "meetings")
     before = compute_backup_revision(meeting / "recording.m4a", meeting / "transcript.md")
 
-    store.merge_fields(
-        meeting,
-        ArtifactFieldOwner.BACKUP,
-        {"b2_audio": "key", "backup_uploaded_revision": "a" * 64},
-    )
+    before_bytes = (meeting / "transcript.md").read_bytes()
+    with pytest.raises(MeetingStateError, match="does not own"):
+        store.merge_fields(
+            meeting,
+            ArtifactFieldOwner.BACKUP,
+            {"b2_audio": "key", "backup_uploaded_revision": "a" * 64},
+        )
 
     after = compute_backup_revision(meeting / "recording.m4a", meeting / "transcript.md")
     assert after == before
+    assert (meeting / "transcript.md").read_bytes() == before_bytes
 
 
 def _meeting(tmp_path: Path) -> Path:

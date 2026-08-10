@@ -54,16 +54,44 @@ The current runtime still constructs the cloud adapters from one fail-fast
 scheduled for replacement in the next implementation phase; the architecture
 above is the accepted target, not a claim that the transition is complete.
 
-The inactive Stage 2A substrate is split by filesystem responsibility:
+The inactive local-first substrate is split by filesystem responsibility:
 `service/atomic_io.py` owns fsync and macOS no-clobber rename primitives,
-`meeting_locks.py` owns per-meeting serialization, `meeting_paths.py` validates
-the direct-child/no-symlink state boundary, and `meeting_store.py` assembles and
-publishes complete local directories. `meeting_state.py` and
-`meeting_state_fields.py` own CAS transitions, immutable identity, field-owner
-merges, same-write Backup reconciliation, and revision-checked Backup
-completion. `ownership.py` provides read-only legacy mapping, while
-`backup_revision.py` provides revision and file-backed snapshot primitives.
-None is connected to the legacy recorder, pipeline, or tray yet.
+`pinned_fs.py` owns component-wise no-follow staging access, and
+`meeting_document.py` pins an owned schema-v2 meeting directory for all state,
+body, and revision operations. `meeting_locks.py` owns per-meeting
+serialization, while `meeting_store.py` assembles and publishes complete local
+directories. `meeting_state.py`, `transcript_state.py`, and `speaker_state.py`
+own CAS transitions and whole-document Transcription/speaker transactions with
+same-write Backup reconciliation. `file_snapshot.py` provides stable regular
+file reads for local Notes input. `recovery_index.py`,
+`legacy_recovery_index.py`, `recovery_audio.py`, `recovery_commit.py`, and
+`recovery_cleanup.py` provide private indexed capture sessions, explicit
+once-only legacy discovery, and verified M4A materialization. The trusted
+configured legacy root is canonicalized once so macOS temporary-directory
+aliases remain compatible; candidates beneath it stay no-follow. Recovery
+keeps the exact source pinned while MeetingStore publishes it. Direct M4A
+recovery checks copied size and digest; WAV recovery gives an injected
+converter a verified private snapshot path and removes that snapshot before
+publication. Both paths require a caller-supplied, native-compatible M4A
+validator that establishes a complete container with AAC audio—the inactive
+service intentionally has no signature-only fallback. A successful commit
+issues a sealed cleanup capability binding both the published directory and
+the final audio device/inode, size, and digest.
+`backup_revision.py` and `backup_snapshot_fs.py` capture immutable revision
+snapshots from one pinned meeting directory; their meeting slug comes from that
+directory's owned transcript rather than a caller argument. Default snapshot
+staging is beneath the pinned root's canonical path, including when the
+configured meetings root is a lexical symlink; explicit snapshot roots retain
+the component-wise no-follow boundary.
+`repo/b2_snapshot.py` copies the verified pair through private writers, closes
+those writers, reopens read-only views, and unlinks their names. Identity and
+revision come from those exact anonymous bytes, and only the read-only streams
+reach the inactive per-object adapter. Path or provider mutation therefore
+cannot change bytes between validation, upload, or retry. The adapter also honors
+monotonic worker cancellation at provider boundaries. Pure revision framing
+lives in `types/backup.py` so the service and repository cannot drift. None of
+these new activation seams is connected to the legacy recorder, pipeline, or
+tray yet.
 
 ## Native Audio Boundary
 

@@ -3,20 +3,17 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from pathlib import Path
 
-from meeting_memory.service.atomic_io import atomic_replace_text
-from meeting_memory.service.backup_revision import (
-    compute_backup_revision,
-    compute_backup_revision_with_transcript,
-)
 from meeting_memory.service.frontmatter import merge_frontmatter_fields
-from meeting_memory.service.meeting_locks import meeting_lock
-from meeting_memory.service.meeting_paths import (
-    ValidatedMeetingDirectory,
-    validate_state_meeting_directory,
+from meeting_memory.service.meeting_document import (
+    MeetingDocument,
+    open_meeting_document,
+    validate_meeting_document,
 )
+from meeting_memory.service.meeting_locks import meeting_lock
 from meeting_memory.service.meeting_state_fields import (
     changed_fields,
     validate_core_identity,
@@ -64,23 +61,19 @@ class MeetingStateStore:
         owner: ArtifactFieldOwner,
         updates: Mapping[str, object],
     ) -> dict[str, object]:
-        validated = self._validate_path(meeting_dir)
-        meeting_dir = validated.path
         self._validate_owned_fields(owner, updates)
-        self._validate_core_identity(owner, validated.frontmatter, updates)
+        self._validate_reference(meeting_dir)
         with meeting_lock(self.meetings_dir, meeting_dir.name):
-            locked = self._validate_path(meeting_dir)
-            text, frontmatter = locked.text, locked.frontmatter
-            self._validate_core_identity(owner, frontmatter, updates)
-            written_updates = changed_fields(frontmatter, updates)
-            if not written_updates:
-                return frontmatter.copy()
-            if owner is not ArtifactFieldOwner.BACKUP:
-                written_updates = self._reconcile_backup(
-                    meeting_dir, text, frontmatter, written_updates
-                )
-            self._write_updates(meeting_dir, text, frontmatter, written_updates)
-            return frontmatter.copy()
+            with self._document(meeting_dir) as document:
+                frontmatter = document.frontmatter
+                self._validate_core_identity(owner, frontmatter, updates)
+                written_updates = changed_fields(frontmatter, updates)
+                if not written_updates:
+                    return frontmatter.copy()
+                if owner is not ArtifactFieldOwner.BACKUP:
+                    written_updates = self._reconcile_backup(document, written_updates)
+                self._write_updates(document, written_updates)
+                return document.frontmatter.copy()
 
     def transition_job(
         self,
@@ -90,39 +83,35 @@ class MeetingStateStore:
         target: MeetingJobState,
         updates: Mapping[str, object] | None = None,
     ) -> dict[str, object]:
-        meeting_dir = self._validate_path(meeting_dir).path
         owner, state_field = _job_owner_and_field(job)
         owned_updates = dict(updates or {})
         self._validate_owned_fields(owner, owned_updates)
         _validate_transition(job, expected, target)
+        self._validate_reference(meeting_dir)
 
         with meeting_lock(self.meetings_dir, meeting_dir.name):
-            locked = self._validate_path(meeting_dir)
-            text, frontmatter = locked.text, locked.frontmatter
-            current = _state(frontmatter.get(state_field))
-            if current is not expected:
-                raise MeetingStateConflict(
-                    f"{job.value} state is {current.value}, expected {expected.value}"
-                )
-            if (
-                job is MeetingJob.BACKUP
-                and expected is MeetingJobState.SUCCEEDED
-                and target is MeetingJobState.PENDING
-            ):
-                current_revision = compute_backup_revision(
-                    meeting_dir / "recording.m4a", meeting_dir / "transcript.md"
-                )
-                if current_revision == frontmatter.get("backup_uploaded_revision"):
+            with self._document(meeting_dir) as document:
+                frontmatter = document.frontmatter
+                current = _state(frontmatter.get(state_field))
+                if current is not expected:
+                    raise MeetingStateConflict(
+                        f"{job.value} state is {current.value}, expected {expected.value}"
+                    )
+                if (
+                    job is MeetingJob.BACKUP
+                    and expected is MeetingJobState.SUCCEEDED
+                    and target is MeetingJobState.PENDING
+                    and document.backup_revision()
+                    == frontmatter.get("backup_uploaded_revision")
+                ):
                     raise InvalidMeetingTransition(
                         "backup succeeded -> pending requires a changed content revision"
                     )
-            written_updates = {**owned_updates, state_field: target.value}
-            if job is MeetingJob.TRANSCRIPTION:
-                written_updates = self._reconcile_backup(
-                    meeting_dir, text, frontmatter, written_updates
-                )
-            self._write_updates(meeting_dir, text, frontmatter, written_updates)
-            return frontmatter.copy()
+                written_updates = {**owned_updates, state_field: target.value}
+                if job is MeetingJob.TRANSCRIPTION:
+                    written_updates = self._reconcile_backup(document, written_updates)
+                self._write_updates(document, written_updates)
+                return document.frontmatter.copy()
 
     def complete_backup(
         self,
@@ -133,76 +122,85 @@ class MeetingStateStore:
     ) -> BackupCompletionResult:
         """Atomically record a complete matching snapshot or return it to pending."""
 
-        meeting_dir = self._validate_path(meeting_dir).path
-        _validate_completion_inputs(revision, audio_key, transcript_key)
+        _validate_revision(revision)
+        self._validate_reference(meeting_dir)
         with meeting_lock(self.meetings_dir, meeting_dir.name):
-            locked = self._validate_path(meeting_dir)
-            text, frontmatter = locked.text, locked.frontmatter
-            current = _state(frontmatter.get("backup_status"))
-            if current is not MeetingJobState.RUNNING:
-                raise MeetingStateConflict(
-                    f"backup state is {current.value}, expected running"
-                )
-            current_revision = compute_backup_revision(
-                meeting_dir / "recording.m4a", meeting_dir / "transcript.md"
-            )
-            if revision != current_revision:
+            with self._document(meeting_dir) as document:
+                _validate_completion_keys(document.path.name, audio_key, transcript_key)
+                current = _state(document.frontmatter.get("backup_status"))
+                if current is not MeetingJobState.RUNNING:
+                    raise MeetingStateConflict(
+                        f"backup state is {current.value}, expected running"
+                    )
+                current_revision = document.backup_revision()
+                if revision != current_revision:
+                    self._write_updates(
+                        document,
+                        {"backup_status": MeetingJobState.PENDING.value},
+                    )
+                    return BackupCompletionResult(
+                        False,
+                        MeetingJobState.PENDING,
+                        revision,
+                        current_revision,
+                    )
                 self._write_updates(
-                    meeting_dir,
-                    text,
-                    frontmatter,
-                    {"backup_status": MeetingJobState.PENDING.value},
+                    document,
+                    {
+                        "backup_status": MeetingJobState.SUCCEEDED.value,
+                        "b2_audio": audio_key,
+                        "b2_transcript": transcript_key,
+                        "backup_uploaded_revision": revision,
+                    },
                 )
                 return BackupCompletionResult(
-                    completed=False,
-                    status=MeetingJobState.PENDING,
-                    captured_revision=revision,
-                    current_revision=current_revision,
+                    True,
+                    MeetingJobState.SUCCEEDED,
+                    revision,
+                    current_revision,
                 )
 
-            self._write_updates(
-                meeting_dir,
-                text,
-                frontmatter,
-                {
-                    "backup_status": MeetingJobState.SUCCEEDED.value,
-                    "b2_audio": audio_key.strip(),
-                    "b2_transcript": transcript_key.strip(),
-                    "backup_uploaded_revision": revision,
-                },
-            )
-            return BackupCompletionResult(
-                completed=True,
-                status=MeetingJobState.SUCCEEDED,
-                captured_revision=revision,
-                current_revision=current_revision,
-            )
+    def confirm_speakers(
+        self,
+        meeting_dir: Path,
+        aliases: Mapping[str, str],
+        *,
+        expected_status: str | None = None,
+    ) -> Path:
+        """Atomically relabel one schema-v2 transcript under its meeting lock."""
+
+        from meeting_memory.service.speaker_state import confirm_v2_speakers
+
+        return confirm_v2_speakers(
+            self.meetings_dir,
+            meeting_dir,
+            aliases,
+            expected_status=expected_status,
+        )
+
+    def _validate_reference(self, meeting_dir: Path) -> None:
+        try:
+            validate_meeting_document(self.meetings_dir, meeting_dir)
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise MeetingStateError(str(exc)) from exc
 
     @staticmethod
     def _write_updates(
-        meeting_dir: Path,
-        text: str,
-        frontmatter: dict[str, object],
+        document: MeetingDocument,
         updates: Mapping[str, object],
     ) -> None:
-        atomic_replace_text(
-            meeting_dir / "transcript.md", merge_frontmatter_fields(text, updates)
-        )
-        frontmatter.update(updates)
+        document.replace_transcript(merge_frontmatter_fields(document.text, updates))
 
     @staticmethod
     def _reconcile_backup(
-        meeting_dir: Path,
-        text: str,
-        frontmatter: dict[str, object],
+        document: MeetingDocument,
         updates: dict[str, object],
     ) -> dict[str, object]:
+        frontmatter = document.frontmatter
         if frontmatter.get("backup_status") != MeetingJobState.SUCCEEDED.value:
             return updates
-        prospective = merge_frontmatter_fields(text, updates)
-        revision = compute_backup_revision_with_transcript(
-            meeting_dir / "recording.m4a", prospective
-        )
+        prospective = merge_frontmatter_fields(document.text, updates)
+        revision = document.backup_revision(prospective)
         if revision == frontmatter.get("backup_uploaded_revision"):
             return updates
         return {**updates, "backup_status": MeetingJobState.PENDING.value}
@@ -227,11 +225,17 @@ class MeetingStateStore:
         except ValueError as exc:
             raise MeetingStateError(str(exc)) from exc
 
-    def _validate_path(self, meeting_dir: Path) -> ValidatedMeetingDirectory:
+    @contextmanager
+    def _document(self, meeting_dir: Path) -> Iterator[MeetingDocument]:
+        manager = open_meeting_document(self.meetings_dir, meeting_dir)
         try:
-            return validate_state_meeting_directory(self.meetings_dir, meeting_dir)
+            document = manager.__enter__()
         except (OSError, UnicodeError, ValueError) as exc:
             raise MeetingStateError(str(exc)) from exc
+        try:
+            yield document
+        finally:
+            manager.__exit__(None, None, None)
 
 
 def _job_owner_and_field(job: MeetingJob) -> tuple[ArtifactFieldOwner, str]:
@@ -245,6 +249,13 @@ def _validate_transition(
     expected: MeetingJobState,
     target: MeetingJobState,
 ) -> None:
+    if job is MeetingJob.TRANSCRIPTION and target in {
+        MeetingJobState.SUCCEEDED,
+        MeetingJobState.FAILED,
+    }:
+        raise InvalidMeetingTransition(
+            "transcription completion must use TranscriptStateStore"
+        )
     if job is MeetingJob.BACKUP and target is MeetingJobState.SUCCEEDED:
         raise InvalidMeetingTransition("backup success must use complete_backup")
     allowed = set(VALID_TRANSITIONS[expected])
@@ -263,10 +274,15 @@ def _state(value: object) -> MeetingJobState:
         raise MeetingStateError(f"invalid stored meeting job state: {value!r}") from exc
 
 
-def _validate_completion_inputs(revision: str, audio_key: str, transcript_key: str) -> None:
+def _validate_revision(revision: str) -> None:
     if not isinstance(revision, str) or re.fullmatch(r"[0-9a-f]{64}", revision) is None:
         raise ValueError("backup revision must be 64 lowercase hexadecimal characters")
-    if not isinstance(audio_key, str) or not audio_key.strip():
-        raise ValueError("backup audio key must not be blank")
-    if not isinstance(transcript_key, str) or not transcript_key.strip():
-        raise ValueError("backup transcript key must not be blank")
+
+
+def _validate_completion_keys(slug: str, audio_key: str, transcript_key: str) -> None:
+    expected_audio = f"meetings/{slug}/recording.m4a"
+    expected_transcript = f"meetings/{slug}/transcript.md"
+    if audio_key != expected_audio:
+        raise ValueError(f"backup audio key must be {expected_audio}")
+    if transcript_key != expected_transcript:
+        raise ValueError(f"backup transcript key must be {expected_transcript}")
