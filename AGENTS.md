@@ -27,14 +27,19 @@ Naming boundaries:
 
 ## Repository Map
 
-- `src/meeting_memory/types/`: pure boundary data. No SDK imports and no
+- `src/meeting_memory/types/`: pure boundary data, including capability and
+  progressive-configuration provenance types. No SDK imports and no
   cross-layer imports.
-- `src/meeting_memory/config/`: settings and fail-fast validation.
+- `src/meeting_memory/config/`: active legacy-compatible settings plus the
+  inactive Phase 4A typed schema, pure resolver, and secret-payload codec.
 - `src/meeting_memory/repo/`: external adapters. This is the only layer allowed
   to import external SDKs such as `boto3`, `assemblyai`, `anthropic`,
-  `googleapiclient`, `google_auth_oauthlib`, `google`, or `sounddevice`.
+  `googleapiclient`, `google_auth_oauthlib`, `google`, `keyring`, or
+  `sounddevice`. The generic Keychain adapter writes immutable generations;
+  preferences activate only opaque references.
 - `src/meeting_memory/service/`: orchestration, local behavior, and capability
-  readiness. No SDKs and no `rumps`.
+  readiness. Phase 4A's private atomic non-secret preference store also lives
+  here. No SDKs and no `rumps`.
 - `src/meeting_memory/ui/`: tray UI. This is the only layer allowed to import
   `rumps`.
 - `src/meeting_memory/doctor.py`: preflight checks that can run before optional

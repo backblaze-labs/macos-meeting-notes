@@ -191,11 +191,13 @@ Real credentials, OAuth files, local recordings, transcripts, generated meeting
 folders, and `.env` are ignored by git. Before publishing or pushing changes,
 run the checks in [docs/publishing-checklist.md](docs/publishing-checklist.md).
 
-The target app-managed configuration stores API secrets and OAuth tokens in
-macOS Keychain, names each integration's data egress before opt-in, and imports
-legacy `.env` values only with explicit confirmation. This migration is not yet
-implemented; existing `.env` files are neither changed nor deleted by this
-contract stage.
+The inactive Phase 4A foundation defines a private atomic app preference store,
+immutable generation-based Keychain secret references, and value-free source
+provenance. Runtime and the current settings windows do not use it yet. Phase
+4B will compose those sources, Phase 4C will add explicit digest-bound and
+non-destructive `.env` import, and Phase 4D will add native per-capability
+disclosure, consent, and Calendar auth. Existing `.env` files are not read,
+changed, or deleted by the Phase 4A foundation.
 
 `KNOWN_SPEAKERS` is intentionally empty by default. Use the tray's
 **Configuration › Known Speakers...** item to add local aliases for normalizing

@@ -31,9 +31,24 @@ setup surfaces now share one five-capability `ReadinessReport`; only Recording
 Core controls the default exit status, and explicit in-app checks run off the UI
 thread without provider network calls.
 
-Deferred by phase: Keychain-backed progressive configuration and explicit
-`.env` import remain Phase 4; clean-user computer validation remains Phase 5;
+Phase 4A now provides an inactive typed resolver, private atomic non-secret
+preference store, and immutable generation-based generic Keychain adapter.
+The store includes pinned no-follow I/O and revision compare-and-swap; the
+Keychain API accepts and returns typed provider bundles, including one atomic
+B2 credential pair. They are intentionally not wired into runtime or UI.
+Deferred by phase: the composed loader remains Phase 4B; digest-bound `.env`
+migration remains Phase 4C; native per-capability disclosure/consent forms and
+Calendar auth remain Phase 4D; clean-user computer validation remains Phase 5;
 signed/notarized standalone distribution remains Phase 6.
+
+Phase 4B must treat a missing preference file as legacy-compatible but a
+corrupt/unreadable/unknown-schema file as fail-closed for optional egress unless
+a complete valid process-environment group overrides it. Phase 4C migration
+must bind a preview to the unchanged `.env`, never import process values, write
+new immutable secret generations before one atomic preference activation, and
+never rewrite or delete `.env`. Phase 4D must keep Keychain/filesystem work off
+the UI thread, never prefill or redisplay a secret, and disclose provider egress
+and automatic triggers before consent.
 
 Legacy migration is explicitly user-triggered from Debugging. A successful
 empty scan writes the durable once marker immediately. A nonempty result stays

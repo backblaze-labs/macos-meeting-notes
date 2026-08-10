@@ -5,9 +5,13 @@ fresh clone of the `macos-meeting-notes` repository.
 
 This is the current source-checkout setup. Recording Core requires no cloud
 integration for a first recording; see
-[`local-first-contract.md`](local-first-contract.md). App-managed Keychain
-configuration, native onboarding validation, and standalone distribution are
-delivered in later phases.
+[`local-first-contract.md`](local-first-contract.md). The inactive Phase 4A
+foundation for app preferences, immutable Keychain references, and source
+precedence is present, but the current runtime and UI still use the compatible
+environment path. Composed configuration and explicit migration arrive in
+Phases 4B and 4C respectively; native capability forms and Calendar auth arrive
+in Phase 4D, native onboarding validation in Phase 5, and standalone
+distribution in Phase 6.
 
 ## 1. Install System Requirements
 

@@ -1,6 +1,7 @@
 # Local-First Capability Contract
 
-**Status:** Accepted product contract; implemented through Phase 3
+**Status:** Accepted product contract; implemented through Phase 3, with the
+inactive Phase 4A storage/resolution foundation complete
 **Canonical for:** onboarding, capability readiness, data lifecycle, migration,
 and optional-service behavior
 
@@ -283,6 +284,26 @@ changes the contract and test vocabulary, not secret storage behavior.
 - Secrets are stored in Keychain and are never redisplayed.
 - Legacy `.env` import follows the compatible migration rules above.
 - Every integration names its data egress and automatic trigger before consent.
+
+Phase 4 is intentionally split into independently reviewable slices:
+
+- **Phase 4A (complete, inactive):** typed setting/provenance data, a private
+  atomic non-secret preference store, immutable generation-based Keychain
+  references, typed provider secret bundles, and a pure precedence resolver.
+  The store pins every path component without following symlinks and uses a
+  revision compare-and-swap boundary for concurrent writers.
+  This foundation is not called by runtime, readiness, auth, CLI commands, or
+  UI, and performs no migration.
+- **Phase 4B (deferred):** one composed loader for runtime, readiness, and CLI
+  commands. Process environment remains the highest-priority override source.
+- **Phase 4C (deferred):** digest-bound `.env` migration preview and confirmed
+  application. Process-environment values are never imported and `.env` is
+  never rewritten or deleted.
+- **Phase 4D (deferred):** native per-capability forms, disclosure/consent,
+  background configuration events, and explicit Calendar auth. Secrets remain
+  blank on redisplay.
+
+The Phase 4 acceptance criteria above are not complete until 4B–4D land.
 
 ### Phase 5 — Native onboarding validation
 

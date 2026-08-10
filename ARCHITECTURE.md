@@ -15,10 +15,10 @@ types <- config <- repo <- service <- ui
 
 | Layer | Package | Responsibility |
 | --- | --- | --- |
-| types | `types/` | Pure data models and UI event objects. |
-| config | `config/` | Capability-scoped settings loading plus isolated legacy validation. |
-| repo | `repo/` | External service and hardware adapters. |
-| service | `service/` | Local behavior and orchestration. |
+| types | `types/` | Pure data models, UI events, and value-free configuration provenance. |
+| config | `config/` | Capability-scoped settings, typed schema, pure precedence resolution, and isolated legacy validation. |
+| repo | `repo/` | External service, hardware, and Keychain adapters. |
+| service | `service/` | Local behavior, orchestration, and private app-owned filesystem stores. |
 | ui | `ui/` | `rumps` tray UI and menu handling. |
 
 Cross-cutting modules live directly under `meeting_memory`: `__main__.py`,
@@ -191,5 +191,34 @@ Transcript ready, and Transcription failed notifications.
 
 Runtime startup follows the same boundary and isolates optional adapter
 construction failures from Recording Core. Capability-aware setup/doctor is
-active; Keychain-backed progressive configuration and explicit `.env` import
-remain Phase 4 work.
+active.
+
+## Progressive Configuration Foundation
+
+Phase 4A is present but deliberately inactive. `types/configuration.py` and
+`types/configuration_resolution.py` define the allowlisted non-secret document,
+opaque versioned `SecretRef`, typed provider secret bundles, enablement, and
+value-free provenance. `config/schema.py` and `config/resolution.py` implement a
+pure resolver with the future precedence `process env > app preference/active
+Keychain ref > legacy .env > default`. An explicit optional disable masks app
+and legacy values; only a complete valid process-environment group overrides
+it. An unavailable/corrupt app document fails optional capability selection
+closed while Recording Core remains resolvable.
+
+`service/preference_store.py` and `preference_store_fs.py` store only allowlisted
+non-secrets, enablement, and opaque references in a private atomic JSON file
+under Application Support. Component-wise no-follow directory pinning, strict
+0700/0600 ownership/modes, a writer lock, and revision compare-and-swap prevent
+unsafe paths and lost concurrent updates. Unconditional `save` is create-only
+bootstrap; every later Phase 4 writer must load a snapshot and use
+compare-and-swap.
+`repo/secret_store.py` writes provider payloads under immutable generated
+Keychain accounts in a service distinct from the compatible Google OAuth token
+service. Multi-field B2 credentials form one payload, so a single preference
+replace activates the matching secret and destination settings together.
+
+No active loader calls these modules yet. Runtime, readiness, auth, search,
+summarize, existing UI, and `.env` behavior remain unchanged in 4A. Phase 4B
+adds composed loading; Phase 4C adds digest-bound, explicit, non-destructive
+migration; Phase 4D adds native disclosure/consent forms, background store
+writes, and explicit Calendar auth.
