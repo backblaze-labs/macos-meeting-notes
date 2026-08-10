@@ -23,18 +23,58 @@ from meeting_memory.config.settings import Settings, looks_placeholder
 from meeting_memory.types.speakers import KnownSpeaker
 
 
-@dataclass(frozen=True, slots=True)
-class TranscriptionConfig:
-    api_key: str
+class _ImmutableConfig:
+    def __setattr__(self, _name: str, _value: object) -> None:
+        raise AttributeError("configuration is immutable")
 
 
-@dataclass(frozen=True, slots=True)
-class BackupConfig:
-    application_key_id: str
-    application_key: str
-    endpoint: str
-    region: str
-    bucket_name: str
+class TranscriptionConfig(_ImmutableConfig):
+    __slots__ = ("_api_key",)
+
+    def __init__(self, api_key: str) -> None:
+        object.__setattr__(self, "_api_key", api_key)
+
+    @property
+    def api_key(self) -> str:
+        return self._api_key
+
+    def __repr__(self) -> str:
+        return "TranscriptionConfig(api_key=<redacted>)"
+
+
+class BackupConfig(_ImmutableConfig):
+    __slots__ = (
+        "_application_key_id",
+        "_application_key",
+        "endpoint",
+        "region",
+        "bucket_name",
+    )
+
+    def __init__(
+        self,
+        application_key_id: str,
+        application_key: str,
+        endpoint: str,
+        region: str,
+        bucket_name: str,
+    ) -> None:
+        object.__setattr__(self, "_application_key_id", application_key_id)
+        object.__setattr__(self, "_application_key", application_key)
+        object.__setattr__(self, "endpoint", endpoint)
+        object.__setattr__(self, "region", region)
+        object.__setattr__(self, "bucket_name", bucket_name)
+
+    @property
+    def application_key_id(self) -> str:
+        return self._application_key_id
+
+    @property
+    def application_key(self) -> str:
+        return self._application_key
+
+    def __repr__(self) -> str:
+        return "BackupConfig(credentials=<redacted>, destination=<configured>)"
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,10 +86,26 @@ class CalendarConfig:
 
 
 @dataclass(frozen=True, slots=True)
-class NotesConfig:
-    api_key: str
-    model: str
-    prompt_file: Path | None
+class CalendarAuthConfig:
+    credentials_file: Path
+    calendar_id: str
+    known_speakers: tuple[KnownSpeaker, ...]
+
+
+class NotesConfig(_ImmutableConfig):
+    __slots__ = ("_api_key", "model", "prompt_file")
+
+    def __init__(self, api_key: str, model: str, prompt_file: Path | None) -> None:
+        object.__setattr__(self, "_api_key", api_key)
+        object.__setattr__(self, "model", model)
+        object.__setattr__(self, "prompt_file", prompt_file)
+
+    @property
+    def api_key(self) -> str:
+        return self._api_key
+
+    def __repr__(self) -> str:
+        return "NotesConfig(api_key=<redacted>, local_options=<configured>)"
 
 
 class RuntimeSettings(BaseSettings):
@@ -61,15 +117,15 @@ class RuntimeSettings(BaseSettings):
     max_recording_minutes: int = Field(default=DEFAULT_MAX_RECORDING_MINUTES, gt=0)
     calendar_poll_interval: int | None = DEFAULT_CALENDAR_POLL_INTERVAL
 
-    assemblyai_api_key: str | None = None
-    b2_application_key_id: str | None = None
-    b2_application_key: str | None = None
+    assemblyai_api_key: str | None = Field(default=None, repr=False, exclude=True)
+    b2_application_key_id: str | None = Field(default=None, repr=False, exclude=True)
+    b2_application_key: str | None = Field(default=None, repr=False, exclude=True)
     b2_endpoint: str | None = None
     b2_region: str | None = None
     b2_bucket_name: str | None = None
     google_calendar_credentials_file: Path | None = None
     google_calendar_id: str | None = DEFAULT_GOOGLE_CALENDAR_ID
-    anthropic_api_key: str | None = None
+    anthropic_api_key: str | None = Field(default=None, repr=False, exclude=True)
     anthropic_model: str | None = DEFAULT_ANTHROPIC_MODEL
     summary_prompt_file: Path | None = Path(DEFAULT_SUMMARY_PROMPT_FILE)
 

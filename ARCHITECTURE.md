@@ -193,9 +193,10 @@ Runtime startup follows the same boundary and isolates optional adapter
 construction failures from Recording Core. Capability-aware setup/doctor is
 active.
 
-## Progressive Configuration Foundation
+## Progressive Configuration Composition
 
-Phase 4A is present but deliberately inactive. `types/configuration.py` and
+Phase 4A provides the storage and pure-resolution foundation.
+`types/configuration.py` and
 `types/configuration_resolution.py` define the allowlisted non-secret document,
 opaque versioned `SecretRef`, typed provider secret bundles, enablement, and
 value-free provenance. `config/schema.py` and `config/resolution.py` implement a
@@ -217,8 +218,21 @@ Keychain accounts in a service distinct from the compatible Google OAuth token
 service. Multi-field B2 credentials form one payload, so a single preference
 replace activates the matching secret and destination settings together.
 
-No active loader calls these modules yet. Runtime, readiness, auth, search,
-summarize, existing UI, and `.env` behavior remain unchanged in 4A. Phase 4B
-adds composed loading; Phase 4C adds digest-bound, explicit, non-destructive
-migration; Phase 4D adds native disclosure/consent forms, background store
-writes, and explicit Calendar auth.
+Phase 4B activates those read boundaries through
+`service/configuration_loader.py`. Its typed fixed scopes prevent a narrow
+consumer from reading unrelated secrets: runtime and readiness resolve all
+capabilities, auth resolves only Calendar's local settings, search resolves
+only `MEETINGS_DIR`, and summarize resolves `MEETINGS_DIR` plus Notes. Each
+call snapshots process environment, legacy `.env`, and app preferences once;
+only exact app-enabled generic Keychain references in that scope are read,
+under one bounded deadline. Materialization explicitly supplies every runtime
+field and disables Pydantic's ambient sources, so provenance and effective
+values cannot diverge. Provider construction and network access remain outside
+the loader.
+
+Normal runtime startup still performs no readiness, native-helper, provider,
+or Google OAuth-token probe. It may read only the exact active generic
+Keychain references required by configured runtime capabilities. Phase 4C
+adds digest-bound, explicit, non-destructive migration; Phase 4D adds native
+disclosure/consent forms, background store writes, and explicit in-app Calendar
+auth. The legacy UI continues to edit `.env` until 4D.

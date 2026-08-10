@@ -10,8 +10,14 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from meeting_memory.config.runtime import RuntimeSettings, load_runtime_settings
+from meeting_memory.config.runtime import RuntimeSettings
 from meeting_memory.repo.native_audio import NativeAudioCaptureError, check_native_capture
+from meeting_memory.service.configuration_loader import (
+    LoadedConfiguration,
+    load_configuration,
+)
+from meeting_memory.service.configuration_sources import PreferenceReader, SecretReader
+from meeting_memory.service.readiness_configuration import annotate_process_environment
 from meeting_memory.service.readiness_integrations import TokenReader, optional_statuses
 from meeting_memory.types.capabilities import (
     Capability,
@@ -19,6 +25,7 @@ from meeting_memory.types.capabilities import (
     CapabilityStatus,
     ReadinessReport,
 )
+from meeting_memory.types.configuration_resolution import ConfigurationUse
 
 NativeProbe = Callable[[], Mapping[str, Any]]
 DurableProbe = Callable[[Path], None]
@@ -27,14 +34,29 @@ ProbeSync = Callable[[int], None]
 PROBE_BYTES = b"meeting-memory-readiness\n"
 
 
-def load_readiness_report(env_file: str | Path | None = ".env") -> ReadinessReport:
-    """Load legacy-compatible settings and always return a complete report."""
+def load_readiness_report(
+    env_file: str | Path | None = ".env",
+    *,
+    process_environment: Mapping[str, str] | None = None,
+    preference_reader: PreferenceReader | None = None,
+    secret_reader: SecretReader | None = None,
+) -> ReadinessReport:
+    """Load the shared effective snapshot and always return a complete report."""
 
     try:
-        settings = load_runtime_settings(env_file)
+        configuration = load_configuration(
+            ConfigurationUse.READINESS,
+            env_file=env_file,
+            process_environment=process_environment,
+            preference_reader=preference_reader,
+            secret_reader=secret_reader,
+        )
     except Exception:
         return _configuration_failure_report()
-    return build_readiness_report(settings)
+    return build_readiness_report(
+        configuration.settings,
+        configuration=configuration,
+    )
 
 
 def build_readiness_report(
@@ -46,6 +68,7 @@ def build_readiness_report(
     system_name: str | None = None,
     kernel_release: str | None = None,
     python_version: tuple[int, int] | None = None,
+    configuration: LoadedConfiguration | None = None,
 ) -> ReadinessReport:
     """Check local readiness without contacting an optional provider."""
 
@@ -58,9 +81,14 @@ def build_readiness_report(
             kernel_release=kernel_release or platform.release(),
             python_version=python_version or sys.version_info[:2],
         )
+        core = annotate_process_environment(core, configuration)
         statuses = (
             core,
-            *optional_statuses(settings, token_reader=token_reader),
+            *optional_statuses(
+                settings,
+                token_reader=token_reader,
+                configuration=configuration,
+            ),
         )
         return ReadinessReport(statuses)
     except Exception:

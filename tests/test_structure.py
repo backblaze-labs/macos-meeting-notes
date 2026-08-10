@@ -51,6 +51,7 @@ REQUIRED_SOURCE_FILES = (
     "config/settings.py",
     "config/runtime.py",
     "config/schema.py",
+    "config/validation.py",
     "config/resolution.py",
     "config/secret_payloads.py",
     "repo/__init__.py",
@@ -105,7 +106,12 @@ REQUIRED_SOURCE_FILES = (
     "service/runtime_notes.py",
     "service/runtime_retry.py",
     "service/readiness.py",
+    "service/readiness_configuration.py",
     "service/readiness_integrations.py",
+    "service/configuration_loader.py",
+    "service/configuration_loaded.py",
+    "service/configuration_issues.py",
+    "service/configuration_sources.py",
     "service/preference_store.py",
     "service/preference_store_fs.py",
     "service/audio_modes.py",
@@ -281,9 +287,7 @@ def test_required_modules_exist() -> None:
 
 
 def test_native_validator_bounds_untrusted_packet_metadata() -> None:
-    source = (
-        SRC_ROOT / "repo/native/NativeValidation.swift"
-    ).read_text(encoding="utf-8")
+    source = (SRC_ROOT / "repo/native/NativeValidation.swift").read_text(encoding="utf-8")
 
     assert "packetCount <= audioByteCount" in source
     assert "packetCount <= UInt64(Int64.max)" in source

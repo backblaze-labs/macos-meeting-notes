@@ -1,7 +1,7 @@
 # Local-First Capability Contract
 
-**Status:** Accepted product contract; implemented through Phase 3, with the
-inactive Phase 4A storage/resolution foundation complete
+**Status:** Accepted product contract; implemented through Phase 4B composed
+read-only configuration
 **Canonical for:** onboarding, capability readiness, data lifecycle, migration,
 and optional-service behavior
 
@@ -243,8 +243,11 @@ Existing checkouts and their files continue to work during migration.
    current `meeting-memory` CLI. Normalize a legacy meeting to schema v2 only
    when it is next safely written; do not require an eager bulk rewrite.
 
-Until migration UI ships, `.env` remains the legacy runtime source. This stage
-changes the contract and test vocabulary, not secret storage behavior.
+Until migration UI ships, `.env` remains a legacy fallback that is read-only to
+the composed loader; the existing legacy settings UI may still edit it. Phase
+4B also reads existing app-owned preferences and only their activated generic
+Keychain references, but it performs no import, preference write, secret write,
+or `.env` mutation.
 
 ## Phase Acceptance Criteria
 
@@ -287,15 +290,19 @@ changes the contract and test vocabulary, not secret storage behavior.
 
 Phase 4 is intentionally split into independently reviewable slices:
 
-- **Phase 4A (complete, inactive):** typed setting/provenance data, a private
+- **Phase 4A (complete foundation):** typed setting/provenance data, a private
   atomic non-secret preference store, immutable generation-based Keychain
   references, typed provider secret bundles, and a pure precedence resolver.
   The store pins every path component without following symlinks and uses a
   revision compare-and-swap boundary for concurrent writers.
-  This foundation is not called by runtime, readiness, auth, CLI commands, or
-  UI, and performs no migration.
-- **Phase 4B (deferred):** one composed loader for runtime, readiness, and CLI
-  commands. Process environment remains the highest-priority override source.
+  It performs no migration by itself.
+- **Phase 4B (complete):** one fixed-scope composed loader serves runtime,
+  readiness, auth, search, and summarize. Process environment remains the
+  highest-priority override; explicit disable masks `.env`; corrupt app
+  preferences fail optional egress closed except for a complete valid process
+  override. Only active, in-scope generic Keychain references are read under a
+  bounded deadline. Loading performs no provider request or configuration
+  write, and the Google OAuth Keychain identity remains unchanged.
 - **Phase 4C (deferred):** digest-bound `.env` migration preview and confirmed
   application. Process-environment values are never imported and `.env` is
   never rewritten or deleted.
@@ -303,7 +310,7 @@ Phase 4 is intentionally split into independently reviewable slices:
   background configuration events, and explicit Calendar auth. Secrets remain
   blank on redisplay.
 
-The Phase 4 acceptance criteria above are not complete until 4B–4D land.
+The Phase 4 acceptance criteria above are not complete until 4C–4D land.
 
 ### Phase 5 — Native onboarding validation
 

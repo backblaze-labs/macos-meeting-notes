@@ -1,4 +1,4 @@
-"""Typed setting schema for the inactive progressive-configuration foundation."""
+"""Typed setting schema for progressive configuration composition."""
 
 from __future__ import annotations
 
@@ -110,9 +110,7 @@ SETTING_DEFINITIONS = (
 
 def definitions_for(capability: Capability) -> tuple[SettingDefinition, ...]:
     return tuple(
-        definition
-        for definition in SETTING_DEFINITIONS
-        if definition.capability is capability
+        definition for definition in SETTING_DEFINITIONS if definition.capability is capability
     )
 
 

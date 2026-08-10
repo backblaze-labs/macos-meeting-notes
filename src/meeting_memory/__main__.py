@@ -75,18 +75,24 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def run_auth() -> int:
-    from pydantic import ValidationError
-
-    from meeting_memory.config.settings import format_settings_error, load_google_auth_settings
     from meeting_memory.repo.calendar_client import GoogleCalendarClient
+    from meeting_memory.service.configuration_loader import (
+        ConfigurationLoadError,
+        load_configuration,
+    )
+    from meeting_memory.types.configuration_resolution import ConfigurationUse
 
     try:
-        settings = load_google_auth_settings()
-    except ValidationError as exc:
-        sys.stderr.write(format_settings_error(exc))
+        loaded = load_configuration(ConfigurationUse.AUTH)
+    except ConfigurationLoadError:
+        sys.stderr.write("Calendar configuration could not be loaded.\n")
+        return 2
+    settings = loaded.calendar_auth
+    if settings is None:
+        sys.stderr.write("Calendar is not configured or is disabled.\n")
         return 2
 
-    credentials_path = _resolve_project_path(settings.google_credentials_path)
+    credentials_path = _resolve_project_path(settings.credentials_file)
     if not credentials_path.exists():
         sys.stderr.write(f"Google OAuth credentials file is missing: {credentials_path}\n")
         sys.stderr.write("Download Desktop app credentials and update .env if needed.\n")
@@ -94,7 +100,7 @@ def run_auth() -> int:
 
     GoogleCalendarClient(
         credentials_file=credentials_path,
-        calendar_id=settings.google_calendar_id,
+        calendar_id=settings.calendar_id,
         known_speakers=settings.known_speakers,
     ).authenticate()
     sys.stderr.write("Google Calendar auth token saved to Keychain.\n")
@@ -176,11 +182,19 @@ def uninstall_launch_agent() -> int:
 
 
 def run_search(query: str, *, limit: int) -> int:
-    from meeting_memory.config.runtime import load_runtime_settings
+    from meeting_memory.service.configuration_loader import (
+        ConfigurationLoadError,
+        load_configuration,
+    )
     from meeting_memory.service.search import search_meetings
+    from meeting_memory.types.configuration_resolution import ConfigurationUse
 
-    settings = load_runtime_settings()
-    results = search_meetings(settings.meetings_dir_path, query, limit=limit)
+    try:
+        loaded = load_configuration(ConfigurationUse.SEARCH)
+    except ConfigurationLoadError:
+        sys.stderr.write("Search configuration could not be loaded.\n")
+        return 2
+    results = search_meetings(loaded.meetings_dir_path, query, limit=limit)
     if not results:
         sys.stdout.write("No matching meetings found.\n")
         return 1
@@ -203,12 +217,20 @@ def run_relabel(path: Path) -> int:
 
 
 def run_summarize(path: Path) -> int:
-    from meeting_memory.config.runtime import load_runtime_settings
     from meeting_memory.repo.summarizer import ClaudeSummarizer
+    from meeting_memory.service.configuration_loader import (
+        ConfigurationLoadError,
+        load_configuration,
+    )
     from meeting_memory.service.runtime_notes import generate_owned_notes
+    from meeting_memory.types.configuration_resolution import ConfigurationUse
 
-    settings = load_runtime_settings()
-    config = settings.notes
+    try:
+        loaded = load_configuration(ConfigurationUse.SUMMARIZE)
+    except ConfigurationLoadError:
+        sys.stderr.write("Notes configuration could not be loaded.\n")
+        return 2
+    config = loaded.notes
     if config is None:
         sys.stderr.write("Notes is not configured. Set ANTHROPIC_API_KEY first.\n")
         return 2
@@ -216,7 +238,7 @@ def run_summarize(path: Path) -> int:
     if not meeting_dir.is_dir():
         meeting_dir = meeting_dir.parent
     notes_path = generate_owned_notes(
-        settings.meetings_dir_path,
+        loaded.meetings_dir_path,
         meeting_dir,
         ClaudeSummarizer(
             api_key=config.api_key,

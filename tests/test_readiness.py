@@ -10,6 +10,7 @@ import pytest
 from meeting_memory.config.runtime import RuntimeSettings
 from meeting_memory.service import readiness
 from meeting_memory.types.capabilities import Capability, CapabilityState
+from meeting_memory.types.configuration import AppPreferences, PreferenceSnapshot
 
 
 @pytest.fixture(autouse=True)
@@ -96,9 +97,7 @@ def test_optional_groups_are_independent_and_local_problems_are_isolated(
     assert report.status_for(Capability.BACKUP).state is CapabilityState.FAILED
     assert report.status_for(Capability.CALENDAR).state is CapabilityState.UNCONFIGURED
     assert report.status_for(Capability.NOTES).state is CapabilityState.FAILED
-    visible = " ".join(
-        f"{status.summary} {status.action or ''}" for status in report.statuses
-    )
+    visible = " ".join(f"{status.summary} {status.action or ''}" for status in report.statuses)
     assert "assembly-secret" not in visible
     assert "b2-secret" not in visible
     assert "anthropic-secret" not in visible
@@ -121,10 +120,7 @@ def test_partial_and_placeholder_backup_groups_are_unconfigured(tmp_path: Path) 
     )
 
     assert _build(partial).status_for(Capability.BACKUP).state is CapabilityState.UNCONFIGURED
-    assert (
-        _build(placeholders).status_for(Capability.BACKUP).state
-        is CapabilityState.UNCONFIGURED
-    )
+    assert _build(placeholders).status_for(Capability.BACKUP).state is CapabilityState.UNCONFIGURED
 
 
 def test_calendar_missing_or_invalid_file_short_circuits_keychain(tmp_path: Path) -> None:
@@ -195,11 +191,7 @@ def test_legacy_env_is_unchanged_and_process_environment_keeps_precedence(
     monkeypatch,
 ) -> None:
     env_file = tmp_path / ".env"
-    original = (
-        b"MEETINGS_DIR=./meetings\n"
-        b"ASSEMBLYAI_API_KEY=replace-me\n"
-        b"B2_ENDPOINT=not-valid\n"
-    )
+    original = b"MEETINGS_DIR=./meetings\nASSEMBLYAI_API_KEY=replace-me\nB2_ENDPOINT=not-valid\n"
     env_file.write_bytes(original)
     monkeypatch.setenv("ASSEMBLYAI_API_KEY", "process-secret")
     monkeypatch.setattr(readiness.platform, "system", lambda: "Darwin")
@@ -210,7 +202,10 @@ def test_legacy_env_is_unchanged_and_process_environment_keeps_precedence(
         lambda: {"event": "supported", "microphone": "Built-in"},
     )
 
-    report = readiness.load_readiness_report(env_file)
+    report = readiness.load_readiness_report(
+        env_file,
+        preference_reader=lambda: PreferenceSnapshot(AppPreferences(), None),
+    )
 
     assert report.status_for(Capability.TRANSCRIPTION).state is CapabilityState.READY
     assert report.status_for(Capability.BACKUP).state is CapabilityState.UNCONFIGURED
@@ -220,9 +215,7 @@ def test_legacy_env_is_unchanged_and_process_environment_keeps_precedence(
 
 
 def _build(settings: RuntimeSettings, **kwargs):
-    kwargs.setdefault(
-        "native_probe", lambda: {"event": "supported", "microphone": "Built-in"}
-    )
+    kwargs.setdefault("native_probe", lambda: {"event": "supported", "microphone": "Built-in"})
     kwargs.setdefault("system_name", "Darwin")
     kwargs.setdefault("kernel_release", "24.0.0")
     kwargs.setdefault("python_version", (3, 11))

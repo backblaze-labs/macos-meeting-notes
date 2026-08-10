@@ -166,7 +166,7 @@ def test_preference_and_snapshot_repr_do_not_disclose_values() -> None:
     assert speakers not in repr(snapshot)
 
 
-def test_phase4a_foundation_is_not_runtime_wired() -> None:
+def test_phase4_composition_wiring_stays_behind_service_loader() -> None:
     source_root = Path(__file__).resolve().parents[1] / "src" / "meeting_memory"
     active_entrypoints = (
         "__main__.py",
@@ -176,12 +176,16 @@ def test_phase4a_foundation_is_not_runtime_wired() -> None:
         "ui/runtime_app.py",
         "ui/tray.py",
     )
-    inactive_modules = ("config.resolution", "preference_store", "secret_store")
+    composition_modules = ("config.resolution", "preference_store", "secret_store")
     violations = [
-        f"{relative} references inactive {module}"
+        f"{relative} bypasses composed loader for {module}"
         for relative in active_entrypoints
-        for module in inactive_modules
+        for module in composition_modules
         if module in (source_root / relative).read_text(encoding="utf-8")
     ]
 
     assert violations == []
+    loader = (source_root / "service/configuration_loader.py").read_text(encoding="utf-8")
+    assert "resolve_configuration" in loader
+    assert "load_preferences" in loader
+    assert "read_secret_materials" in loader

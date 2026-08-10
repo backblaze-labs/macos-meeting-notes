@@ -1,15 +1,14 @@
-"""Pure inactive resolver for progressive configuration precedence."""
+"""Pure resolver for progressive configuration precedence."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from urllib.parse import urlsplit
 
 from meeting_memory.config.schema import (
     SETTING_DEFINITIONS,
     required_keys,
 )
-from meeting_memory.config.settings import looks_placeholder
+from meeting_memory.config.validation import configured_value, valid_required_setting
 from meeting_memory.types.capabilities import Capability
 from meeting_memory.types.configuration import (
     AppPreferences,
@@ -126,7 +125,7 @@ def _resolve_capability(
     preference = preferences.enabled_for(capability)
     required = required_keys(capability)
     process_override = bool(required) and all(
-        key in process and _valid_required(key, process[key]) for key in required
+        key in process and valid_required_setting(key, process[key]) for key in required
     )
     if process_override:
         return CapabilityResolution(
@@ -154,14 +153,14 @@ def _resolve_capability(
         )
     if preference is True:
         app_required = tuple(
-            (key, _app_required_value(key, preferences, secret_values)) for key in required
+            (key, _app_required_value(key, process, preferences, secret_values)) for key in required
         )
         app_ready = all(
-            value is not None and _valid_required(key, value) for key, value in app_required
+            value is not None and valid_required_setting(key, value) for key, value in app_required
         )
         resolved_required = [item for item in settings if item.provenance.key in required]
         resolved_ready = bool(resolved_required) and all(
-            _valid_required(item.provenance.key, item.value) for item in resolved_required
+            valid_required_setting(item.provenance.key, item.value) for item in resolved_required
         )
         enabled = app_ready and resolved_ready
         return CapabilityResolution(
@@ -173,12 +172,12 @@ def _resolve_capability(
         )
 
     selected = [item for item in settings if item.provenance.key in required]
-    enabled = bool(selected) and all(_configured(item.value) for item in selected)
+    enabled = bool(selected) and all(configured_value(item.value) for item in selected)
     return CapabilityResolution(
         capability,
         None,
         enabled,
-        _highest_source(item for item in selected if _configured(item.value)),
+        _highest_source(item for item in selected if configured_value(item.value)),
     )
 
 
@@ -205,24 +204,19 @@ def _recognized_values(values: Mapping[str, str]) -> dict[SettingKey, str]:
     return {key: str(values[key.value]) for key in SettingKey if key.value in values}
 
 
-def _configured(value: object) -> bool:
-    if value is None:
-        return False
-    if not isinstance(value, str):
-        return True
-    return not looks_placeholder(value)
+def has_invalid_process_required(
+    capability: Capability,
+    resolution: ConfigurationResolution,
+) -> bool:
+    """Whether a selected required process value is present but invalid."""
 
-
-def _valid_required(key: SettingKey, value: object) -> bool:
-    if not _configured(value):
-        return False
-    if key is SettingKey.B2_ENDPOINT:
-        try:
-            endpoint = urlsplit(str(value))
-        except ValueError:
-            return False
-        return endpoint.scheme == "https" and bool(endpoint.netloc)
-    return True
+    required = set(required_keys(capability))
+    return any(
+        item.provenance.key in required
+        and item.provenance.source is SettingSource.PROCESS_ENV
+        and not valid_required_setting(item.provenance.key, item.value)
+        for item in resolution.settings
+    )
 
 
 def _highest_source(settings) -> SettingSource:
@@ -251,9 +245,12 @@ def _app_preference_value(definition, preferences: AppPreferences) -> str | None
 
 def _app_required_value(
     key: SettingKey,
+    process: Mapping[SettingKey, str],
     preferences: AppPreferences,
     secrets: Mapping[SettingKey, str],
 ) -> object:
+    if key in process:
+        return process[key]
     if key in secrets:
         return secrets[key]
     try:

@@ -29,8 +29,12 @@ from meeting_memory.types.configuration import (
 )
 from meeting_memory.types.configuration_resolution import (
     CapabilityResolution,
+    ConfigurationIssue,
+    ConfigurationIssueCode,
     ConfigurationResolution,
+    ConfigurationUse,
     ResolvedSetting,
+    ScopedConfigurationResolution,
     SettingProvenance,
     SettingSource,
 )
@@ -74,7 +78,10 @@ __all__ = [
     "AppPreferences",
     "CapabilityPreference",
     "CapabilityResolution",
+    "ConfigurationIssue",
+    "ConfigurationIssueCode",
     "ConfigurationResolution",
+    "ConfigurationUse",
     "CalendarMeeting",
     "KnownSpeaker",
     "MeetingDetected",
@@ -98,6 +105,7 @@ __all__ = [
     "PreferenceKey",
     "PreferenceSnapshot",
     "ResolvedSetting",
+    "ScopedConfigurationResolution",
     "SecretBundle",
     "SecretId",
     "SecretMaterial",

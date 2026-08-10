@@ -9,9 +9,14 @@ import stat
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from meeting_memory.config.runtime import RuntimeSettings
+from meeting_memory.config.validation import valid_b2_endpoint
+from meeting_memory.service.configuration_loader import LoadedConfiguration
+from meeting_memory.service.readiness_configuration import (
+    effective_optional_status,
+    safe_optional_status,
+)
 from meeting_memory.types.capabilities import Capability, CapabilityState, CapabilityStatus
 
 TokenReader = Callable[[], str | None]
@@ -23,15 +28,32 @@ def optional_statuses(
     settings: RuntimeSettings,
     *,
     token_reader: TokenReader | None = None,
+    configuration: LoadedConfiguration | None = None,
 ) -> tuple[CapabilityStatus, ...]:
     return (
-        _safe_status(Capability.TRANSCRIPTION, lambda: _transcription_status(settings)),
-        _safe_status(Capability.BACKUP, lambda: _backup_status(settings)),
-        _safe_status(
-            Capability.CALENDAR,
-            lambda: _calendar_status(settings, token_reader=token_reader),
+        effective_optional_status(
+            Capability.TRANSCRIPTION,
+            configuration,
+            lambda: _transcription_status(settings),
         ),
-        _safe_status(Capability.NOTES, lambda: _notes_status(settings)),
+        effective_optional_status(
+            Capability.BACKUP,
+            configuration,
+            lambda: _backup_status(settings),
+        ),
+        safe_optional_status(
+            Capability.CALENDAR,
+            lambda: effective_optional_status(
+                Capability.CALENDAR,
+                configuration,
+                lambda: _calendar_status(settings, token_reader=token_reader),
+            ),
+        ),
+        effective_optional_status(
+            Capability.NOTES,
+            configuration,
+            lambda: _notes_status(settings),
+        ),
     )
 
 
@@ -67,8 +89,7 @@ def _backup_status(settings: RuntimeSettings) -> CapabilityStatus:
             "Set the complete B2 configuration group to enable backup for new recordings.",
         )
 
-    endpoint = urlsplit(settings.b2_endpoint or "")
-    if endpoint.scheme != "https" or not endpoint.netloc:
+    if not valid_b2_endpoint(settings.b2_endpoint):
         return _failed(
             Capability.BACKUP,
             "The configured B2 endpoint is not a valid HTTPS URL.",
@@ -260,17 +281,3 @@ def _unconfigured(capability: Capability, summary: str, action: str) -> Capabili
 
 def _failed(capability: Capability, summary: str, action: str) -> CapabilityStatus:
     return CapabilityStatus(capability, CapabilityState.FAILED, summary, action)
-
-
-def _safe_status(
-    capability: Capability,
-    check: Callable[[], CapabilityStatus],
-) -> CapabilityStatus:
-    try:
-        return check()
-    except Exception:
-        return _failed(
-            capability,
-            f"{capability.label} readiness could not be determined from local configuration.",
-            f"Review {capability.label} settings, then rerun the setup check.",
-        )

@@ -1,6 +1,17 @@
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from meeting_memory.config.runtime import RuntimeSettings
+from meeting_memory.service.configuration_loader import load_configuration
+from meeting_memory.types.capabilities import Capability
+from meeting_memory.types.configuration import (
+    AppPreferences,
+    CapabilityPreference,
+    PreferenceSnapshot,
+)
+from meeting_memory.types.configuration_resolution import ConfigurationUse
 from meeting_memory.ui import runtime_app
 
 
@@ -16,6 +27,17 @@ class Tray:
         self.__class__.ran = True
 
 
+def _loaded(settings: RuntimeSettings) -> SimpleNamespace:
+    return SimpleNamespace(
+        settings=settings,
+        meetings_dir_path=settings.meetings_dir_path,
+        transcription=settings.transcription,
+        backup=settings.backup,
+        calendar=settings.calendar,
+        notes=settings.notes,
+    )
+
+
 def test_fresh_profile_starts_normal_core_without_optional_adapters(
     tmp_path: Path,
     monkeypatch,
@@ -23,7 +45,7 @@ def test_fresh_profile_starts_normal_core_without_optional_adapters(
     settings = RuntimeSettings(meetings_dir=tmp_path / "meetings")
     Tray.controller = None
     Tray.ran = False
-    monkeypatch.setattr(runtime_app, "load_runtime_settings", lambda: settings)
+    monkeypatch.setattr(runtime_app, "load_configuration", lambda _use: _loaded(settings))
     monkeypatch.setattr(runtime_app, "RumpsTrayApp", Tray)
     assert not hasattr(runtime_app, "load_readiness_report")
     monkeypatch.setattr(
@@ -76,7 +98,7 @@ def test_optional_constructor_failures_do_not_block_core(
         anthropic_api_key="notes-key",
     )
     Tray.ran = False
-    monkeypatch.setattr(runtime_app, "load_runtime_settings", lambda: settings)
+    monkeypatch.setattr(runtime_app, "load_configuration", lambda _use: _loaded(settings))
     monkeypatch.setattr(runtime_app, "RumpsTrayApp", Tray)
 
     def fail(*_args, **_kwargs):
@@ -106,7 +128,7 @@ def test_invalid_optional_settings_never_route_core_to_setup(
         anthropic_model=" ",
     )
     Tray.ran = False
-    monkeypatch.setattr(runtime_app, "load_runtime_settings", lambda: settings)
+    monkeypatch.setattr(runtime_app, "load_configuration", lambda _use: _loaded(settings))
     monkeypatch.setattr(runtime_app, "RumpsTrayApp", Tray)
     monkeypatch.setattr(
         runtime_app,
@@ -127,6 +149,70 @@ def test_invalid_optional_settings_never_route_core_to_setup(
     assert runtime_app.run_runtime_app() == 0
     assert Tray.ran is True
     assert Tray.controller.recorder.temp_dir.is_relative_to(settings.meetings_dir_path)
+
+
+@pytest.mark.parametrize("preference_state", ["disabled", "corrupt"])
+def test_real_composed_fail_closed_configuration_never_constructs_providers(
+    tmp_path: Path,
+    monkeypatch,
+    preference_state: str,
+) -> None:
+    env_file = tmp_path / ".env"
+    credentials = tmp_path / "credentials.json"
+    credentials.write_text("{}", encoding="utf-8")
+    env_file.write_text(
+        "ASSEMBLYAI_API_KEY=legacy-assembly\n"
+        "B2_APPLICATION_KEY_ID=legacy-id\n"
+        "B2_APPLICATION_KEY=legacy-key\n"
+        "B2_ENDPOINT=https://s3.example.invalid\n"
+        "B2_REGION=region\n"
+        "B2_BUCKET_NAME=bucket\n"
+        f"GOOGLE_CALENDAR_CREDENTIALS_FILE={credentials}\n"
+        "ANTHROPIC_API_KEY=legacy-notes\n",
+        encoding="utf-8",
+    )
+    if preference_state == "disabled":
+        preferences = AppPreferences(
+            capabilities=tuple(
+                CapabilityPreference(capability, False)
+                for capability in Capability
+                if capability is not Capability.RECORDING_CORE
+            ),
+        )
+
+        def preference_reader():
+            return PreferenceSnapshot(preferences, None)
+    else:
+
+        def preference_reader():
+            raise RuntimeError("corrupt")
+
+    loaded = load_configuration(
+        ConfigurationUse.RUNTIME,
+        env_file=env_file,
+        process_environment={"MEETINGS_DIR": str(tmp_path / "meetings")},
+        preference_reader=preference_reader,
+        secret_reader=lambda _ref: (_ for _ in ()).throw(AssertionError("Keychain read")),
+    )
+    calls: list[str] = []
+
+    def fail_provider(*_args, **_kwargs):
+        calls.append("provider")
+        raise AssertionError("provider constructed")
+
+    Tray.ran = False
+    monkeypatch.setattr(runtime_app, "load_configuration", lambda _use: loaded)
+    monkeypatch.setattr(runtime_app, "configure_logging", lambda: None)
+    monkeypatch.setattr(runtime_app, "RumpsTrayApp", Tray)
+    monkeypatch.setattr(runtime_app, "AssemblyAITranscriptionClient", fail_provider)
+    monkeypatch.setattr(runtime_app, "B2S3Client", fail_provider)
+    monkeypatch.setattr(runtime_app, "GoogleCalendarClient", fail_provider)
+    monkeypatch.setattr(runtime_app, "ClaudeSummarizer", fail_provider)
+
+    assert runtime_app.run_runtime_app() == 0
+    assert Tray.ran is True
+    assert Tray.controller.committer is not None
+    assert calls == []
 
 
 def test_explicit_retry_actions_combine_v2_and_isolated_legacy_scanners(

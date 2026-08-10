@@ -144,7 +144,11 @@ specific calendar ID to narrow the watcher.
 
 ## Configuration
 
-The app reads configuration from environment variables or `.env`.
+The app resolves configuration with this precedence: exact process-environment
+name, active app preference/Keychain reference, legacy `.env`, then built-in
+default. A missing app preference document preserves legacy behavior. An
+unreadable app document fails optional egress closed unless a complete valid
+process group overrides it; Recording Core remains local and available.
 
 Recording Core (all have defaults):
 
@@ -191,13 +195,15 @@ Real credentials, OAuth files, local recordings, transcripts, generated meeting
 folders, and `.env` are ignored by git. Before publishing or pushing changes,
 run the checks in [docs/publishing-checklist.md](docs/publishing-checklist.md).
 
-The inactive Phase 4A foundation defines a private atomic app preference store,
-immutable generation-based Keychain secret references, and value-free source
-provenance. Runtime and the current settings windows do not use it yet. Phase
-4B will compose those sources, Phase 4C will add explicit digest-bound and
-non-destructive `.env` import, and Phase 4D will add native per-capability
-disclosure, consent, and Calendar auth. Existing `.env` files are not read,
-changed, or deleted by the Phase 4A foundation.
+Phase 4B composes the Phase 4A private preference store, immutable
+generation-based Keychain secret references, legacy `.env`, and value-free
+source provenance through fixed consumer scopes. Runtime and explicit
+readiness load only the active generic Keychain references they need; auth,
+search, and summarize use narrower scopes. The existing Google OAuth Keychain
+identity is unchanged. Composition performs no provider request and never
+writes `.env`, preferences, or Keychain. Phase 4C will add explicit
+digest-bound, non-destructive `.env` migration; Phase 4D will add native
+per-capability disclosure, consent, secret writes, and in-app Calendar auth.
 
 `KNOWN_SPEAKERS` is intentionally empty by default. Use the tray's
 **Configuration › Known Speakers...** item to add local aliases for normalizing

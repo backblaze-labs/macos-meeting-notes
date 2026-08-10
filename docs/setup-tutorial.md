@@ -5,13 +5,13 @@ fresh clone of the `macos-meeting-notes` repository.
 
 This is the current source-checkout setup. Recording Core requires no cloud
 integration for a first recording; see
-[`local-first-contract.md`](local-first-contract.md). The inactive Phase 4A
-foundation for app preferences, immutable Keychain references, and source
-precedence is present, but the current runtime and UI still use the compatible
-environment path. Composed configuration and explicit migration arrive in
-Phases 4B and 4C respectively; native capability forms and Calendar auth arrive
-in Phase 4D, native onboarding validation in Phase 5, and standalone
-distribution in Phase 6.
+[`local-first-contract.md`](local-first-contract.md). Phase 4B now composes
+exact process-environment overrides, active app preferences/immutable Keychain
+references, legacy `.env`, and defaults. The current UI still edits `.env`;
+explicit non-destructive migration arrives in Phase 4C, and native capability
+forms, secret writes, disclosures, and in-app Calendar auth arrive in Phase 4D.
+Native onboarding validation remains Phase 5 and standalone distribution
+remains Phase 6.
 
 ## 1. Install System Requirements
 
@@ -103,6 +103,11 @@ not in the repository.
 If `make setup` created `.env`, edit only the groups you want to enable. Leave
 the other values blank or as placeholders; they will report `unconfigured` and
 will not block recording.
+
+The composed loader never modifies `.env`. On profiles without an app-owned
+preference document, these values retain their legacy behavior. Exact process
+environment names override every persisted source. A future Phase 4C migration
+will require preview and confirmation before importing anything.
 
 ```bash
 B2_APPLICATION_KEY_ID=...

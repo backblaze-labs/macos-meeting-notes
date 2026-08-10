@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.repo.b2_snapshot import open_verified_backup_snapshot
@@ -23,15 +22,48 @@ TRANSCRIPT_MARKDOWN = "transcript.md"
 RECORDING_AUDIO = "recording.m4a"
 
 
-@dataclass(frozen=True)
 class B2S3Client:
-    application_key_id: str
-    application_key: str
-    endpoint: str
-    region: str
-    bucket_name: str
-    retry_delays: tuple[float, ...] = DEFAULT_RETRY_DELAYS
-    sleeper: Callable[[float], None] = field(default=time.sleep, repr=False, compare=False)
+    __slots__ = (
+        "_application_key_id",
+        "_application_key",
+        "endpoint",
+        "region",
+        "bucket_name",
+        "retry_delays",
+        "sleeper",
+    )
+
+    def __init__(
+        self,
+        application_key_id: str,
+        application_key: str,
+        endpoint: str,
+        region: str,
+        bucket_name: str,
+        retry_delays: tuple[float, ...] = DEFAULT_RETRY_DELAYS,
+        sleeper: Callable[[float], None] = time.sleep,
+    ) -> None:
+        object.__setattr__(self, "_application_key_id", application_key_id)
+        object.__setattr__(self, "_application_key", application_key)
+        object.__setattr__(self, "endpoint", endpoint)
+        object.__setattr__(self, "region", region)
+        object.__setattr__(self, "bucket_name", bucket_name)
+        object.__setattr__(self, "retry_delays", retry_delays)
+        object.__setattr__(self, "sleeper", sleeper)
+
+    def __setattr__(self, _name: str, _value: object) -> None:
+        raise AttributeError("backup adapter is immutable")
+
+    @property
+    def application_key_id(self) -> str:
+        return self._application_key_id
+
+    @property
+    def application_key(self) -> str:
+        return self._application_key
+
+    def __repr__(self) -> str:
+        return "B2S3Client(credentials=<redacted>, destination=<configured>)"
 
     @classmethod
     def from_settings(cls, settings: Settings) -> B2S3Client:

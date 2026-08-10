@@ -31,19 +31,22 @@ setup surfaces now share one five-capability `ReadinessReport`; only Recording
 Core controls the default exit status, and explicit in-app checks run off the UI
 thread without provider network calls.
 
-Phase 4A now provides an inactive typed resolver, private atomic non-secret
-preference store, and immutable generation-based generic Keychain adapter.
+Phase 4A provides a typed resolver, private atomic non-secret preference store,
+and immutable generation-based generic Keychain adapter.
 The store includes pinned no-follow I/O and revision compare-and-swap; the
 Keychain API accepts and returns typed provider bundles, including one atomic
-B2 credential pair. They are intentionally not wired into runtime or UI.
-Deferred by phase: the composed loader remains Phase 4B; digest-bound `.env`
-migration remains Phase 4C; native per-capability disclosure/consent forms and
-Calendar auth remain Phase 4D; clean-user computer validation remains Phase 5;
-signed/notarized standalone distribution remains Phase 6.
+B2 credential pair. Phase 4B now wires one read-only, fixed-scope loader into
+runtime, readiness, auth, search, and summarize. It snapshots exact process
+names, `.env`, and app preferences once; reads only active generic Keychain
+references required by the consumer; and fails corrupt app preferences closed
+for optional egress unless a complete valid process group overrides them. It
+performs no provider request, Google OAuth-token read, migration, or write.
+Digest-bound `.env` migration remains Phase 4C; native per-capability
+disclosure/consent forms, secret writes, and in-app Calendar auth remain Phase
+4D; clean-user computer validation remains Phase 5; signed/notarized standalone
+distribution remains Phase 6.
 
-Phase 4B must treat a missing preference file as legacy-compatible but a
-corrupt/unreadable/unknown-schema file as fail-closed for optional egress unless
-a complete valid process-environment group overrides it. Phase 4C migration
+Phase 4C migration
 must bind a preview to the unchanged `.env`, never import process values, write
 new immutable secret generations before one atomic preference activation, and
 never rewrite or delete `.env`. Phase 4D must keep Keychain/filesystem work off
@@ -61,9 +64,10 @@ strong validator complete successfully. The validator checks M4A type, AAC,
 16 kHz mono, positive packets/duration, and a full packet read; do not weaken it
 to accommodate a sandbox limitation.
 
-First thing to check: read `docs/local-first-contract.md`, then inspect the
-runtime commit, job, recovery, and snapshot tests. Do not add background scans
-or provider calls to startup.
+First thing to check: read `docs/local-first-contract.md`, then inspect
+`service/configuration_loader.py` and its fixed-scope tests before the runtime
+commit, job, recovery, and snapshot tests. Do not add broad Keychain reads,
+background scans, or provider calls to startup.
 
 Runtime configuration canonicalizes the trusted `MEETINGS_DIR` root once, so a
 configured root symlink works while meeting children and artifacts remain

@@ -712,10 +712,10 @@ The codebase is organized into five strictly-ordered layers under `src/meeting_m
 
 | Layer | Package | Components (file → responsibility) |
 |---|---|---|
-| **types** | `types/` | `capabilities.py` (`Capability`, `CapabilityState`, `CapabilityStatus`, `MeetingJobState`, `ReadinessReport`) · `configuration.py` / `configuration_resolution.py` (inactive Phase 4A allowlists, secret references, enablement, and value-free provenance) · `meeting.py` (`MeetingMeta`, slug helpers-as-data) · `transcript.py` (`TranscriptResult`, `TranscriptSegment`) · `summary.py` (`SummaryResult` with decisions + action items) · `events.py` (UI events emitted to the tray: `MeetingDetected`, `NotifyEvent`, `RecordingStateChanged`). Pure data — **no SDK imports, no cross-layer imports.** |
-| **config** | `config/` | Capability-scoped settings and precedence from §8; depends only on `types`. `runtime.py` is the active local-first composition path; `settings.py` retains characterized legacy APIs. The inactive Phase 4A `schema.py`, `resolution.py`, and `secret_payloads.py` foundation is not runtime-wired until Phase 4B. |
-| **repo** | `repo/` | Existing provider/native adapters plus `secret_store.py`, the inactive generic immutable-generation Keychain adapter. `calendar_client.py` retains the compatible Google OAuth Keychain identity. **The only layer permitted to import external SDKs.** |
-| **service** | `service/` | Existing local orchestration plus `readiness.py` / `readiness_integrations.py` and inactive Phase 4A `preference_store.py` / `preference_store_fs.py`, which use pinned no-follow I/O and revision compare-and-swap to atomically store allowlisted non-secrets and opaque Keychain references. Calls `repo`, returns `types`; **no `rumps`, no SDKs.** |
+| **types** | `types/` | `capabilities.py` (`Capability`, `CapabilityState`, `CapabilityStatus`, `MeetingJobState`, `ReadinessReport`) · `configuration.py` / `configuration_resolution.py` (Phase 4 allowlists, secret references, fixed consumer scopes, issues, enablement, and value-free provenance) · `meeting.py` (`MeetingMeta`, slug helpers-as-data) · `transcript.py` (`TranscriptResult`, `TranscriptSegment`) · `summary.py` (`SummaryResult` with decisions + action items) · `events.py` (UI events emitted to the tray: `MeetingDetected`, `NotifyEvent`, `RecordingStateChanged`). Pure data — **no SDK imports, no cross-layer imports.** |
+| **config** | `config/` | Capability-scoped settings, typed schema, pure precedence resolution, and secret payload codec; depends only on `types`. `settings.py` retains characterized legacy APIs. Source I/O and active composition stay in `service/`. |
+| **repo** | `repo/` | Existing provider/native adapters plus `secret_store.py`, the generic immutable-generation Keychain adapter activated only through opaque preference references. `calendar_client.py` retains the compatible Google OAuth Keychain identity. **The only layer permitted to import external SDKs.** |
+| **service** | `service/` | Existing local orchestration plus readiness, the private atomic preference store, and `configuration_loader.py` with its bounded source readers and fixed runtime/readiness/auth/search/summarize scopes. Calls `repo`, returns `types`; **no `rumps`, no SDKs.** |
 | **ui** | `ui/` | `tray.py` (`rumps.App` subclass; menu state, action dispatch, notifications, status timer, `rumps.Timer` draining the event queue) · `setup_readiness.py` (background setup check + UI rendering) · `controller.py` (recording/pipeline/sync handoff) · `menu.py` (menu label helpers) · `submenus.py` (Configuration and Debugging menu composition) · `preferences.py` (minimal settings window) · `notes_prompt.py` (native prompt editor) · `notifications.py` (rumps notification wrapper + fallback) · `title_prompt.py` (ad-hoc title prompt) · `macos.py` / `icons.py` (macOS UI helpers). **The only layer permitted to import `rumps`.** |
 | *cross-cutting* | — | `__main__.py` (entrypoint; subcommands; logging; starts the capability-scoped runtime) · `doctor.py` (typed preflight renderer, §7.6) · `logging_config.py` (logs → `~/Library/Logs/meeting-memory/app.log`). |
 
@@ -898,9 +898,11 @@ A first-class design goal (alongside the user-facing app) is that **the reposito
 REQ-LF-04. The report checks Recording Core requirements and each configured
 integration independently; every problem says what is wrong and how to fix it.
 The in-app check runs on a worker and returns a typed event to the main thread.
-Normal app startup does not run readiness, provider, native-helper, or Keychain
-probes. Readiness makes no provider network request; configured Calendar may
-read its existing OAuth token from Keychain only during the explicit check.
+Normal app startup does not run readiness, provider, native-helper, or Google
+OAuth-token probes. It may read only exact active generic Keychain references
+needed by configured runtime capabilities. Readiness makes no provider network
+request; configured Calendar may read its existing OAuth token from Keychain
+only during the explicit check.
 
 **Tooling & commands** — `ruff` (lint + format; rule `T20` forbids bare `print()` — use std `logging`), `pytest`, `pre-commit`. A `Makefile` exposes the predictable command set: `make setup | install | run | auth | doctor | install-macos-app | reload-macos-app | open-macos-app | quit-macos-app | install-launch-agent | uninstall-launch-agent | lint | format | test | check:structure | check`, where `check` = lint + tests + structure (the full gate `AGENTS.md` tells agents to run before finishing). The installed CLI also exposes `meeting-memory setup` and `meeting-memory search <query>`.
 
@@ -910,17 +912,19 @@ read its existing OAuth token from Keychain only during the explicit check.
 
 ## 8. Configuration Reference
 
-The current compatibility path reads environment variables with `.env` support
-through `python-dotenv`. The target app-managed flow stores secrets in Keychain
-and imports legacy values per REQ-LF-08. Variables marked "Integration" below
-are required only when that optional capability is enabled; missing groups are
+Phase 4B actively resolves exact process-environment names, app-owned
+preferences/activated generic Keychain references, legacy `.env`, and defaults
+in that order. A missing preference document preserves the legacy path;
+corrupt or unreadable preferences fail optional egress closed except for a
+complete valid process override. Explicit disable masks legacy values. The
+loader is read-only and scoped per consumer, and it does not construct a
+provider or contact the network. Variables marked "Integration" below are
+required only when that optional capability is enabled; missing groups are
 reported as `unconfigured` and never gate Recording Core.
 
-Phase 4A defines and tests the future source schema and precedence without
-wiring it into runtime. Until Phase 4B, the active behavior remains the current
-process-environment plus `.env` compatibility path. Phase 4B composes the
-sources, Phase 4C adds digest-bound migration, and Phase 4D adds the native
-configuration, disclosure, and Calendar-auth surfaces.
+Phase 4C adds digest-bound migration; Phase 4D adds the native configuration,
+disclosure, secret-writing, and in-app Calendar-auth surfaces. Until then, the
+legacy settings UI continues to edit `.env`; composition never rewrites it.
 
 | Variable | Capability | Default | Description |
 |---|---|---|---|

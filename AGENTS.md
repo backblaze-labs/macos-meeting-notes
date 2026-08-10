@@ -30,16 +30,17 @@ Naming boundaries:
 - `src/meeting_memory/types/`: pure boundary data, including capability and
   progressive-configuration provenance types. No SDK imports and no
   cross-layer imports.
-- `src/meeting_memory/config/`: active legacy-compatible settings plus the
-  inactive Phase 4A typed schema, pure resolver, and secret-payload codec.
+- `src/meeting_memory/config/`: validated runtime settings plus the typed
+  schema, pure precedence resolver, and secret-payload codec used by the
+  Phase 4B service composition boundary.
 - `src/meeting_memory/repo/`: external adapters. This is the only layer allowed
   to import external SDKs such as `boto3`, `assemblyai`, `anthropic`,
   `googleapiclient`, `google_auth_oauthlib`, `google`, `keyring`, or
-  `sounddevice`. The generic Keychain adapter writes immutable generations;
-  preferences activate only opaque references.
+  `sounddevice`. The generic Keychain adapter reads and writes immutable
+  generations; preferences activate only opaque references.
 - `src/meeting_memory/service/`: orchestration, local behavior, and capability
-  readiness. Phase 4A's private atomic non-secret preference store also lives
-  here. No SDKs and no `rumps`.
+  readiness. The private atomic preference store and fixed-scope composed
+  configuration loader also live here. No SDKs and no `rumps`.
 - `src/meeting_memory/ui/`: tray UI. This is the only layer allowed to import
   `rumps`.
 - `src/meeting_memory/doctor.py`: preflight checks that can run before optional
@@ -63,7 +64,7 @@ repo, or service modules as needed.
   missing, install the local macOS app wrapper, and print setup diagnostics.
 - `make install`: install the package and developer tools.
 - `make run`: run the current application entrypoint.
-- `make auth`: run the future Google Calendar auth flow.
+- `make auth`: run the explicit Google Calendar auth flow.
 - `make doctor`: run preflight checks.
 - `make install-macos-app`: install the clickable app bundle at
   `~/Applications/Meeting Memory.app`.

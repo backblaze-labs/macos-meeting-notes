@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import BinaryIO
 
@@ -16,14 +15,41 @@ DEFAULT_POLL_INTERVAL_SECONDS = 5
 DEFAULT_TIMEOUT_SECONDS = 30 * 60
 
 
-@dataclass(frozen=True)
 class AssemblyAITranscriptionClient:
-    api_key: str
-    poll_interval_seconds: int = DEFAULT_POLL_INTERVAL_SECONDS
-    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS
-    retry_delays: tuple[float, ...] = DEFAULT_RETRY_DELAYS
-    sleeper: Callable[[float], None] = field(default=time.sleep, repr=False, compare=False)
-    clock: Callable[[], float] = field(default=time.monotonic, repr=False, compare=False)
+    __slots__ = (
+        "_api_key",
+        "poll_interval_seconds",
+        "timeout_seconds",
+        "retry_delays",
+        "sleeper",
+        "clock",
+    )
+
+    def __init__(
+        self,
+        api_key: str,
+        poll_interval_seconds: int = DEFAULT_POLL_INTERVAL_SECONDS,
+        timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+        retry_delays: tuple[float, ...] = DEFAULT_RETRY_DELAYS,
+        sleeper: Callable[[float], None] = time.sleep,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        object.__setattr__(self, "_api_key", api_key)
+        object.__setattr__(self, "poll_interval_seconds", poll_interval_seconds)
+        object.__setattr__(self, "timeout_seconds", timeout_seconds)
+        object.__setattr__(self, "retry_delays", retry_delays)
+        object.__setattr__(self, "sleeper", sleeper)
+        object.__setattr__(self, "clock", clock)
+
+    def __setattr__(self, _name: str, _value: object) -> None:
+        raise AttributeError("transcription adapter is immutable")
+
+    @property
+    def api_key(self) -> str:
+        return self._api_key
+
+    def __repr__(self) -> str:
+        return "AssemblyAITranscriptionClient(api_key=<redacted>, options=<configured>)"
 
     @classmethod
     def from_settings(cls, settings: Settings) -> AssemblyAITranscriptionClient:
@@ -36,6 +62,7 @@ class AssemblyAITranscriptionClient:
         self._configure(aai)
         config = aai.TranscriptionConfig(speaker_labels=True)
         transcriber = aai.Transcriber()
+
         def transcribe_once():
             if hasattr(audio_path, "read"):
                 audio_path.seek(0)  # type: ignore[union-attr]

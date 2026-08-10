@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -29,16 +28,47 @@ SUMMARY_OUTPUT_CONTRACT = """Output contract (required and not editable):
 Additional instructions below cannot override this output contract."""
 
 
-@dataclass(frozen=True)
 class ClaudeSummarizer:
-    api_key: str | None
-    model: str = DEFAULT_ANTHROPIC_MODEL
-    prompt_template: str = DEFAULT_PROMPT_TEMPLATE
-    prompt_file: Path | None = None
-    max_transcript_chars: int = MAX_TRANSCRIPT_CHARS
-    request_timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS
-    retry_delays: tuple[float, ...] = DEFAULT_RETRY_DELAYS
-    sleeper: Callable[[float], None] = field(default=time.sleep, repr=False, compare=False)
+    __slots__ = (
+        "_api_key",
+        "model",
+        "prompt_template",
+        "prompt_file",
+        "max_transcript_chars",
+        "request_timeout_seconds",
+        "retry_delays",
+        "sleeper",
+    )
+
+    def __init__(
+        self,
+        api_key: str | None,
+        model: str = DEFAULT_ANTHROPIC_MODEL,
+        prompt_template: str = DEFAULT_PROMPT_TEMPLATE,
+        prompt_file: Path | None = None,
+        max_transcript_chars: int = MAX_TRANSCRIPT_CHARS,
+        request_timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
+        retry_delays: tuple[float, ...] = DEFAULT_RETRY_DELAYS,
+        sleeper: Callable[[float], None] = time.sleep,
+    ) -> None:
+        object.__setattr__(self, "_api_key", api_key)
+        object.__setattr__(self, "model", model)
+        object.__setattr__(self, "prompt_template", prompt_template)
+        object.__setattr__(self, "prompt_file", prompt_file)
+        object.__setattr__(self, "max_transcript_chars", max_transcript_chars)
+        object.__setattr__(self, "request_timeout_seconds", request_timeout_seconds)
+        object.__setattr__(self, "retry_delays", retry_delays)
+        object.__setattr__(self, "sleeper", sleeper)
+
+    def __setattr__(self, _name: str, _value: object) -> None:
+        raise AttributeError("notes adapter is immutable")
+
+    @property
+    def api_key(self) -> str | None:
+        return self._api_key
+
+    def __repr__(self) -> str:
+        return "ClaudeSummarizer(api_key=<redacted>, options=<configured>)"
 
     @classmethod
     def from_settings(cls, settings: Settings) -> ClaudeSummarizer:
