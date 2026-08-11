@@ -41,20 +41,29 @@ names, `.env`, and app preferences once; reads only active generic Keychain
 references required by the consumer; and fails corrupt app preferences closed
 for optional egress unless a complete valid process group overrides them. It
 performs no provider request, Google OAuth-token read, migration, or write.
-Digest-bound `.env` migration remains Phase 4C; native per-capability
-disclosure/consent forms, secret writes, and in-app Calendar auth remain Phase
-4D; clean-user computer validation remains Phase 5; signed/notarized standalone
-distribution remains Phase 6.
+The inactive digest-bound `.env` migration engine is now Phase 4C; native
+per-capability disclosure/consent forms, the explicit migration trigger, secret
+entry, and in-app Calendar auth remain Phase 4D; clean-user computer validation
+remains Phase 5; signed/notarized standalone distribution remains Phase 6.
 
-Phase 4C migration
-must bind a preview to the unchanged `.env`, never import process values, write
-new immutable secret generations before one atomic preference activation, and
-never rewrite or delete `.env`. Phase 4D must keep Keychain/filesystem work off
-the UI thread, never prefill or redisplay a secret, and disclose provider egress
-and automatic triggers before consent.
+Phase 4C now provides the inactive migration engine. Its strict bounded preview
+is privately bound to `.env` identity/digest and one preference revision;
+confirmed apply reparses the unchanged file, writes only selected new immutable
+secret generations, rechecks `.env`, and performs one preference CAS. Process
+values are presence-only and never imported. `.env` is never rewritten or
+deleted. Partial failures clean only refs created by that attempt; a visible but
+directory-sync-uncertain preference activation retains its refs. An ambiguous
+CAS also retains refs without claiming activation and requires a check before
+retry. Failed cleanup may leave an unreachable immutable generation and is
+reported for attention rather than deleting any pre-existing ref. The engine has
+no CLI, UI, startup, runtime, or readiness caller yet. Phase 4D must provide the
+explicit native trigger, keep Keychain/filesystem work off the UI thread, never
+prefill or redisplay a secret, and disclose provider egress and automatic
+triggers before consent.
 
-Legacy migration is explicitly user-triggered from Debugging. A successful
-empty scan writes the durable once marker immediately. A nonempty result stays
+Legacy recording recovery is explicitly user-triggered from Debugging. Its
+successful empty scan writes the durable once marker immediately; this is
+separate from `.env` configuration migration. A nonempty result stays
 in memory and unmarked until every discovered entry is explicitly committed,
 so a crash before selection intentionally permits a safe rescan. Normal launch
 does not scan the legacy temp root. The real WAV-to-M4A validator test may
@@ -65,9 +74,11 @@ strong validator complete successfully. The validator checks M4A type, AAC,
 to accommodate a sandbox limitation.
 
 First thing to check: read `docs/local-first-contract.md`, then inspect
-`service/configuration_loader.py` and its fixed-scope tests before the runtime
-commit, job, recovery, and snapshot tests. Do not add broad Keychain reads,
-background scans, or provider calls to startup.
+`service/configuration_loader.py` and `service/configuration_migration.py` with
+their fixed-scope/single-use tests before runtime commit, job, recovery, and
+snapshot tests. Do not wire migration before the native disclosure/consent
+worker boundary, or add broad Keychain reads, background scans, or provider
+calls to startup.
 
 Runtime configuration canonicalizes the trusted `MEETINGS_DIR` root once, so a
 configured root symlink works while meeting children and artifacts remain

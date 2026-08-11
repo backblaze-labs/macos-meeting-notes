@@ -922,9 +922,12 @@ provider or contact the network. Variables marked "Integration" below are
 required only when that optional capability is enabled; missing groups are
 reported as `unconfigured` and never gate Recording Core.
 
-Phase 4C adds digest-bound migration; Phase 4D adds the native configuration,
-disclosure, secret-writing, and in-app Calendar-auth surfaces. Until then, the
-legacy settings UI continues to edit `.env`; composition never rewrites it.
+Phase 4C provides an inactive, digest-and-identity-bound migration engine with
+explicit preview, capability selection, and typed confirmation. It never
+imports process values or rewrites `.env`. Phase 4D adds the native
+configuration, disclosure, secret-writing, migration-trigger, and in-app
+Calendar-auth surfaces. Until then, the legacy settings UI continues to edit
+`.env`; no app surface invokes the migration engine.
 
 | Variable | Capability | Default | Description |
 |---|---|---|---|

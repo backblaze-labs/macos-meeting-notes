@@ -8,8 +8,10 @@ integration for a first recording; see
 [`local-first-contract.md`](local-first-contract.md). Phase 4B now composes
 exact process-environment overrides, active app preferences/immutable Keychain
 references, legacy `.env`, and defaults. The current UI still edits `.env`;
-explicit non-destructive migration arrives in Phase 4C, and native capability
-forms, secret writes, disclosures, and in-app Calendar auth arrive in Phase 4D.
+Phase 4C's explicit non-destructive migration engine is implemented but has no
+user-facing trigger. Native capability forms, disclosure/consent, background
+configuration events, the migration trigger, secret entry, and in-app Calendar
+auth arrive in Phase 4D.
 Native onboarding validation remains Phase 5 and standalone distribution
 remains Phase 6.
 
@@ -106,8 +108,9 @@ will not block recording.
 
 The composed loader never modifies `.env`. On profiles without an app-owned
 preference document, these values retain their legacy behavior. Exact process
-environment names override every persisted source. A future Phase 4C migration
-will require preview and confirmation before importing anything.
+environment names override every persisted source. The inactive Phase 4C
+migration engine enforces preview, capability selection, and confirmation, but
+it has no caller until the Phase 4D native consent UI invokes it.
 
 ```bash
 B2_APPLICATION_KEY_ID=...

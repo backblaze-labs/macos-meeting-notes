@@ -33,7 +33,11 @@ def open_directory_tree(
             except FileNotFoundError:
                 if not create:
                     raise
-                os.mkdir(part, 0o700, dir_fd=descriptor)
+                try:
+                    os.mkdir(part, 0o700, dir_fd=descriptor)
+                except FileExistsError:
+                    # A concurrent creator won; the no-follow open below validates it.
+                    pass
                 os.fsync(descriptor)
                 child = os.open(
                     part,

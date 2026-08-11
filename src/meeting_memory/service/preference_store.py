@@ -69,8 +69,8 @@ class PreferenceStore:
     def save(self, preferences: AppPreferences) -> PreferenceSnapshot:
         """Create the first document; later writers must use compare-and-swap."""
 
-        content = _encode_preferences(preferences)
-        snapshot = _snapshot(content)
+        content, snapshot = _encoded_preferences(preferences)
+        replacement_visible = False
         try:
             with locked_directory(self.path) as (directory_fd, filename):
                 if read_document_at(directory_fd, filename) is not None:
@@ -78,11 +78,14 @@ class PreferenceStore:
                         "App preferences already exist; reload before saving."
                     )
                 replace_document_at(directory_fd, filename, content)
+                replacement_visible = True
         except PreferencesConflictError:
             raise
         except DirectorySyncUncertain:
             raise PreferencesDurabilityUncertain(snapshot) from None
         except Exception:
+            if replacement_visible:
+                raise PreferencesDurabilityUncertain(snapshot) from None
             raise PreferencesStoreError("App preferences could not be saved.") from None
         return snapshot
 
@@ -91,21 +94,30 @@ class PreferenceStore:
         expected: PreferenceSnapshot,
         replacement: AppPreferences,
     ) -> PreferenceSnapshot:
-        content = _encode_preferences(replacement)
-        snapshot = _snapshot(content)
+        content, snapshot = _encoded_preferences(replacement)
+        replacement_visible = False
         try:
             with locked_directory(self.path) as (directory_fd, filename):
                 current = _snapshot(read_document_at(directory_fd, filename))
                 if current.revision != expected.revision:
                     raise PreferencesConflictError("App preferences changed; reload before saving.")
                 replace_document_at(directory_fd, filename, content)
+                replacement_visible = True
         except (PreferencesConflictError, PreferencesDurabilityUncertain):
             raise
         except DirectorySyncUncertain:
             raise PreferencesDurabilityUncertain(snapshot) from None
         except Exception:
+            if replacement_visible:
+                raise PreferencesDurabilityUncertain(snapshot) from None
             raise PreferencesStoreError("App preferences could not be saved.") from None
         return snapshot
+
+
+def snapshot_for_preferences(preferences: AppPreferences) -> PreferenceSnapshot:
+    """Return the exact canonical snapshot a successful writer must expose."""
+
+    return _encoded_preferences(preferences)[1]
 
 
 def _snapshot(content: bytes | None) -> PreferenceSnapshot:
@@ -115,6 +127,13 @@ def _snapshot(content: bytes | None) -> PreferenceSnapshot:
         _decode_preferences(content),
         hashlib.sha256(content).hexdigest(),
     )
+
+
+def _encoded_preferences(
+    preferences: AppPreferences,
+) -> tuple[bytes, PreferenceSnapshot]:
+    content = _encode_preferences(preferences)
+    return content, PreferenceSnapshot(preferences, hashlib.sha256(content).hexdigest())
 
 
 def _encode_preferences(preferences: AppPreferences) -> bytes:

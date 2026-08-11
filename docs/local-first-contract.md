@@ -1,7 +1,7 @@
 # Local-First Capability Contract
 
-**Status:** Accepted product contract; implemented through Phase 4B composed
-read-only configuration
+**Status:** Accepted product contract; implemented through the inactive Phase
+4C migration engine
 **Canonical for:** onboarding, capability readiness, data lifecycle, migration,
 and optional-service behavior
 
@@ -303,14 +303,22 @@ Phase 4 is intentionally split into independently reviewable slices:
   override. Only active, in-scope generic Keychain references are read under a
   bounded deadline. Loading performs no provider request or configuration
   write, and the Google OAuth Keychain identity remains unchanged.
-- **Phase 4C (deferred):** digest-bound `.env` migration preview and confirmed
-  application. Process-environment values are never imported and `.env` is
-  never rewritten or deleted.
+- **Phase 4C (complete engine; inactive until 4D):** strict bounded `.env`
+  preview is bound privately to file identity, content digest, and the exact
+  preference revision. Typed confirmation selects whole capabilities. The
+  engine writes new immutable secret generations first and activates all
+  selected preferences with one compare-and-swap. It never imports process
+  values, rewrites or deletes `.env`, contacts a provider, or runs
+  automatically. Public previews identify keys, state, secret presence, and
+  process-override presence without values or source fingerprints. If CAS
+  visibility is ambiguous, new refs are retained but activation is not claimed;
+  configuration must be checked before retry.
 - **Phase 4D (deferred):** native per-capability forms, disclosure/consent,
-  background configuration events, and explicit Calendar auth. Secrets remain
-  blank on redisplay.
+  background configuration events, an explicit trigger for the 4C engine, and
+  explicit Calendar auth. Secrets remain blank on redisplay.
 
-The Phase 4 acceptance criteria above are not complete until 4C–4D land.
+The Phase 4 acceptance criteria above are not complete until the 4D native
+consent and disclosure surface lands.
 
 ### Phase 5 — Native onboarding validation
 

@@ -5,7 +5,11 @@ from __future__ import annotations
 import pytest
 
 from meeting_memory.repo import calendar_client, secret_store
-from meeting_memory.repo.secret_store import KeychainSecretStore, SecretStoreError
+from meeting_memory.repo.secret_store import (
+    KeychainSecretStore,
+    SecretStoreCleanupUncertain,
+    SecretStoreError,
+)
 from meeting_memory.types.configuration import (
     SecretBundle,
     SecretId,
@@ -80,6 +84,79 @@ def test_generation_collision_never_overwrites_existing_payload(monkeypatch) -> 
     assert _secret(store, second, SettingKey.ANTHROPIC_API_KEY) == "second"
 
 
+def test_late_write_failure_cleans_exact_new_payload_and_preserves_foreign_collision(
+    monkeypatch,
+) -> None:
+    backend = LateFailureKeyring()
+    monkeypatch.setattr(secret_store, "_load_keyring", lambda: backend)
+    store = KeychainSecretStore(generation_factory=lambda: "1" * 32)
+
+    backend.late_value = None
+    with pytest.raises(SecretStoreError):
+        store.write_new(_notes_bundle("intended"))
+    assert backend.values == {}
+
+    backend = LateFailureKeyring()
+    monkeypatch.setattr(secret_store, "_load_keyring", lambda: backend)
+    generations = iter(("2" * 32, "3" * 32))
+    store = KeychainSecretStore(generation_factory=lambda: next(generations))
+    backend.late_value = "foreign-payload"
+    ref = store.write_new(_notes_bundle("intended"))
+    assert backend.values[(store.service, f"notes:{'2' * 32}")] == "foreign-payload"
+    assert ref == SecretRef(SecretId.NOTES, "3" * 32)
+    assert _secret(store, ref, SettingKey.ANTHROPIC_API_KEY) == "intended"
+
+
+def test_late_write_cleanup_failure_is_typed_and_sanitized(monkeypatch) -> None:
+    backend = LateFailureKeyring()
+    backend.late_value = None
+    backend.fail_delete = True
+    monkeypatch.setattr(secret_store, "_load_keyring", lambda: backend)
+    store = KeychainSecretStore(generation_factory=lambda: "3" * 32)
+
+    with pytest.raises(SecretStoreCleanupUncertain) as error:
+        store.write_new(_notes_bundle("intended"))
+
+    assert "intended" not in str(error.value)
+
+
+def test_late_write_noop_cleanup_is_uncertain_and_preserves_account(monkeypatch) -> None:
+    backend = LateFailureKeyring()
+    backend.noop_delete = True
+    monkeypatch.setattr(secret_store, "_load_keyring", lambda: backend)
+    store = KeychainSecretStore(generation_factory=lambda: "4" * 32)
+
+    with pytest.raises(SecretStoreCleanupUncertain) as error:
+        store.write_new(_notes_bundle("secret-sentinel"))
+
+    assert backend.values[(store.service, f"notes:{'4' * 32}")]
+    assert "secret-sentinel" not in str(error.value)
+
+
+def test_nominal_noop_or_wrong_payload_never_returns_an_activatable_ref(monkeypatch) -> None:
+    noop = NominalAnomalyKeyring("noop")
+    monkeypatch.setattr(secret_store, "_load_keyring", lambda: noop)
+    generations = iter(f"{number:032x}" for number in range(10, 14))
+    store = KeychainSecretStore(generation_factory=lambda: next(generations))
+
+    with pytest.raises(SecretStoreError):
+        store.write_new(_notes_bundle("secret-sentinel"))
+
+    assert noop.set_calls == secret_store.MAX_GENERATION_ATTEMPTS
+    assert noop.values == {}
+
+    wrong = NominalAnomalyKeyring("wrong-once")
+    monkeypatch.setattr(secret_store, "_load_keyring", lambda: wrong)
+    generations = iter(("a" * 32, "b" * 32))
+    store = KeychainSecretStore(generation_factory=lambda: next(generations))
+
+    ref = store.write_new(_notes_bundle("secret-sentinel"))
+
+    assert wrong.values[(store.service, f"notes:{'a' * 32}")] == "foreign-payload"
+    assert ref == SecretRef(SecretId.NOTES, "b" * 32)
+    assert _secret(store, ref, SettingKey.ANTHROPIC_API_KEY) == "secret-sentinel"
+
+
 def test_payload_is_bounded_and_never_appears_in_store_repr() -> None:
     payload = "secret-sentinel"
     store = KeychainSecretStore(generation_factory=lambda: "a" * 32)
@@ -118,9 +195,7 @@ def test_read_rejects_oversize_payload_before_decoding(monkeypatch) -> None:
     )
     store = KeychainSecretStore()
     ref = SecretRef(SecretId.NOTES, "1" * 32)
-    backend.values[(store.service, ref.account)] = "x" * (
-        secret_store.MAX_SECRET_PAYLOAD_CHARS + 1
-    )
+    backend.values[(store.service, ref.account)] = "x" * (secret_store.MAX_SECRET_PAYLOAD_CHARS + 1)
 
     with pytest.raises(SecretStoreError):
         store.read(ref)
@@ -142,6 +217,47 @@ class FakeKeyring:
 
     def delete_password(self, service: str, account: str) -> None:
         self.values.pop((service, account), None)
+
+
+class LateFailureKeyring(FakeKeyring):
+    def __init__(self) -> None:
+        super().__init__()
+        self.late_value: str | None = None
+        self.fail_delete = False
+        self.noop_delete = False
+        self.fail_once = True
+
+    def set_password(self, service: str, account: str, payload: str) -> None:
+        if self.fail_once:
+            self.fail_once = False
+            self.values[(service, account)] = (
+                payload if self.late_value is None else self.late_value
+            )
+            raise RuntimeError("late backend failure")
+        super().set_password(service, account, payload)
+
+    def delete_password(self, service: str, account: str) -> None:
+        if self.noop_delete:
+            return
+        if self.fail_delete:
+            raise RuntimeError("delete failure")
+        super().delete_password(service, account)
+
+
+class NominalAnomalyKeyring(FakeKeyring):
+    def __init__(self, behavior: str) -> None:
+        super().__init__()
+        self.behavior = behavior
+        self.set_calls = 0
+
+    def set_password(self, service: str, account: str, payload: str) -> None:
+        self.set_calls += 1
+        if self.behavior == "noop":
+            return
+        if self.behavior == "wrong-once" and self.set_calls == 1:
+            self.values[(service, account)] = "foreign-payload"
+            return
+        super().set_password(service, account, payload)
 
 
 def _transcription_bundle(secret: str) -> SecretBundle:

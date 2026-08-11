@@ -9,13 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = ROOT / "src" / "meeting_memory"
 TESTS_ROOT = ROOT / "tests"
 
-LAYERS = {
-    "types": 0,
-    "config": 1,
-    "repo": 2,
-    "service": 3,
-    "ui": 4,
-}
+LAYERS = {"types": 0, "config": 1, "repo": 2, "service": 3, "ui": 4}
 
 EXTERNAL_SDK_PREFIXES = (
     "anthropic",
@@ -38,6 +32,7 @@ REQUIRED_SOURCE_FILES = (
     "types/__init__.py",
     "types/capabilities.py",
     "types/configuration.py",
+    "types/configuration_migration.py",
     "types/configuration_resolution.py",
     "types/artifacts.py",
     "types/backup.py",
@@ -109,6 +104,12 @@ REQUIRED_SOURCE_FILES = (
     "service/readiness_configuration.py",
     "service/readiness_integrations.py",
     "service/configuration_loader.py",
+    "service/configuration_migration.py",
+    "service/configuration_migration_cas.py",
+    "service/configuration_migration_outcomes.py",
+    "service/configuration_migration_plan.py",
+    "service/configuration_migration_source.py",
+    "service/configuration_migration_state.py",
     "service/configuration_loaded.py",
     "service/configuration_issues.py",
     "service/configuration_sources.py",

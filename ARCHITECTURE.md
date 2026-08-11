@@ -232,7 +232,28 @@ the loader.
 
 Normal runtime startup still performs no readiness, native-helper, provider,
 or Google OAuth-token probe. It may read only the exact active generic
-Keychain references required by configured runtime capabilities. Phase 4C
-adds digest-bound, explicit, non-destructive migration; Phase 4D adds native
-disclosure/consent forms, background store writes, and explicit in-app Calendar
-auth. The legacy UI continues to edit `.env` until 4D.
+Keychain references required by configured runtime capabilities.
+
+Phase 4C adds an inactive, explicit, non-destructive migration engine.
+`types/configuration_migration.py` is the value-free preview, confirmation, and
+outcome boundary. `service/configuration_migration_source.py` performs strict,
+stable, bounded reads; `configuration_migration_plan.py` owns tri-state merge
+rules; `configuration_migration_cas.py` classifies exact post-CAS visibility;
+`configuration_migration_state.py` holds the private storage boundary;
+and `configuration_migration.py` owns the single-use binding lifecycle and
+secret-write-before-preference-CAS ordering. The binding retains only source
+identity/digest, the exact preference snapshot, and safe selectable capability
+IDs. It never retains parsed source values. Apply reparses the unchanged source,
+rechecks it after immutable secret writes, and performs one preference CAS.
+Failures delete only refs created by that attempt. Visible-but-not-durable and
+ambiguous CAS outcomes retain refs so preferences never point to deleted
+secrets; ambiguous activation is not reported as activated and must be checked
+before retry. A cleanup failure can leave only an unreachable immutable
+generation and is surfaced for attention. `.env` is never
+written or deleted, process values are presence-only and never imported, and
+the compatible Google OAuth identity is untouched.
+
+No runtime, readiness, auth, search, summarize, doctor, startup, or UI module
+imports the engine. Phase 4D adds native disclosure/consent forms, background
+store writes/events, the explicit migration trigger, and in-app Calendar auth.
+The legacy UI continues to edit `.env` until 4D.

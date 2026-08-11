@@ -5,6 +5,7 @@ from __future__ import annotations
 import fcntl
 import os
 import stat
+import threading
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
@@ -15,6 +16,8 @@ MAX_PREFERENCES_BYTES = 1_048_576
 DIRECTORY_MODE = 0o700
 FILE_MODE = 0o600
 LOCK_FILENAME = ".preferences.lock"
+LOCK_OPEN_ATTEMPTS = 4
+_WRITER_LOCK = threading.Lock()
 
 
 class DirectorySyncUncertain(OSError):
@@ -43,34 +46,30 @@ def read_document(path: Path) -> bytes | None:
 def locked_directory(path: Path):
     """Pin private storage and serialize every writer through one lock file."""
 
-    filename = _filename(path)
-    directory_fd = open_directory_tree(
-        path.parent,
-        create=True,
-        require_private_final=True,
-    )
-    lock_fd = -1
-    try:
-        _validate_private_directory(directory_fd)
-        lock_exists = _entry_exists(directory_fd, LOCK_FILENAME)
-        lock_fd = os.open(
-            LOCK_FILENAME,
-            os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW,
-            FILE_MODE,
-            dir_fd=directory_fd,
+    with _WRITER_LOCK:
+        filename = _filename(path)
+        directory_fd = open_directory_tree(
+            path.parent,
+            create=True,
+            require_private_final=True,
         )
-        _validate_private_file(lock_fd)
-        if not lock_exists:
-            _sync_directory(directory_fd)
-        fcntl.flock(lock_fd, fcntl.LOCK_EX)
-        yield directory_fd, filename
-    finally:
-        if lock_fd >= 0:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-            finally:
-                os.close(lock_fd)
-        os.close(directory_fd)
+        lock_fd = -1
+        try:
+            _validate_private_directory(directory_fd)
+            lock_exists = _entry_exists(directory_fd, LOCK_FILENAME)
+            lock_fd = _open_lock_file(directory_fd)
+            _validate_private_file(lock_fd)
+            if not lock_exists:
+                _sync_directory(directory_fd)
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            yield directory_fd, filename
+        finally:
+            if lock_fd >= 0:
+                try:
+                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                finally:
+                    os.close(lock_fd)
+            os.close(directory_fd)
 
 
 def read_document_at(directory_fd: int, filename: str) -> bytes | None:
@@ -189,6 +188,21 @@ def _entry_exists(directory_fd: int, filename: str) -> bool:
     except FileNotFoundError:
         return False
     return True
+
+
+def _open_lock_file(directory_fd: int) -> int:
+    for attempt in range(LOCK_OPEN_ATTEMPTS):
+        try:
+            return os.open(
+                LOCK_FILENAME,
+                os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW,
+                FILE_MODE,
+                dir_fd=directory_fd,
+            )
+        except FileNotFoundError:
+            if attempt == LOCK_OPEN_ATTEMPTS - 1:
+                raise
+    raise OSError("preference writer lock could not be opened")
 
 
 def _sync_directory(directory_fd: int) -> None:

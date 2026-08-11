@@ -40,7 +40,9 @@ Naming boundaries:
   generations; preferences activate only opaque references.
 - `src/meeting_memory/service/`: orchestration, local behavior, and capability
   readiness. The private atomic preference store and fixed-scope composed
-  configuration loader also live here. No SDKs and no `rumps`.
+  configuration loader also live here. Phase 4C's explicit `.env` migration
+  engine is service-only and remains inactive until the Phase 4D consent UI.
+  No SDKs and no `rumps`.
 - `src/meeting_memory/ui/`: tray UI. This is the only layer allowed to import
   `rumps`.
 - `src/meeting_memory/doctor.py`: preflight checks that can run before optional

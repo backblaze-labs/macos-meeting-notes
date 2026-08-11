@@ -201,9 +201,12 @@ source provenance through fixed consumer scopes. Runtime and explicit
 readiness load only the active generic Keychain references they need; auth,
 search, and summarize use narrower scopes. The existing Google OAuth Keychain
 identity is unchanged. Composition performs no provider request and never
-writes `.env`, preferences, or Keychain. Phase 4C will add explicit
-digest-bound, non-destructive `.env` migration; Phase 4D will add native
-per-capability disclosure, consent, secret writes, and in-app Calendar auth.
+writes `.env`, preferences, or Keychain. Phase 4C now provides the inactive
+service engine for explicit, identity/digest-bound, non-destructive `.env`
+preview and confirmed migration. It is not called by startup, the CLI, or the
+current UI. Phase 4D will add the native trigger, per-capability disclosure,
+consent, secret entry, background configuration events, and in-app Calendar
+auth. Until that UI ships, continue using the legacy configuration flow.
 
 `KNOWN_SPEAKERS` is intentionally empty by default. Use the tray's
 **Configuration › Known Speakers...** item to add local aliases for normalizing
