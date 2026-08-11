@@ -283,3 +283,8 @@ and AppKit boundaries and verifies immutable resources without Keychain, network
 provider, or preference access. The repository verifier rejects architecture
 drift, external Mach-O linkage, build-machine paths, private configuration files,
 external symlinks, forbidden hardened-runtime exceptions, and smoke-test writes.
+The only public-release workflow is manual and bound to a protected GitHub
+Environment. It verifies every nested signature and Team ID, inspects the
+accepted Apple notarization log, staples and re-verifies each thin app, and
+publishes ZIPs plus SHA-256 files only after both architectures pass. The
+workflow definition does not imply that owner credentials or approval exist.

@@ -336,6 +336,9 @@ computer-use validation of the installed app.
 - The runtime-layout foundation is complete: bundled execution has no implicit
   checkout/cwd or `.env` discovery, and explicit legacy imports persist selected
   relative paths as absolute app-owned values.
+- Reproducible ad-hoc thin bundles and a manual protected Developer ID/notary
+  workflow are versioned. The latter remains unexecuted until owner-controlled
+  credentials, Environment approval, and clean-user evidence are available.
 - A signed/notarized build launches without a source checkout or developer
   Python.
 - Upgrade preserves app configuration, Keychain items, and meeting data.

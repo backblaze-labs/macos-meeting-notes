@@ -54,11 +54,13 @@ action must receive an explicit absolute selection. The PyInstaller artifact,
 dual-architecture verification, clean-user evidence, and signed/notarized
 release pipeline remain the next distribution slices.
 
-The standalone-build slice now has a versioned PyInstaller spec, fully pinned macOS
-distribution environment, thin `arm64`/`x86_64` CI matrix, ad-hoc signer,
-relocation smoke, and static/dynamic bundle verifier. Protected Developer ID
-signing/notarization and clean standard-user audio/TCC evidence remain deferred
-until their explicit release and hardware boundaries are satisfied.
+The standalone-build slice now has a versioned PyInstaller spec, fully pinned
+macOS distribution environment, thin `arm64`/`x86_64` CI matrix, ad-hoc signer,
+relocation smoke, and static/dynamic bundle verifier. A manual, protected
+release workflow defines Developer ID signing, notarization-log inspection,
+stapling, final checksums, and publication, but cannot execute without the
+owner-controlled `release` Environment, Apple credentials, and approval. Clean
+standard-user audio/TCC evidence also remains pending its hardware boundary.
 
 Phase 4C provides the migration engine. Its strict bounded preview
 is privately bound to `.env` identity/digest and one preference revision;

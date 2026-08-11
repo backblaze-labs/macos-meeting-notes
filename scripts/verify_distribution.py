@@ -51,6 +51,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--app", type=Path, required=True)
     result.add_argument("--arch", choices=("arm64", "x86_64"), required=True)
     result.add_argument("--signature", choices=("adhoc", "developer-id"), required=True)
+    result.add_argument("--team-id")
     result.add_argument("--notarized", action="store_true")
     return result
 
@@ -58,7 +59,7 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
-        verify_distribution(args.app, args.arch, args.signature, args.notarized)
+        verify_distribution(args.app, args.arch, args.signature, args.notarized, args.team_id)
     except DistributionVerificationError as exc:
         sys.stderr.write(f"Distribution verification failed safely at {exc.stage}.\n")
         return 2
@@ -74,6 +75,7 @@ def verify_distribution(
     architecture: str,
     signature: str,
     notarized: bool = False,
+    team_id: str | None = None,
     *,
     runner=subprocess.run,
 ) -> None:
@@ -87,7 +89,15 @@ def verify_distribution(
         _run_stage("architecture", _verify_architecture, binary, architecture, runner)
         _run_stage("linkage", _verify_linkage, binary, app, runner)
     _run_stage("build-paths", _verify_no_build_paths, app)
-    _run_stage("signature", _verify_signature, app, signature, runner)
+    _run_stage(
+        "signature",
+        _verify_signature,
+        app,
+        macho_files,
+        signature,
+        team_id,
+        runner,
+    )
     _run_stage("relocated-smoke", _verify_smoke, app, runner)
     if notarized:
         _run_stage(
@@ -215,27 +225,45 @@ def _build_path_sentinels() -> tuple[tuple[str, bytes], ...]:
     )
 
 
-def _verify_signature(app: Path, signature: str, runner) -> None:
+def _verify_signature(
+    app: Path,
+    macho_files: tuple[Path, ...],
+    signature: str,
+    team_id: str | None,
+    runner,
+) -> None:
     runner(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)], check=True)
-    details = runner(
-        ["/usr/bin/codesign", "-d", "--verbose=4", str(app)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    output = details.stderr + details.stdout
-    if signature == "adhoc" and "Signature=adhoc" not in output:
-        raise RuntimeError("expected an ad-hoc signature")
-    if signature == "developer-id" and "Authority=Developer ID Application:" not in output:
-        raise RuntimeError("expected a Developer ID Application signature")
-    entitlements = runner(
-        ["/usr/bin/codesign", "-d", "--entitlements", ":-", str(app)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if any(item in entitlements.stdout + entitlements.stderr for item in FORBIDDEN_ENTITLEMENTS):
-        raise RuntimeError("bundle contains a forbidden hardened-runtime exception")
+    if signature == "developer-id" and (not team_id or "\x00" in team_id):
+        raise RuntimeError("Developer ID verification requires the expected team")
+    for target in (app, *macho_files):
+        details = runner(
+            ["/usr/bin/codesign", "-d", "--verbose=4", str(target)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        output = details.stderr + details.stdout
+        if signature == "adhoc" and "Signature=adhoc" not in output:
+            raise RuntimeError("expected an ad-hoc signature")
+        if signature == "developer-id":
+            if "Authority=Developer ID Application:" not in output:
+                raise RuntimeError("expected a Developer ID Application signature")
+            if f"TeamIdentifier={team_id}" not in output:
+                raise RuntimeError("signed code has an unexpected team identifier")
+            if "(runtime)" not in output or "Timestamp=" not in output:
+                raise RuntimeError("signed code is missing hardened runtime or secure timestamp")
+            if target == app and "Identifier=com.meeting-memory.app" not in output:
+                raise RuntimeError("application designated identifier changed")
+        entitlements = runner(
+            ["/usr/bin/codesign", "-d", "--entitlements", ":-", str(target)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if any(
+            item in entitlements.stdout + entitlements.stderr for item in FORBIDDEN_ENTITLEMENTS
+        ):
+            raise RuntimeError("bundle contains a forbidden hardened-runtime exception")
 
 
 def _verify_smoke(app: Path, runner) -> None:
