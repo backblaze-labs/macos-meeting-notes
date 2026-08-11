@@ -7,14 +7,13 @@ import argparse
 import json
 import os
 import plistlib
-import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from meeting_memory.service.bundle_self_check import BUNDLE_SELF_CHECK_STAGES
+from meeting_memory.service.bundle_self_check import BUNDLE_SELF_CHECK_EXIT_CODES
 from meeting_memory.service.macos_app import BUNDLE_IDENTIFIER, macos_app_plist
 from meeting_memory.version import APP_VERSION, BUNDLE_BUILD
 
@@ -37,9 +36,6 @@ FORBIDDEN_ENTITLEMENTS = {
     "com.apple.security.cs.disable-library-validation",
     "com.apple.security.get-task-allow",
 }
-SELF_CHECK_FAILURE_RE = re.compile(
-    r"Bundle self-check failed safely at ([A-Za-z0-9-]+)\. Reinstall the app\.\n?"
-)
 
 
 class DistributionVerificationError(RuntimeError):
@@ -276,15 +272,15 @@ def _verify_smoke(app: Path, runner) -> None:
                 timeout=60,
             )
         except subprocess.CalledProcessError as exc:
-            outputs = (exc.stdout or "", exc.stderr or "")
-            stages = {
-                matched.group(1)
-                for output in outputs
-                for matched in SELF_CHECK_FAILURE_RE.finditer(output)
-            }
-            child_stage = next(iter(stages)) if len(stages) == 1 else None
-            valid = child_stage in BUNDLE_SELF_CHECK_STAGES
-            stage = f"self-check-{child_stage}" if valid else "self-check-launch"
+            child_stage = next(
+                (
+                    stage
+                    for stage, code in BUNDLE_SELF_CHECK_EXIT_CODES.items()
+                    if code == exc.returncode
+                ),
+                None,
+            )
+            stage = f"self-check-{child_stage}" if child_stage else "self-check-launch"
             raise DistributionVerificationError(stage) from None
         except Exception:
             raise DistributionVerificationError("self-check-launch") from None

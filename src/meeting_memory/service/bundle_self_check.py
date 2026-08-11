@@ -39,6 +39,9 @@ BUNDLE_SELF_CHECK_STAGES = frozenset(
     + tuple(f"resource-{index}" for index in range(len(RESOURCE_PATHS)))
     + tuple(f"import-{name.replace('.', '-')}" for name in REQUIRED_IMPORTS)
 )
+BUNDLE_SELF_CHECK_EXIT_CODES = {
+    stage: code for code, stage in enumerate(sorted(BUNDLE_SELF_CHECK_STAGES), start=20)
+}
 
 
 class BundleSelfCheckError(RuntimeError):
@@ -113,7 +116,7 @@ def run_bundle_self_check() -> int:
         report = inspect_bundle()
     except BundleSelfCheckError as exc:
         sys.stdout.write(f"Bundle self-check failed safely at {exc.stage}. Reinstall the app.\n")
-        return 2
+        return BUNDLE_SELF_CHECK_EXIT_CODES.get(exc.stage, 2)
     except Exception:
         sys.stdout.write("Bundle self-check failed safely. Reinstall the application.\n")
         return 2

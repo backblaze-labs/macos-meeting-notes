@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from meeting_memory.service.bundle_self_check import (
+    BUNDLE_SELF_CHECK_EXIT_CODES,
     REQUIRED_IMPORTS,
     RESOURCE_PATHS,
     BundleSelfCheckError,
@@ -84,7 +85,7 @@ def test_bundle_self_check_failure_uses_windowed_safe_stdout(monkeypatch, capsys
 
     monkeypatch.setattr("meeting_memory.service.bundle_self_check.inspect_bundle", fail)
 
-    assert run_bundle_self_check() == 2
+    assert run_bundle_self_check() == BUNDLE_SELF_CHECK_EXIT_CODES["import-keyring-backends-macOS"]
     captured = capsys.readouterr()
     assert captured.out == (
         "Bundle self-check failed safely at import-keyring-backends-macOS. Reinstall the app.\n"

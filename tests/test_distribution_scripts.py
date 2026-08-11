@@ -141,7 +141,7 @@ def test_relocated_smoke_extracts_only_allowlisted_child_stage(tmp_path: Path) -
                 stdout=f"meeting-memory {verifier.APP_VERSION}\n",
             )
         raise subprocess.CalledProcessError(
-            2,
+            verifier.BUNDLE_SELF_CHECK_EXIT_CODES["import-keyring-backends-macOS"],
             command,
             output=(
                 "private-bootstrap-sentinel\n"
