@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from scripts import build_distribution as builder
+from scripts import verify_distribution as verifier
 
 
 def test_build_requires_matching_native_architecture(tmp_path: Path, monkeypatch) -> None:
@@ -56,3 +57,31 @@ def test_build_copies_helper_then_signs_helper_and_outer_app(
     assert pyinstaller[1]["env"]["MEETING_MEMORY_TARGET_ARCH"] == "arm64"
     assert pyinstaller[1]["env"]["MEETING_MEMORY_CODESIGN_IDENTITY"] == ""
     assert pyinstaller[1]["env"]["PYINSTALLER_CONFIG_DIR"].endswith("pyinstaller-cache")
+
+
+def test_verifier_reports_only_allowlisted_stage_on_failure(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    sentinel = "private-build-path-sentinel"
+
+    def fail(*_args, **_kwargs):
+        raise verifier.DistributionVerificationError("relocated-smoke") from RuntimeError(sentinel)
+
+    monkeypatch.setattr(verifier, "verify_distribution", fail)
+    result = verifier.main(
+        [
+            "--app",
+            str(tmp_path / "Meeting Memory.app"),
+            "--arch",
+            "arm64",
+            "--signature",
+            "adhoc",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert result == 2
+    assert captured.err == "Distribution verification failed safely at relocated-smoke.\n"
+    assert sentinel not in captured.err

@@ -38,6 +38,14 @@ FORBIDDEN_ENTITLEMENTS = {
 }
 
 
+class DistributionVerificationError(RuntimeError):
+    """Value-free verifier failure with one allowlisted stage."""
+
+    def __init__(self, stage: str) -> None:
+        super().__init__(f"distribution verification failed at {stage}")
+        self.stage = stage
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("--app", type=Path, required=True)
@@ -51,6 +59,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         verify_distribution(args.app, args.arch, args.signature, args.notarized)
+    except DistributionVerificationError as exc:
+        sys.stderr.write(f"Distribution verification failed safely at {exc.stage}.\n")
+        return 2
     except Exception as exc:
         sys.stderr.write(f"Distribution verification failed safely: {type(exc).__name__}.\n")
         return 2
@@ -66,21 +77,40 @@ def verify_distribution(
     *,
     runner=subprocess.run,
 ) -> None:
-    app = app.resolve(strict=True)
-    _verify_plist(app)
-    _verify_manifest(app)
-    macho_files = _macho_files(app, runner)
+    app = _run_stage("application", app.resolve, strict=True)
+    _run_stage("metadata", _verify_plist, app)
+    _run_stage("manifest", _verify_manifest, app)
+    macho_files = _run_stage("mach-o-inventory", _macho_files, app, runner)
     if not macho_files:
-        raise RuntimeError("bundle does not contain Mach-O files")
+        raise DistributionVerificationError("mach-o-inventory")
     for binary in macho_files:
-        _verify_architecture(binary, architecture, runner)
-        _verify_linkage(binary, app, runner)
-    _verify_no_build_paths(app)
-    _verify_signature(app, signature, runner)
-    _verify_smoke(app, runner)
+        _run_stage("architecture", _verify_architecture, binary, architecture, runner)
+        _run_stage("linkage", _verify_linkage, binary, app, runner)
+    _run_stage("build-paths", _verify_no_build_paths, app)
+    _run_stage("signature", _verify_signature, app, signature, runner)
+    _run_stage("relocated-smoke", _verify_smoke, app, runner)
     if notarized:
-        runner(["xcrun", "stapler", "validate", str(app)], check=True)
-        runner(["spctl", "--assess", "--type", "execute", "--verbose=4", str(app)], check=True)
+        _run_stage(
+            "staple",
+            runner,
+            ["xcrun", "stapler", "validate", str(app)],
+            check=True,
+        )
+        _run_stage(
+            "gatekeeper",
+            runner,
+            ["spctl", "--assess", "--type", "execute", "--verbose=4", str(app)],
+            check=True,
+        )
+
+
+def _run_stage(stage: str, operation, *args, **kwargs):
+    try:
+        return operation(*args, **kwargs)
+    except DistributionVerificationError:
+        raise
+    except Exception as exc:
+        raise DistributionVerificationError(stage) from exc
 
 
 def _verify_plist(app: Path) -> None:
