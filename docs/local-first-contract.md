@@ -99,7 +99,10 @@ failure.
    two closed, readable artifacts—`recording.m4a` plus a compatible
    `transcript.md` metadata stub—then publish that whole directory into
    `MEETINGS_DIR` with one same-filesystem atomic rename before any cloud
-   request. A partially assembled final meeting directory is never visible.
+   request. WAV conversion prefers AVFoundation and otherwise uses the bundled
+   offline, source-pinned minimal LGPL encoder. Either route MUST produce the
+   same validated 16 kHz mono AAC-bearing M4A. A partially assembled final
+   meeting directory is never visible.
 4. **Queuing optional work:** record independent local state for transcription
    and backup. Missing configuration leaves the meeting job `not_requested`,
    not lost or failed.
@@ -336,6 +339,9 @@ computer-use validation of the installed app.
 - The runtime-layout foundation is complete: bundled execution has no implicit
   checkout/cwd or `.env` discovery, and explicit legacy imports persist selected
   relative paths as absolute app-owned values.
+- Reproducible ad-hoc thin bundles and a manual protected Developer ID/notary
+  workflow are versioned. The latter remains unexecuted until owner-controlled
+  credentials, Environment approval, and clean-user evidence are available.
 - A signed/notarized build launches without a source checkout or developer
   Python.
 - Upgrade preserves app configuration, Keychain items, and meeting data.

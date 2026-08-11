@@ -4,7 +4,7 @@
 **Status:** Draft  
 **Author:** Meeting Memory contributors
 **Date:** 2026-08-07
-**Version:** 0.4
+**Version:** 0.5
 **Methodology:** RFC-inspired SRS (requirement language per RFC 2119: MUST / SHOULD / MAY / MUST NOT)
 
 **Revision note (v0.2):** Added a second, first-class design goal — **the repository must be easy for AI coding agents to read and modify** — and the conventions that deliver it, ported from the *portable* (non-web-specific) patterns of the team's `agent-friendly reference project`: an `AGENTS.md` control surface, import-enforced module layering, mechanical structural tests, a doctor preflight, and fail-fast config. §7 was restructured into enforced layers (§7.1, §7.5, §7.6) and all v0.1 Open Questions were resolved (§11). This app is deliberately **not** built on the reference project web template (Next.js + FastAPI) — see §1.2 and §2.1.
@@ -16,6 +16,11 @@ Recording Core is the only first-value gate; Transcription, Backup, Calendar,
 and Notes are independent optional capabilities. The current fail-fast runtime
 is explicitly legacy until the implementation phases replace it. See §2.5 and
 `docs/local-first-contract.md`.
+
+**Revision note (v0.5):** Made the durable WAV-to-M4A boundary independent of
+the host's optional AudioToolbox AAC encoder. Conversion prefers AVFoundation
+and falls back offline to a separately bundled, minimal LGPL FFmpeg executable
+compiled from pinned source with networking and unrelated codecs disabled.
 
 ---
 
@@ -259,7 +264,13 @@ B2_BUCKET_NAME
 
 **REQ-EXT-18** If native capture cannot start because the helper, hardware, or macOS permissions are unavailable, the application MUST surface a visible, actionable error rather than silently failing.
 
-**REQ-EXT-19** Audio MUST be captured at 16000 Hz sample rate, mono channel, encoded as a 16-bit PCM WAV during capture, then converted to M4A/AAC with AVFoundation before saving and uploading, to balance file size and speech quality.
+**REQ-EXT-19** Audio MUST be captured at 16000 Hz sample rate, mono channel,
+and encoded as a 16-bit PCM WAV during capture. Before local publication or
+upload, it MUST be converted to a validated 16000 Hz mono AAC-bearing M4A.
+Conversion MUST prefer AVFoundation when the host exposes AAC encoding and MUST
+otherwise use the bundled, offline, minimal LGPL encoder. The fallback MUST
+have networking disabled and MUST accept only the app's fixed WAV-to-AAC/M4A
+operation.
 
 ---
 
@@ -588,7 +599,13 @@ error messages.
 
 **REQ-NF-11** The application MUST NOT depend on any paid macOS feature or third-party subscription beyond the services listed in Section 3.
 
-**REQ-NF-12** The Python application MUST be distributable as a `pip install` from a Git URL. The repository MAY contain native helper source that setup compiles for the current Mac, but MUST NOT bundle third-party executables. Static UI assets such as the app icon MAY be stored in the repository.
+**REQ-NF-12** The Python application MUST be distributable as a `pip install`
+from a Git URL. The repository MAY contain native-helper source and a pinned
+third-party source recipe that setup compiles for the current Mac, but MUST NOT
+commit a prebuilt third-party executable. The standalone app artifact MAY
+bundle the separately built minimal LGPL audio encoder together with its
+license and exact source/relinking information. Static UI assets such as the
+app icon MAY be stored in the repository.
 
 ### 5.5 Observability
 
@@ -915,7 +932,15 @@ only during the explicit check.
 
 **Tooling & commands** — `ruff` (lint + format; rule `T20` forbids bare `print()` — use std `logging`), `pytest`, `pre-commit`. A `Makefile` exposes the predictable command set: `make setup | install | run | auth | doctor | install-macos-app | reload-macos-app | open-macos-app | quit-macos-app | install-launch-agent | uninstall-launch-agent | lint | format | test | check:structure | check`, where `check` = lint + tests + structure (the full gate `AGENTS.md` tells agents to run before finishing). The installed CLI also exposes `meeting-memory setup` and `meeting-memory search <query>`.
 
-**Packaging** — `pyproject.toml` is canonical (PEP 621, src-layout, console-script entrypoint, `pip install` from a git URL per REQ-NF-12; no bundled third-party executables). A thin `requirements.txt` (`-e .`) supports the plain `python -m venv` + `pip` path. Setup compiles the repository's Swift helper source for the current architecture and copies it into the generated local `.app`; the bundle remains a wrapper around the checkout and virtualenv, not a signed/notarized standalone distribution.
+**Packaging** — `pyproject.toml` is canonical (PEP 621, src-layout,
+console-script entrypoint, and `pip install` from a Git URL per REQ-NF-12). A
+thin `requirements.txt` (`-e .`) supports the plain `python -m venv` + `pip`
+path. Setup compiles the repository's Swift helper and the pinned minimal LGPL
+AAC encoder for the current architecture; no prebuilt third-party executable
+is committed. The generated local `.app` remains a wrapper around the checkout
+and virtualenv. The standalone artifact bundles those two executables with the
+encoder license and source offer, but is not a public release until Developer
+ID signing and notarization pass.
 
 ---
 

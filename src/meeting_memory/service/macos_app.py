@@ -20,7 +20,9 @@ from meeting_memory.repo.native_audio import (
     build_native_capture_helper,
     default_build_helper_path,
 )
+from meeting_memory.repo.native_audio_build import ENCODER_NAME
 from meeting_memory.repo.native_layout import HELPER_ENV_VAR
+from meeting_memory.version import APP_VERSION, BUNDLE_BUILD
 
 APP_NAME = "Meeting Memory"
 APP_BUNDLE_NAME = f"{APP_NAME}.app"
@@ -58,8 +60,14 @@ def install_macos_app(
         default_build_helper_path(root),
         runner=runner,
     )
+    built_encoder = built_helper.with_name(ENCODER_NAME)
+    if not built_encoder.is_file():
+        raise RuntimeError("Native audio builder did not create the AAC encoder.")
     shutil.copyfile(built_helper, macos_dir / HELPER_NAME)
     (macos_dir / HELPER_NAME).chmod(0o755)
+    shutil.copyfile(built_encoder, macos_dir / ENCODER_NAME)
+    (macos_dir / ENCODER_NAME).chmod(0o755)
+    (macos_dir / "MeetingMemoryAudioEncoder").unlink(missing_ok=True)
 
     executable = macos_dir / EXECUTABLE_NAME
     executable.write_text(
@@ -102,8 +110,8 @@ def macos_app_plist() -> dict[str, Any]:
         "CFBundleInfoDictionaryVersion": "6.0",
         "CFBundleName": APP_NAME,
         "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "0.1.0",
-        "CFBundleVersion": "1",
+        "CFBundleShortVersionString": APP_VERSION,
+        "CFBundleVersion": BUNDLE_BUILD,
         "LSMinimumSystemVersion": "15.0",
         "LSUIElement": True,
         "NSMicrophoneUsageDescription": (
