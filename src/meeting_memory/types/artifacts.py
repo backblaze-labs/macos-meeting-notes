@@ -101,6 +101,8 @@ class BackupSnapshotUpload:
     def __post_init__(self) -> None:
         validate_meeting_slug(self.meeting_slug)
         _validate_revision(self.revision)
+        if not isinstance(self.directory, Path) or not self.directory.is_absolute():
+            raise ValueError("backup snapshot directory must be absolute")
         if self.directory_device < 0 or self.directory_inode <= 0:
             raise ValueError("backup snapshot directory identity is invalid")
 

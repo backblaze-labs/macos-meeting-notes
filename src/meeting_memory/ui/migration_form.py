@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from meeting_memory.types.capabilities import Capability
@@ -11,6 +12,24 @@ from meeting_memory.types.configuration_migration import (
     MigrationPreviewState,
 )
 from meeting_memory.ui.configuration_forms import DISCLOSURES, OK_RESPONSES
+
+
+def choose_legacy_environment_file() -> Path | None:
+    """Choose one explicit legacy source without scanning user directories."""
+
+    from AppKit import NSOpenPanel
+
+    panel = NSOpenPanel.openPanel()
+    panel.setTitle_("Select Legacy Configuration")
+    panel.setPrompt_("Select .env")
+    panel.setCanChooseDirectories_(False)
+    panel.setCanChooseFiles_(True)
+    panel.setAllowsMultipleSelection_(False)
+    panel.setShowsHiddenFiles_(True)
+    if int(panel.runModal()) not in OK_RESPONSES:
+        return None
+    selected = Path(str(panel.URL().path()))
+    return selected if selected.is_absolute() else None
 
 
 def open_migration_preview(preview: MigrationPreview) -> MigrationConfirmation | None:

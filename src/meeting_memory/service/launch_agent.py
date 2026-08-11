@@ -26,7 +26,7 @@ Runner = Callable[..., subprocess.CompletedProcess]
 
 def install_launch_agent(
     *,
-    project_dir: Path | None = None,
+    project_dir: Path,
     plist_path: Path | None = None,
     app_path: Path | None = None,
     python_executable: str | None = None,
@@ -35,7 +35,7 @@ def install_launch_agent(
     uid: int | None = None,
 ) -> Path:
     target = plist_path or default_plist_path()
-    root = (project_dir or Path.cwd()).resolve()
+    root = project_dir.resolve()
     app_target = app_path or default_app_path()
     python = python_executable or sys.executable
     target.parent.mkdir(parents=True, exist_ok=True)

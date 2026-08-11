@@ -11,7 +11,7 @@ def open_parent_directory(path: Path) -> int:
 
     absolute = path.expanduser()
     if not absolute.is_absolute():
-        absolute = Path.cwd() / absolute
+        raise ValueError("pinned source paths must be absolute")
     descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
     try:
         for part in absolute.parent.parts[1:]:

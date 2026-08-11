@@ -1,6 +1,7 @@
 """Side-effect orchestration used by the native configuration worker."""
 
 from collections.abc import Mapping
+from pathlib import Path
 
 from meeting_memory.service.calendar_authorization import CalendarAuthorizationService
 from meeting_memory.service.configuration_editing import CapabilityConfigurationService
@@ -28,6 +29,7 @@ from meeting_memory.types.configuration_surface import (
     ConfigurationOpenFailed,
     ConfigurationSaved,
     MigrationApplied,
+    MigrationPreviewed,
 )
 
 _MIGRATION_PAUSE_STATES = {
@@ -72,6 +74,21 @@ def open_configuration(
         return ConfigurationOpened(operation, service.open(capability))
     except Exception:
         return ConfigurationOpenFailed(operation, capability)
+
+
+def preview_migration_operation(
+    service: EnvironmentMigrationService,
+    operation: ConfigurationOperationId,
+    process_environment: Mapping[str, str] | None,
+    source_path: Path | None,
+) -> MigrationPreviewed:
+    return MigrationPreviewed(
+        operation,
+        service.preview(
+            process_environment=process_environment,
+            source_path=source_path,
+        ),
+    )
 
 
 def save_configuration(

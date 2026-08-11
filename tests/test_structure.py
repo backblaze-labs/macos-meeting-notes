@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import structure_distribution_files as distribution
 from structure_d2_files import REQUIRED_D2_SOURCE_FILES
 from structure_native_files import REQUIRED_NATIVE_SOURCE_FILES
 
@@ -29,6 +30,7 @@ EXTERNAL_SDK_PREFIXES = (
 
 REQUIRED_SOURCE_FILES = (
     *REQUIRED_D2_SOURCE_FILES,
+    *distribution.REQUIRED_DISTRIBUTION_SOURCE_FILES,
     "__init__.py",
     "__main__.py",
     "doctor.py",
@@ -158,6 +160,7 @@ REQUIRED_SOURCE_FILES = (
 )
 
 REQUIRED_REPO_FILES = (
+    *distribution.REQUIRED_DISTRIBUTION_REPO_FILES,
     "AGENTS.md",
     "CLAUDE.md",
     "ARCHITECTURE.md",

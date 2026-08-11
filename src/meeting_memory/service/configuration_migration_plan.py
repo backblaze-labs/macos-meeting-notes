@@ -30,17 +30,19 @@ from meeting_memory.types.configuration_migration import (
 class MigrationPlan:
     """Ephemeral plan whose raw parsed values never enter its representation."""
 
-    __slots__ = ("_candidates", "_preferences", "_values")
+    __slots__ = ("_candidates", "_preference_values", "_preferences", "_values")
 
     def __init__(
         self,
         candidates: tuple[MigrationCandidate, ...],
         preferences: AppPreferences,
         values: Mapping[SettingKey, str],
+        preference_values: Mapping[SettingKey, str] | None = None,
     ) -> None:
         self._candidates = candidates
         self._preferences = preferences
         self._values = dict(values)
+        self._preference_values = dict(preference_values or values)
 
     @property
     def candidates(self) -> tuple[MigrationCandidate, ...]:
@@ -82,7 +84,7 @@ class MigrationPlan:
                     continue
                 key = PreferenceKey(definition.key.value)
                 if key not in existing_keys:
-                    values.append(PreferenceValue(key, self._values[definition.key]))
+                    values.append(PreferenceValue(key, self._preference_values[definition.key]))
                     existing_keys.add(key)
             if (
                 capability is not Capability.RECORDING_CORE
@@ -99,13 +101,15 @@ def build_migration_plan(
     values: Mapping[SettingKey, str],
     preferences: AppPreferences,
     process_keys: frozenset[SettingKey] = frozenset(),
+    *,
+    preference_values: Mapping[SettingKey, str] | None = None,
 ) -> MigrationPlan:
     """Build canonical candidates without using process values as import material."""
 
     candidates = tuple(
         _candidate(capability, values, preferences, process_keys) for capability in Capability
     )
-    return MigrationPlan(candidates, preferences, values)
+    return MigrationPlan(candidates, preferences, values, preference_values)
 
 
 def _candidate(

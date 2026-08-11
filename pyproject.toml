@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "macos-meeting-notes"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Local-first macOS app for Meeting Memory notes, transcription, and B2 backup."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -41,12 +41,18 @@ dev = [
   "pytest>=8.3",
   "ruff>=0.8",
 ]
+distribution = [
+  "pyinstaller==6.21.0",
+]
 
 [project.scripts]
 meeting-memory = "meeting_memory.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "meeting_memory.version.APP_VERSION" }
 
 [tool.setuptools.package-data]
 "meeting_memory.service.assets" = ["*.icns"]

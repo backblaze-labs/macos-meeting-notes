@@ -25,7 +25,12 @@ class Surface:
         self.calls.append(capability)
         return object()
 
-    def preview_migration(self):
+    @property
+    def migration_source_required(self):
+        return False
+
+    def preview_migration(self, *, source_path=None):
+        assert source_path is None
         self.calls.append("migration")
         return object()
 
@@ -35,6 +40,21 @@ class Surface:
 
     def load_prompt(self):
         raise AssertionError("setup prompt must stay disabled")
+
+
+class SelectingSurface(Surface):
+    def __init__(self) -> None:
+        super().__init__()
+        self.source_path = None
+
+    @property
+    def migration_source_required(self):
+        return True
+
+    def preview_migration(self, *, source_path=None):
+        self.source_path = source_path
+        self.calls.append("migration")
+        return object()
 
 
 def test_coordinator_and_setup_construction_perform_zero_store_or_provider_io() -> None:
@@ -80,3 +100,22 @@ def test_setup_exposes_same_capabilities_auth_and_import_with_prompt_disabled(
     assert surface.calls == [*Capability, "authorization", "migration"]
     assert menu.NOTES_PROMPT_LABEL in items
     assert items[menu.NOTES_PROMPT_LABEL].callback is None
+
+
+def test_bundled_import_uses_one_explicit_selected_source(monkeypatch, tmp_path) -> None:
+    source = tmp_path / "selected.env"
+    surface = SelectingSurface()
+    app = RumpsSetupApp(rumps_module=FakeRumps(), configuration_surface=surface)
+    monkeypatch.setattr(
+        "meeting_memory.ui.configuration_surface.choose_legacy_environment_file",
+        lambda: source,
+    )
+    submenu = next(
+        item for item in app.app.menu.items if item and item.title == menu.CONFIGURATION_LABEL
+    )
+    item = next(item for item in submenu.items if item and item.title == menu.IMPORT_LEGACY_LABEL)
+
+    item.callback(object())
+
+    assert surface.calls == ["migration"]
+    assert surface.source_path == source

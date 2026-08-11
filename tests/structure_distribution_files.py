@@ -1,0 +1,23 @@
+"""Source modules introduced by standalone distribution hardening."""
+
+REQUIRED_DISTRIBUTION_SOURCE_FILES = (
+    "version.py",
+    "types/runtime_layout.py",
+    "config/runtime_layout.py",
+    "repo/native_layout.py",
+    "repo/native_audio_build.py",
+    "repo/native_audio_source.py",
+    "service/bundle_self_check.py",
+    "service/configuration_migration_paths.py",
+)
+
+REQUIRED_DISTRIBUTION_REPO_FILES = (
+    "docs/standalone-validation-evidence.md",
+    "scripts/build_distribution.py",
+    "scripts/distribution_signature.py",
+    "scripts/release_distribution.py",
+    "scripts/validate_release_context.py",
+    "scripts/verify_distribution.py",
+    "packaging/FFMPEG_SOURCE_OFFER.md",
+    "packaging/vendor/ffmpeg-8.1.2.tar.xz",
+)

@@ -1,0 +1,174 @@
+name: Protected macOS release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build and release, for example v0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meeting-memory-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  sign-and-notarize:
+    name: signed-${{ matrix.arch }}
+    environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - name: Check out the exact release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-distribution.lock
+
+      - name: Validate tag and version
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: PYTHONPATH=src python scripts/validate_release_context.py --tag "$RELEASE_TAG"
+
+      - name: Install locked distribution dependencies
+        run: python -m pip install -r requirements-distribution.lock
+
+      - name: Import protected signing materials
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          umask 077
+          for value in "$APPLE_CERTIFICATE_P12" "$APPLE_CERTIFICATE_PASSWORD" \
+            "$APPLE_NOTARY_KEY" "$APPLE_NOTARY_KEY_ID" "$APPLE_NOTARY_ISSUER_ID" \
+            "$APPLE_SIGNING_IDENTITY" "$APPLE_TEAM_ID"; do
+            test -n "$value"
+          done
+          KEYCHAIN_PATH="$RUNNER_TEMP/meeting-memory-signing.keychain-db"
+          CERTIFICATE_PATH="$RUNNER_TEMP/developer-id.p12"
+          NOTARY_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          KEYCHAIN_PASSWORD="$(/usr/bin/uuidgen)"
+          printf '%s' "$APPLE_CERTIFICATE_P12" | /usr/bin/base64 -D > "$CERTIFICATE_PATH"
+          printf '%s' "$APPLE_NOTARY_KEY" | /usr/bin/base64 -D > "$NOTARY_KEY_PATH"
+          /usr/bin/security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          /usr/bin/security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          /usr/bin/security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          /usr/bin/security import "$CERTIFICATE_PATH" -k "$KEYCHAIN_PATH" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          /usr/bin/security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          /usr/bin/security list-keychains -d user -s "$KEYCHAIN_PATH"
+          {
+            echo "KEYCHAIN_PATH=$KEYCHAIN_PATH"
+            echo "CERTIFICATE_PATH=$CERTIFICATE_PATH"
+            echo "NOTARY_KEY_PATH=$NOTARY_KEY_PATH"
+          } >> "$GITHUB_ENV"
+
+      - name: Build Developer ID application
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: >-
+          python scripts/build_distribution.py
+          --arch "${{ matrix.arch }}"
+          --identity "$APPLE_SIGNING_IDENTITY"
+
+      - name: Verify Developer ID signatures
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: >-
+          python scripts/verify_distribution.py
+          --app "dist/${{ matrix.arch }}/Meeting Memory.app"
+          --arch "${{ matrix.arch }}"
+          --signature developer-id
+          --team-id "$APPLE_TEAM_ID"
+
+      - name: Notarize, staple, and create final archive
+        env:
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: >-
+          python scripts/release_distribution.py
+          --app "dist/${{ matrix.arch }}/Meeting Memory.app"
+          --arch "${{ matrix.arch }}"
+          --notary-key "$NOTARY_KEY_PATH"
+          --notary-key-id "$APPLE_NOTARY_KEY_ID"
+          --notary-issuer "$APPLE_NOTARY_ISSUER_ID"
+          --team-id "$APPLE_TEAM_ID"
+          --output-dir "release/${{ matrix.arch }}"
+
+      - name: Remove signing materials
+        if: always()
+        run: |
+          KEYCHAIN_PATH="${KEYCHAIN_PATH:-$RUNNER_TEMP/meeting-memory-signing.keychain-db}"
+          CERTIFICATE_PATH="${CERTIFICATE_PATH:-$RUNNER_TEMP/developer-id.p12}"
+          NOTARY_KEY_PATH="${NOTARY_KEY_PATH:-$RUNNER_TEMP/AuthKey.p8}"
+          /usr/bin/security delete-keychain "$KEYCHAIN_PATH" || true
+          /bin/rm -f "$CERTIFICATE_PATH" "$NOTARY_KEY_PATH"
+
+      - name: Upload notarized release files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: meeting-memory-${{ matrix.arch }}-notarized
+          path: release/${{ matrix.arch }}/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: publish-release
+    needs: sign-and-notarize
+    environment: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the exact release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Download notarized artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: meeting-memory-*-notarized
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Verify checksums
+        working-directory: release-artifacts
+        run: shasum -a 256 -c ./*.sha256
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: >-
+          gh release create "$RELEASE_TAG"
+          release-artifacts/*.zip release-artifacts/*.sha256
+          --verify-tag
+          --title "Meeting Memory ${RELEASE_TAG#v}"
+          --generate-notes

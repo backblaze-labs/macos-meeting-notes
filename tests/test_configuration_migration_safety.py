@@ -16,6 +16,7 @@ from meeting_memory.types.configuration_migration import (
     MigrationOutcomeState,
     MigrationPreviewState,
 )
+from meeting_memory.types.runtime_layout import RuntimeLayout
 
 
 def test_invalid_returned_refs_never_delete_existing_or_foreign_references(
@@ -95,7 +96,13 @@ def test_preview_and_apply_are_total_and_relative_path_is_anchored(
     preferences = FakePreferenceStore()
     secrets = FakeSecretStore()
     monkeypatch.chdir(first)
-    service = _service(Path(".env"), preferences, secrets)
+    service = EnvironmentMigrationService(
+        Path(".env"),
+        preference_store=preferences,
+        secret_store=secrets,
+        id_factory=lambda: "1" * 32,
+        runtime_layout=RuntimeLayout.development(first, home=tmp_path / "home"),
+    )
     preview = service.preview()
     monkeypatch.chdir(second)
 
@@ -118,7 +125,7 @@ def test_preview_and_apply_are_total_and_relative_path_is_anchored(
     preview = service.preview()
     monkeypatch.setattr(
         configuration_migration,
-        "build_migration_plan",
+        "migration_apply_plan",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("plan sentinel")),
     )
     failed_apply = service.apply(_confirmation(preview, Capability.TRANSCRIPTION))

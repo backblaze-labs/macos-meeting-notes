@@ -3,29 +3,31 @@
 from __future__ import annotations
 
 import json
-import os
-import platform
 import queue
-import shutil
 import signal
 import subprocess
 import threading
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TextIO
 
-HELPER_ENV_VAR = "MEETING_MEMORY_CAPTURE_HELPER"
-HELPER_NAME = "MeetingMemoryCapture"
-BUILD_DIR_NAME = ".build"
+from meeting_memory.repo.native_audio_build import (
+    NativeAudioCaptureError,
+    build_native_capture_helper,
+    default_build_helper_path,
+)
+from meeting_memory.repo.native_layout import HELPER_NAME, resolve_native_capture_helper
+from meeting_memory.types.runtime_layout import RuntimeLayout
+
+__all__ = (
+    "HELPER_NAME",
+    "NativeAudioCaptureError",
+    "build_native_capture_helper",
+    "default_build_helper_path",
+)
+
 START_TIMEOUT_SECONDS = 60
 STOP_TIMEOUT_SECONDS = 20
-
-Runner = Callable[..., subprocess.CompletedProcess]
-
-
-class NativeAudioCaptureError(RuntimeError):
-    """Raised when native audio capture cannot start or finish."""
 
 
 @dataclass
@@ -185,85 +187,13 @@ def convert_native_audio(wav_path: Path, m4a_path: Path) -> Path:
     return m4a_path
 
 
-def native_capture_helper_path() -> Path:
-    configured = os.environ.get(HELPER_ENV_VAR)
-    candidates = [
-        Path(configured).expanduser() if configured else None,
-        Path.cwd() / BUILD_DIR_NAME / HELPER_NAME,
-    ]
-    for candidate in candidates:
-        if candidate is not None and candidate.is_file() and os.access(candidate, os.X_OK):
-            return candidate
+def native_capture_helper_path(runtime_layout: RuntimeLayout | None = None) -> Path:
+    helper = resolve_native_capture_helper(runtime_layout)
+    if helper is not None:
+        return helper
     raise NativeAudioCaptureError(
         "Native audio helper is missing. Run make setup or make install-macos-app."
     )
-
-
-def build_native_capture_helper(
-    project_dir: Path,
-    output_path: Path,
-    *,
-    runner: Runner = subprocess.run,
-) -> Path:
-    source_dir = project_dir / "src" / "meeting_memory" / "repo" / "native"
-    sources = sorted(source_dir.glob("*.swift"))
-    if not sources:
-        raise NativeAudioCaptureError(f"Native capture sources are missing: {source_dir}")
-    swiftc = shutil.which("swiftc")
-    if swiftc is None:
-        raise NativeAudioCaptureError(
-            "Swift compiler is missing. Install Xcode Command Line Tools with "
-            "xcode-select --install."
-        )
-    sdk_path = _compatible_sdk_path()
-    architecture = "x86_64" if platform.machine() == "x86_64" else "arm64"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    module_cache = output_path.parent / "swift-module-cache"
-    module_cache.mkdir(parents=True, exist_ok=True)
-    command: list[str] = [
-        swiftc,
-        "-O",
-        "-module-cache-path",
-        str(module_cache),
-        "-sdk",
-        str(sdk_path),
-        "-target",
-        f"{architecture}-apple-macosx15.0",
-    ]
-    for framework in ("AVFoundation", "CoreAudio", "CoreMedia", "ScreenCaptureKit"):
-        command.extend(["-framework", framework])
-    command.extend(str(path) for path in sources)
-    command.extend(["-o", str(output_path)])
-    try:
-        runner(command, check=True, capture_output=True, text=True)
-    except (OSError, subprocess.CalledProcessError) as exc:
-        detail = str(getattr(exc, "stderr", "") or exc).strip()
-        raise NativeAudioCaptureError(
-            "Could not build the native audio helper. Install or update Xcode "
-            f"Command Line Tools, then retry. Detail: {detail}"
-        ) from exc
-    if not output_path.is_file():
-        raise NativeAudioCaptureError("Swift finished without creating the audio helper.")
-    output_path.chmod(0o755)
-    return output_path
-
-
-def default_build_helper_path(project_dir: Path) -> Path:
-    return project_dir / BUILD_DIR_NAME / HELPER_NAME
-
-
-def _compatible_sdk_path() -> Path:
-    sdk_root = Path("/Library/Developer/CommandLineTools/SDKs")
-    macos_15_sdks = sorted(sdk_root.glob("MacOSX15*.sdk"), reverse=True)
-    if macos_15_sdks:
-        return macos_15_sdks[0]
-    result = subprocess.run(
-        ["xcrun", "--sdk", "macosx", "--show-sdk-path"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return Path(result.stdout.strip())
 
 
 def _read_helper_output(

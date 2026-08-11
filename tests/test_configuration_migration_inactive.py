@@ -14,6 +14,7 @@ def test_migration_engine_is_reachable_only_through_explicit_configuration_surfa
         "service/configuration_migration.py",
         "service/configuration_migration_cas.py",
         "service/configuration_migration_outcomes.py",
+        "service/configuration_migration_paths.py",
         "service/configuration_migration_plan.py",
         "service/configuration_migration_source.py",
         "service/configuration_migration_state.py",

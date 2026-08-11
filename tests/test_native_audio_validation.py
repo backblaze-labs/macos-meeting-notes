@@ -1,5 +1,6 @@
 import math
 import os
+import shlex
 import struct
 import subprocess
 import wave
@@ -13,6 +14,7 @@ from meeting_memory.repo.native_audio import (
     build_native_capture_helper,
     convert_native_audio,
 )
+from meeting_memory.types.runtime_layout import NATIVE_ENCODER_NAME
 
 
 def test_native_m4a_validator_requires_one_complete_fact_event(
@@ -175,7 +177,7 @@ def test_native_m4a_validator_rejects_symlink_before_helper(
     assert called is False
 
 
-def test_native_m4a_validator_accepts_real_avfoundation_conversion(
+def test_native_m4a_validator_accepts_real_offline_conversion(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -198,10 +200,7 @@ def test_native_m4a_validator_accepts_real_avfoundation_conversion(
         lambda: helper,
     )
 
-    try:
-        convert_native_audio(wav_path, m4a_path)
-    except NativeAudioCaptureError as exc:
-        pytest.skip(f"host AVFoundation AAC encoder unavailable: {exc}")
+    convert_native_audio(wav_path, m4a_path)
     native_audio_validation.validate_native_m4a(m4a_path)
     descriptor = os.open(m4a_path, os.O_RDONLY)
     m4a_path.unlink()
@@ -209,3 +208,61 @@ def test_native_m4a_validator_accepts_real_avfoundation_conversion(
         native_audio_validation.validate_native_m4a(Path(f"/dev/fd/{descriptor}"))
     finally:
         os.close(descriptor)
+
+
+def test_native_conversion_fallback_uses_only_the_fixed_sibling_command(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project = Path(__file__).resolve().parents[1]
+    helper = build_native_capture_helper(
+        project,
+        tmp_path / "MeetingMemoryCapture",
+        build_encoder=False,
+    )
+    encoder = helper.with_name(NATIVE_ENCODER_NAME)
+    arguments = tmp_path / "arguments.txt"
+    encoder.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' \"$@\" > {shlex.quote(str(arguments))}\n"
+        'for output_path in "$@"; do :; done\n'
+        'printf "fake-m4a" > "$output_path"\n',
+        encoding="utf-8",
+    )
+    encoder.chmod(0o755)
+    invalid_wav = tmp_path / "invalid.wav"
+    invalid_wav.write_bytes(b"not-a-wave")
+    output = tmp_path / "recording.m4a"
+    monkeypatch.setattr(
+        "meeting_memory.repo.native_audio.native_capture_helper_path",
+        lambda: helper,
+    )
+
+    convert_native_audio(invalid_wav, output)
+
+    assert output.read_bytes() == b"fake-m4a"
+    assert arguments.read_text(encoding="utf-8").splitlines() == [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostdin",
+        "-y",
+        "-i",
+        str(invalid_wav),
+        "-map",
+        "0:a:0",
+        "-vn",
+        "-sn",
+        "-dn",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "48k",
+        "-ar",
+        "16000",
+        "-ac",
+        "1",
+        "-movflags",
+        "+faststart",
+        str(output),
+    ]

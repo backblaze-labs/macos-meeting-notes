@@ -155,10 +155,19 @@ newline-delimited lifecycle events through `repo/native_audio.py`.
   captures system audio, excludes the microphone, and leaves the selected audio
   devices unchanged.
 - The helper aligns and mixes captured streams into an incremental 16 kHz mono
-  WAV. The same helper converts the completed WAV to M4A through AVFoundation.
+  WAV. The same helper first converts the completed WAV to M4A through
+  AVFoundation. If that host does not expose an AAC encoder, the helper invokes
+  its exact bundled sibling `MeetingMemoryFFmpegAudioEncoder`: a thin, static,
+  source-pinned LGPL FFmpeg build with networking, autodetection, shared
+  libraries, and unrelated codecs/containers disabled. Its arguments are a
+  fixed PCM-WAV-to-16-kHz-mono-AAC/M4A allowlist; no caller-provided option is
+  forwarded.
 
 This boundary intentionally avoids virtual audio drivers, Aggregate Devices,
-`sounddevice`, and `ffmpeg`.
+`sounddevice`, and arbitrary system or Homebrew FFmpeg installations. The
+fallback encoder is built reproducibly for the app architecture, shipped as a
+separate executable with its LGPL license, source offer, and exact verified
+source archive, and verified as a bundle resource.
 
 ## Boundary Rules
 
@@ -263,3 +272,28 @@ runtime pause controls before emitting any possibly activated terminal event.
 Typed operation IDs keep AppKit on the main thread and storage, OAuth,
 migration, and prompt I/O on workers. Both tray modes share the native surface;
 no reachable UI action imports the legacy `.env` writers.
+
+## Captured Runtime Layout
+
+`types/runtime_layout.py` defines the pure checkout/bundled filesystem contract,
+and `config/runtime_layout.py` captures it once per process. Active configuration,
+migration, readiness, OAuth/prompt reads, native-helper lookup, and pinned local
+I/O no longer consult the ambient working directory. Checkout-relative process
+paths use the captured project root; selected legacy paths use the selected
+`.env` parent; app-owned relative paths use Application Support. Bundled mode
+does not scan for `.env`, rejects relative process paths, uses the exact bundled
+Swift helper, and requires an explicit file selection before legacy preview.
+Migration converts selected legacy path values to absolute app preferences before
+the final CAS while leaving the source file byte-identical.
+
+The standalone artifact is a PyInstaller `onedir + windowed` bundle built once
+per native architecture. A frozen, value-free self-check imports collected SDK
+and AppKit boundaries and verifies immutable resources without Keychain, network,
+provider, or preference access. The repository verifier rejects architecture
+drift, external Mach-O linkage, build-machine paths, private configuration files,
+external symlinks, forbidden hardened-runtime exceptions, and smoke-test writes.
+The only public-release workflow is manual and bound to a protected GitHub
+Environment. It verifies every nested signature and Team ID, inspects the
+accepted Apple notarization log, staples and re-verifies each thin app, and
+publishes ZIPs plus SHA-256 files only after both architectures pass. The
+workflow definition does not imply that owner credentials or approval exist.

@@ -47,6 +47,21 @@ workers/events, migration trigger, Calendar auth, and current-session pause
 ordering. Clean-user computer validation remains Phase 5; signed/notarized
 standalone distribution remains Phase 6.
 
+The Phase 6 runtime-path prerequisite is now implemented. One captured
+checkout/bundled layout anchors every active path by provenance and removes
+ambient-cwd fallbacks. Bundled mode does not auto-discover `.env`; its migration
+action must receive an explicit absolute selection. The PyInstaller artifact,
+dual-architecture verification, clean-user evidence, and signed/notarized
+release pipeline remain the next distribution slices.
+
+The standalone-build slice now has a versioned PyInstaller spec, fully pinned
+macOS distribution environment, thin `arm64`/`x86_64` CI matrix, ad-hoc signer,
+relocation smoke, and static/dynamic bundle verifier. A manual, protected
+release workflow defines Developer ID signing, notarization-log inspection,
+stapling, final checksums, and publication, but cannot execute without the
+owner-controlled `release` Environment, Apple credentials, and approval. Clean
+standard-user audio/TCC evidence also remains pending its hardware boundary.
+
 Phase 4C provides the migration engine. Its strict bounded preview
 is privately bound to `.env` identity/digest and one preference revision;
 confirmed apply reparses the unchanged file, writes only selected new immutable
@@ -67,12 +82,12 @@ successful empty scan writes the durable once marker immediately; this is
 separate from `.env` configuration migration. A nonempty result stays
 in memory and unmarked until every discovered entry is explicitly committed,
 so a crash before selection intentionally permits a safe rescan. Normal launch
-does not scan the legacy temp root. The real WAV-to-M4A validator test may
-report the host encoder as unavailable inside a restricted sandbox. On the
-same macOS host outside that sandbox, the original AVFoundation exporter and
-strong validator complete successfully. The validator checks M4A type, AAC,
-16 kHz mono, positive packets/duration, and a full packet read; do not weaken it
-to accommodate a sandbox limitation.
+does not scan the legacy temp root. WAV-to-M4A conversion now prefers the
+original AVFoundation exporter and falls back to a source-pinned, minimal,
+offline LGPL encoder when the host exposes no AAC encoder. The real conversion
+test therefore MUST run rather than skip on encoder availability. The strong
+validator checks M4A type, AAC, 16 kHz mono, positive packets/duration, and a
+full packet read; do not weaken it to accommodate a host limitation.
 
 First thing to check: read `docs/local-first-contract.md`, then inspect
 `service/configuration_loader.py` and `service/configuration_migration.py` with

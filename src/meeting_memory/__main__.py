@@ -36,6 +36,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="generate notes.md from reviewed transcript.md",
     )
     summarize_parser.add_argument("path", type=Path, help="meeting folder or transcript.md path")
+    subcommands.add_parser(
+        "bundle-self-check",
+        help="validate a frozen application bundle without external side effects",
+    )
     return parser
 
 
@@ -70,6 +74,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_relabel(args.path)
     if args.command == "summarize":
         return run_summarize(args.path)
+    if args.command == "bundle-self-check":
+        from meeting_memory.service.bundle_self_check import run_bundle_self_check
+
+        return run_bundle_self_check()
 
     return run_app()
 
@@ -93,10 +101,9 @@ def run_auth() -> int:
         sys.stderr.write("Calendar is not configured or is disabled.\n")
         return 2
 
-    credentials_path = _resolve_project_path(settings.credentials_file)
     try:
         GoogleCalendarClient(
-            credentials_file=credentials_path,
+            credentials_file=settings.credentials_file,
             calendar_id=settings.calendar_id,
             known_speakers=settings.known_speakers,
         ).authenticate()
@@ -272,13 +279,12 @@ def run_setup_required_app() -> int:
 
 
 def _project_dir() -> Path:
-    source_root = Path(__file__).resolve().parents[2]
-    return source_root if (source_root / "src" / "meeting_memory").exists() else Path.cwd()
+    from meeting_memory.config.runtime_layout import current_runtime_layout
 
-
-def _resolve_project_path(path: Path) -> Path:
-    expanded = path.expanduser()
-    return expanded if expanded.is_absolute() else _project_dir() / expanded
+    root = current_runtime_layout().project_root
+    if root is None:
+        raise RuntimeError("developer command is unavailable in the bundled app")
+    return root
 
 
 if __name__ == "__main__":

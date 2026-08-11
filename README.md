@@ -37,7 +37,7 @@ The first-value acceptance test is concrete: record about 30 seconds of real
 audio, stop, play the saved result, and reveal its meeting directory in Finder
 within five minutes of first launch.
 
-## Requirements
+## Checkout Requirements
 
 - macOS 15 Sequoia or later
 - Python 3.11 or later
@@ -46,6 +46,12 @@ within five minutes of first launch.
 - Optional AssemblyAI API key
 - Optional dedicated Backblaze B2 bucket and S3-compatible application key
 - Optional Anthropic API key for summaries
+
+The standalone `.app` validation artifact bundles Python, the Swift capture
+helper, and its minimal offline AAC encoder; it does not require Python, Xcode,
+Homebrew, or a system FFmpeg installation on the destination Mac. Developer ID
+signing, notarization, and clean-user evidence are still required before it can
+be described as a public release.
 
 ## Quick Start
 
@@ -113,7 +119,9 @@ Choose the audio mode for the next recording from the tray:
 
 Meeting Memory captures these streams through native macOS APIs. It does not
 change the user's input/output devices and does not require BlackHole,
-Aggregate Devices, or per-device configuration.
+Aggregate Devices, or per-device configuration. The durable capture is first a
+16 kHz mono WAV; conversion prefers AVFoundation and uses the separately
+bundled, offline minimal LGPL encoder only when the host lacks AAC encoding.
 
 While recording, the status bar shows a live timer and the tray menu switches to
 `Stop Recording`. When a calendar-backed recording reaches the event end time,
@@ -299,7 +307,11 @@ meeting-memory search "launch risks"
 ## Known Limitations
 
 - The `.app` bundle is a local wrapper around this repo and its Python virtual
-  environment, not a standalone signed/notarized binary.
+  environment, not yet the standalone signed/notarized artifact. Runtime paths
+  are already checkout/bundle aware and do not depend on the launch cwd.
+- Reproducible thin `arm64` and `x86_64` standalone builds are documented in
+  [docs/distribution.md](docs/distribution.md). Current CI artifacts are ad-hoc
+  validation builds, not public Gatekeeper-ready releases.
 - Recording requires an explicit user start. The app can remind the user to
   stop at the calendar event end time, but fully automatic recording is out of
   scope.
