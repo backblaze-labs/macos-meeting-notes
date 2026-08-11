@@ -12,6 +12,12 @@ import sys
 from pathlib import Path
 
 from meeting_memory.repo.native_audio import build_native_capture_helper
+from meeting_memory.repo.native_audio_build import (
+    ENCODER_NAME,
+    FFMPEG_LICENSE_NAME,
+    NativeAudioCaptureError,
+)
+from meeting_memory.repo.native_audio_source import FFMPEG_SOURCE_ARCHIVE_NAME
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = ROOT / "packaging" / "MeetingMemory.spec"
@@ -35,6 +41,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         app = build_distribution(args.arch, args.identity, args.output_dir)
+    except NativeAudioCaptureError as exc:
+        sys.stderr.write(f"Distribution build failed safely: {exc}\n")
+        return 2
     except Exception as exc:
         sys.stderr.write(f"Distribution build failed safely: {type(exc).__name__}.\n")
         return 2
@@ -63,7 +72,13 @@ def build_distribution(
     output.mkdir(parents=True, exist_ok=True)
     work.mkdir(parents=True, exist_ok=True)
     helper = build_native_capture_helper(ROOT, work / HELPER_NAME, runner=runner)
+    encoder = helper.with_name(ENCODER_NAME)
+    encoder_license = encoder.with_name(FFMPEG_LICENSE_NAME)
+    encoder_source = encoder.with_name(FFMPEG_SOURCE_ARCHIVE_NAME)
+    if not encoder_license.is_file() or not encoder_source.is_file():
+        raise RuntimeError("native audio build did not retain its license and source")
     _require_architecture(helper, architecture, runner)
+    _require_architecture(encoder, architecture, runner)
 
     environment = os.environ.copy()
     environment.update(
@@ -92,23 +107,32 @@ def build_distribution(
     if not app.is_dir():
         raise RuntimeError("PyInstaller did not create the application bundle")
     bundled_helper = app / "Contents" / "MacOS" / HELPER_NAME
+    bundled_encoder = app / "Contents" / "MacOS" / ENCODER_NAME
+    bundled_license = app / "Contents" / "Resources" / FFMPEG_LICENSE_NAME
+    bundled_source = app / "Contents" / "Resources" / FFMPEG_SOURCE_ARCHIVE_NAME
     shutil.copyfile(helper, bundled_helper)
     bundled_helper.chmod(0o755)
-    _sign_after_helper_copy(app, bundled_helper, identity, runner)
+    shutil.copyfile(encoder, bundled_encoder)
+    bundled_encoder.chmod(0o755)
+    bundled_license.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(encoder_license, bundled_license)
+    shutil.copyfile(encoder_source, bundled_source)
+    _sign_after_helper_copy(app, (bundled_helper, bundled_encoder), identity, runner)
     _require_architecture(bundled_helper, architecture, runner)
+    _require_architecture(bundled_encoder, architecture, runner)
     runner(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)], check=True)
     return app
 
 
 def _sign_after_helper_copy(
     app: Path,
-    helper: Path,
+    nested_binaries: tuple[Path, ...],
     identity: str,
     runner,
 ) -> None:
     signing_identity = "-" if identity == "-" else identity
     options = [] if identity == "-" else ["--options", "runtime", "--timestamp"]
-    for target in (helper, app):
+    for target in (*nested_binaries, app):
         runner(
             [
                 "/usr/bin/codesign",

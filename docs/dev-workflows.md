@@ -37,9 +37,10 @@ make PYTHON=.venv/bin/python reload-macos-app
 ```
 
 The bundle lives at `~/Applications/Meeting Memory.app`. It wraps this checkout
-and virtualenv; it is not a signed, notarized, standalone build. After changing
-`.env` through Preferences, restart or reload the app so the process reads the
-new values.
+and virtualenv; it is not a signed, notarized, standalone build. Native
+Configuration writes app-owned preferences and Keychain references, never
+`.env`. Restart or reload when a saved form says the changed setting takes
+effect after relaunch.
 
 To stop a running app process without using the tray menu:
 

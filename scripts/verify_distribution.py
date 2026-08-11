@@ -13,34 +13,35 @@ import sys
 import tempfile
 from pathlib import Path
 
+from meeting_memory.repo.native_audio_source import (
+    FFMPEG_SOURCE_ARCHIVE_NAME,
+    NativeAudioSourceError,
+    read_verified_source_archive,
+)
 from meeting_memory.service.bundle_self_check import BUNDLE_SELF_CHECK_EXIT_CODES
 from meeting_memory.service.macos_app import BUNDLE_IDENTIFIER, macos_app_plist
+from meeting_memory.types.runtime_layout import NATIVE_ENCODER_NAME
 from meeting_memory.version import APP_VERSION, BUNDLE_BUILD
+
+if __package__:
+    from scripts.distribution_signature import verify_signature as _verify_signature
+else:
+    from distribution_signature import verify_signature as _verify_signature
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_EXECUTABLE, HELPER_NAME = "Meeting Memory", "MeetingMemoryCapture"
-FORBIDDEN_BASENAMES = {
-    ".env",
-    ".env.example",
-    "credentials.json",
-    "token.json",
-}
+FORBIDDEN_BASENAMES = frozenset(
+    ".env .env.example credentials.json token.json "
+    "notes.md preferences.json recording.m4a transcript.md".split()
+)
 FORBIDDEN_PRIVATE_PATTERNS = (
     "client_secret*.json",
     "credentials*.json",
     "token*.json",
 )
-FORBIDDEN_ENTITLEMENTS = {
-    "com.apple.security.cs.allow-jit",
-    "com.apple.security.cs.allow-unsigned-executable-memory",
-    "com.apple.security.cs.disable-library-validation",
-    "com.apple.security.get-task-allow",
-}
 
 
 class DistributionVerificationError(RuntimeError):
-    """Value-free verifier failure with one allowlisted stage."""
-
     def __init__(self, stage: str) -> None:
         super().__init__(f"distribution verification failed at {stage}")
         self.stage = stage
@@ -51,6 +52,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--app", type=Path, required=True)
     result.add_argument("--arch", choices=("arm64", "x86_64"), required=True)
     result.add_argument("--signature", choices=("adhoc", "developer-id"), required=True)
+    result.add_argument("--team-id")
     result.add_argument("--notarized", action="store_true")
     return result
 
@@ -58,7 +60,7 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
-        verify_distribution(args.app, args.arch, args.signature, args.notarized)
+        verify_distribution(args.app, args.arch, args.signature, args.notarized, args.team_id)
     except DistributionVerificationError as exc:
         sys.stderr.write(f"Distribution verification failed safely at {exc.stage}.\n")
         return 2
@@ -74,6 +76,7 @@ def verify_distribution(
     architecture: str,
     signature: str,
     notarized: bool = False,
+    team_id: str | None = None,
     *,
     runner=subprocess.run,
 ) -> None:
@@ -87,7 +90,15 @@ def verify_distribution(
         _run_stage("architecture", _verify_architecture, binary, architecture, runner)
         _run_stage("linkage", _verify_linkage, binary, app, runner)
     _run_stage("build-paths", _verify_no_build_paths, app)
-    _run_stage("signature", _verify_signature, app, signature, runner)
+    _run_stage(
+        "signature",
+        _verify_signature,
+        app,
+        macho_files,
+        signature,
+        team_id,
+        runner,
+    )
     _run_stage("relocated-smoke", _verify_smoke, app, runner)
     if notarized:
         _run_stage(
@@ -138,9 +149,17 @@ def _verify_manifest(app: Path) -> None:
             raise RuntimeError("bundle contains a symlink outside the application")
     executable = app / "Contents/MacOS" / APP_EXECUTABLE
     helper = app / "Contents/MacOS" / HELPER_NAME
-    for path in (executable, helper):
-        if not path.is_file() or not os.access(path, os.X_OK):
+    encoder = app / "Contents/MacOS" / NATIVE_ENCODER_NAME
+    for path in (executable, helper, encoder):
+        if path.is_symlink() or not path.is_file() or not os.access(path, os.X_OK):
             raise RuntimeError("bundle executable is missing or not executable")
+    source = app / "Contents/Resources" / FFMPEG_SOURCE_ARCHIVE_NAME
+    if source.is_symlink() or not source.is_file():
+        raise RuntimeError("bundled FFmpeg source is unavailable")
+    try:
+        read_verified_source_archive(source)
+    except NativeAudioSourceError:
+        raise RuntimeError("bundled FFmpeg source does not match the encoder build") from None
 
 
 def _macho_files(app: Path, runner) -> tuple[Path, ...]:
@@ -206,36 +225,9 @@ def _verify_no_build_paths(app: Path) -> None:
 
 def _build_path_sentinels() -> tuple[tuple[str, bytes], ...]:
     values = [("checkout-path", str(ROOT))]
-    if Path(sys.prefix) != Path(sys.base_prefix):
+    if Path(sys.prefix) not in {Path(sys.base_prefix), ROOT}:
         values.append(("python-prefix", str(Path(sys.prefix))))
-    return tuple(
-        (stage, value.encode())
-        for stage, value in values
-        if value and value != "/" and (stage == "checkout-path" or Path(value) != ROOT)
-    )
-
-
-def _verify_signature(app: Path, signature: str, runner) -> None:
-    runner(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)], check=True)
-    details = runner(
-        ["/usr/bin/codesign", "-d", "--verbose=4", str(app)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    output = details.stderr + details.stdout
-    if signature == "adhoc" and "Signature=adhoc" not in output:
-        raise RuntimeError("expected an ad-hoc signature")
-    if signature == "developer-id" and "Authority=Developer ID Application:" not in output:
-        raise RuntimeError("expected a Developer ID Application signature")
-    entitlements = runner(
-        ["/usr/bin/codesign", "-d", "--entitlements", ":-", str(app)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if any(item in entitlements.stdout + entitlements.stderr for item in FORBIDDEN_ENTITLEMENTS):
-        raise RuntimeError("bundle contains a forbidden hardened-runtime exception")
+    return tuple((stage, value.encode()) for stage, value in values if value and value != "/")
 
 
 def _verify_smoke(app: Path, runner) -> None:

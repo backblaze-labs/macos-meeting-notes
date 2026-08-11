@@ -1,14 +1,16 @@
 # Manual Validation Checklist
 
 This checklist is the real-world validation path. Recording Core requires real
-macOS audio setup; validate only the optional services you configured.
+macOS audio setup; validate only the optional services you configured. Use the
+standalone app for Phase 5 acceptance. The checkout commands remain useful for
+developer diagnostics.
 
 ## Preconditions
 
 - macOS 15 or later
-- Python virtualenv active
-- `make setup` completed
-- Xcode Command Line Tools installed
+- Standalone track: a verified thin `.app` matching the Mac architecture
+- Checkout track only: Python virtualenv active, `make setup` completed, and
+  Xcode Command Line Tools installed
 - A writable local `MEETINGS_DIR`
 - Optional Calendar: OAuth credentials JSON plus successful
   `.venv/bin/meeting-memory auth`
@@ -18,7 +20,7 @@ macOS audio setup; validate only the optional services you configured.
 
 ## 1. Doctor
 
-Run:
+From a checkout, run:
 
 ```bash
 make doctor
@@ -29,7 +31,8 @@ Pass criteria:
 - Recording Core, Transcription, Backup, Calendar, and Notes each appear once.
 - Recording Core is `ready` or `degraded`, and the command exits `0`.
 - The local meetings folder passes the temporary write and durability check.
-- The native audio helper is installed and reports local hardware support.
+- The native audio helper and offline AAC encoder are installed, and the helper
+  reports local hardware support.
 - The doctor explains that mode-specific macOS capture permissions are checked
   when a recording starts; it does not claim to pre-authorize them.
 - Missing optional groups appear as `unconfigured`, not as app failures.
@@ -38,7 +41,8 @@ Pass criteria:
 
 ## 2. Auth
 
-Run:
+Choose **Configuration › Authorize Calendar...** in the app. The checkout-only
+equivalent is:
 
 ```bash
 .venv/bin/meeting-memory auth
@@ -185,20 +189,42 @@ Pass criteria:
 - The meeting directory opens in Finder.
 - `transcript.md`, `recording.m4a`, and any generated `notes.md` are visible.
 
-## 10. Preferences
+## 10. Native Configuration
 
-1. Open `Configuration › Preferences...`.
+1. Open `Configuration › Recording Core...`.
 2. Change one of:
    - `MEETINGS_DIR`
-   - `NOTIFY_MINUTES_BEFORE`
    - `MAX_RECORDING_MINUTES`
-3. Save.
-4. Restart the app.
+3. Save and restart only when the result asks for it.
 
 Pass criteria:
 
-- `.env` is updated.
+- App-owned preferences are updated; `.env` remains byte-identical.
 - The app uses the new setting after restart.
+- The tray remains responsive while preferences and filesystem work run.
+
+Optional capability forms:
+
+1. Open each item under **Configuration**.
+2. Confirm the form shows app-owned non-secret values only.
+3. Confirm every secure field is blank, including after reopening.
+4. Read the provider, data, and trigger disclosure before enabling.
+5. Cancel and confirm there are no preference or Keychain writes.
+
+Explicit legacy import:
+
+1. Choose **Configuration › Import Legacy Configuration...**.
+2. Select an exact `.env` file in the native picker.
+3. Review every value-free candidate and leave capabilities unselected first.
+4. Cancel, then repeat and explicitly confirm one whole-capability import.
+
+Pass criteria:
+
+- No preview runs on launch or merely opening Configuration.
+- Process values are identified only by presence and are never imported.
+- The source `.env` content, inode, and mode remain unchanged on cancel,
+  success, stale preview, and failure.
+- Imported path values preserve the selected source's meaning after restart.
 
 Prompt editor:
 
@@ -217,8 +243,8 @@ Pass criteria:
 
 Auto-stop:
 
-1. Temporarily set `MAX_RECORDING_MINUTES=1` in `.env`.
-2. Restart the app.
+1. Temporarily set `MAX_RECORDING_MINUTES` to `1` in **Recording Core...**.
+2. Save and restart the app.
 3. Start a short test recording and do not click stop.
 
 Pass criteria:
@@ -256,7 +282,7 @@ Pass criteria:
 - Matching meetings print date, title, path, and excerpt.
 - A no-match query prints `No matching meetings found.`
 
-## 12. Local App and Login Item
+## 12. Checkout Wrapper, Standalone App, and Login Item
 
 Run:
 
@@ -283,6 +309,24 @@ Pass criteria:
 - The background app starts without a terminal window.
 - Logs are written under `~/Library/Logs/meeting-memory/`.
 
+Standalone acceptance additionally requires:
+
+- Copy the thin app to an unrelated directory and launch it without the source
+  checkout, `PYTHONPATH`, developer Python, or Xcode tools.
+- `--version` and `bundle-self-check` pass with a fresh HOME and foreign working
+  directory before interactive validation.
+- The bundled native helper is selected exactly; no checkout helper or `.env`
+  is discovered.
+- `MeetingMemoryFFmpegAudioEncoder`, `FFMPEG-COPYING.LGPLv2.1`,
+  `FFMPEG_SOURCE_OFFER.md`, and the exact `ffmpeg-8.1.2.tar.xz` source are
+  present in the bundle; the encoder has the same thin architecture as the app
+  and helper.
+- On a host without an AudioToolbox AAC encoder, stopping or recovering a real
+  recording still produces a playable 16 kHz mono AAC M4A through the bundled
+  offline fallback. No system/Homebrew FFmpeg is consulted.
+- An ad-hoc app is described only as a validation build. Gatekeeper-ready claims
+  require the Developer ID/notarized workflow and stapled artifact.
+
 Remove it after validation if you do not want Meeting Memory to start at login:
 
 ```bash
@@ -291,8 +335,9 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
 
 ## Known Limitations During Validation
 
-- The `.app` is a local wrapper around this checkout and virtualenv, not a
-  signed/notarized/standalone binary.
+- The `make install-macos-app` output is a checkout wrapper. The PyInstaller app
+  is standalone but remains validation-only until Developer ID signing,
+  notarization, stapling, and clean-user evidence pass.
 - Recording requires an explicit user start; fully automatic recording is out of
   scope.
 - Speaker names are not inferred automatically; Calendar attendee candidates
@@ -301,4 +346,6 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
   is set to a specific calendar ID.
 - Failed work is retryable from the tray, but retries are not yet automatically
   triggered by connectivity changes.
-- The preferences window writes `.env` and requires restart.
+- Native Configuration writes app-owned preferences and Keychain references;
+  no reachable UI action rewrites `.env`. Enabling or replacing a capability
+  asks for restart, while disabling pauses current-session egress first.

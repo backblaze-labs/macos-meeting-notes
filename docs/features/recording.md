@@ -38,6 +38,11 @@ workers and emit typed events for the tray main thread to render.
 ## Behavior Notes
 
 - The helper resamples and downmixes native streams into a 16 kHz mono WAV.
+- WAV-to-M4A conversion prefers AVFoundation. Hosts without an AudioToolbox AAC
+  encoder use `MeetingMemoryFFmpegAudioEncoder`, a separate minimal LGPL
+  FFmpeg build whose network support and unrelated formats are disabled. The
+  Swift helper supplies one fixed conversion command; it never accepts
+  arbitrary encoder options or uses a system/Homebrew FFmpeg.
 - The tray exposes audio modes for the next recording:
   - `Full Meeting` captures system audio and the current default microphone
     while the user keeps hearing the meeting through the current output.
@@ -110,6 +115,7 @@ workers and emit typed events for the tray main thread to render.
 - `src/meeting_memory/ui/processing_launch.py`
 - `src/meeting_memory/ui/recording_transitions.py`
 - `src/meeting_memory/repo/native_audio.py`
+- `src/meeting_memory/repo/native_audio_build.py`
 - `src/meeting_memory/repo/native/NativeCapture.swift`
 - `src/meeting_memory/ui/tray.py`
 - `src/meeting_memory/ui/title_prompt.py`

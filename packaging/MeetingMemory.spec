@@ -19,6 +19,7 @@ ICON = ROOT / "src/meeting_memory/service/assets/MeetingMemory.icns"
 datas = [
     (str(ROOT / "LICENSE"), "."),
     (str(ROOT / "THIRD_PARTY_NOTICES.md"), "."),
+    (str(ROOT / "packaging/FFMPEG_SOURCE_OFFER.md"), "."),
     (str(ROOT / "src/meeting_memory/ui/assets/robot-template.png"), "meeting_memory/ui/assets"),
     (str(ROOT / "src/meeting_memory/ui/assets/robot-template.svg"), "meeting_memory/ui/assets"),
 ]

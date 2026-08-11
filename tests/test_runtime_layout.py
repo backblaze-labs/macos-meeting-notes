@@ -25,6 +25,7 @@ def test_development_layout_anchors_paths_without_consulting_cwd(tmp_path: Path)
     assert layout.legacy_env_path == project / ".env"
     assert layout.legacy_source_path() == project / ".env"
     assert layout.native_helper_path == project / ".build" / "MeetingMemoryCapture"
+    assert layout.native_encoder_path == project / ".build" / "MeetingMemoryFFmpegAudioEncoder"
     assert (
         layout.resolve_setting_path(
             SettingKey.GOOGLE_CALENDAR_CREDENTIALS_FILE,
@@ -63,6 +64,9 @@ def test_bundled_layout_uses_only_bundle_and_user_support_roots(tmp_path: Path) 
     assert layout.legacy_source_path() is None
     assert layout.application_support == support
     assert layout.native_helper_path == (bundle / "Contents" / "MacOS" / "MeetingMemoryCapture")
+    assert layout.native_encoder_path == (
+        bundle / "Contents" / "MacOS" / "MeetingMemoryFFmpegAudioEncoder"
+    )
     assert layout.default_prompt_path == support / "prompts" / "summary.md"
     assert layout.default_credentials_path == support / "credentials.json"
 

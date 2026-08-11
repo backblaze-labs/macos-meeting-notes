@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from meeting_memory.config.runtime_layout import current_runtime_layout
+from meeting_memory.repo.native_audio_source import FFMPEG_SOURCE_ARCHIVE_NAME
 from meeting_memory.types.runtime_layout import RuntimeLayout, RuntimeMode
 from meeting_memory.version import APP_VERSION
 
@@ -61,11 +62,14 @@ RESOURCE_PATHS = (
     Path("MeetingMemory.icns"),
     Path("LICENSE"),
     Path("THIRD_PARTY_NOTICES.md"),
+    Path("FFMPEG_SOURCE_OFFER.md"),
+    Path("FFMPEG-COPYING.LGPLv2.1"),
+    Path(FFMPEG_SOURCE_ARCHIVE_NAME),
     Path("meeting_memory/ui/assets/robot-template.png"),
     Path("meeting_memory/ui/assets/robot-template.svg"),
 )
 BUNDLE_SELF_CHECK_STAGES = frozenset(
-    ("layout", "frozen", "native-helper")
+    ("layout", "frozen", "native-helper", "native-encoder")
     + tuple(f"resource-{index}" for index in range(len(RESOURCE_PATHS)))
     + tuple(f"import-{name.replace('.', '-')}" for name in REQUIRED_IMPORTS)
 )
@@ -122,11 +126,14 @@ def inspect_bundle(
         raise BundleSelfCheckError("frozen", "bundle self-check requires a frozen executable")
 
     helper = layout.native_helper_path
-    if not helper.is_file() or not os.access(helper, os.X_OK):
+    if helper.is_symlink() or not helper.is_file() or not os.access(helper, os.X_OK):
         raise BundleSelfCheckError("native-helper", "bundled native helper is unavailable")
+    encoder = layout.native_encoder_path
+    if encoder.is_symlink() or not encoder.is_file() or not os.access(encoder, os.X_OK):
+        raise BundleSelfCheckError("native-encoder", "bundled AAC encoder is unavailable")
     for index, relative in enumerate(RESOURCE_PATHS):
         resource = layout.resources_path / relative
-        if not resource.is_file():
+        if resource.is_symlink() or not resource.is_file():
             raise BundleSelfCheckError(
                 f"resource-{index}", "a required bundled resource is missing"
             )
