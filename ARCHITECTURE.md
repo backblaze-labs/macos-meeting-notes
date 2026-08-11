@@ -234,7 +234,7 @@ Normal runtime startup still performs no readiness, native-helper, provider,
 or Google OAuth-token probe. It may read only the exact active generic
 Keychain references required by configured runtime capabilities.
 
-Phase 4C adds an inactive, explicit, non-destructive migration engine.
+Phase 4C adds an explicit, non-destructive migration engine.
 `types/configuration_migration.py` is the value-free preview, confirmation, and
 outcome boundary. `service/configuration_migration_source.py` performs strict,
 stable, bounded reads; `configuration_migration_plan.py` owns tri-state merge
@@ -253,11 +253,13 @@ generation and is surfaced for attention. `.env` is never
 written or deleted, process values are presence-only and never imported, and
 the compatible Google OAuth identity is untouched.
 
-No runtime, readiness, auth, search, summarize, doctor, startup, or UI module
-imports the engine. Phase 4D's internal editing service now binds forms to an
+Runtime, readiness, search, summarize, doctor, and startup never invoke the
+migration engine automatically. Phase 4D's worker coordinator is its only
+active consumer and requires an explicit native preview, whole-capability
+selection, and second confirmation. The same coordinator binds forms to an
 exact preference snapshot, verifies only the capability's exact secret ref,
-and activates immutable replacements through one CAS. It also exposes runtime
-pause controls for the dependent UI coordinator to invoke before its terminal
-event. That native-UI slice still owns disclosures, background events,
-migration, and Calendar auth; the legacy UI continues to edit `.env` until that
-slice.
+and activates immutable replacements through one CAS. It invokes monotonic
+runtime pause controls before emitting any possibly activated terminal event.
+Typed operation IDs keep AppKit on the main thread and storage, OAuth,
+migration, and prompt I/O on workers. Both tray modes share the native surface;
+no reachable UI action imports the legacy `.env` writers.

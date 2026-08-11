@@ -79,8 +79,40 @@ def test_legacy_compatibility_requires_disclosure_and_reenables_on_restart(
         )
 
         assert saved.state is ConfigurationSaveState.SAVED
+        assert saved.legacy_reenables is True
         assert loaded.capability_enabled(capability) is True
         assert env.read_bytes() == original
+
+
+def test_legacy_reenable_flag_is_contextual_to_compatibility_choice(tmp_path) -> None:
+    env = tmp_path / ".env"
+    env.write_text(_complete_legacy_environment(tmp_path), encoding="utf-8")
+    preferences = AppPreferences(capabilities=(CapabilityPreference(Capability.CALENDAR, False),))
+
+    disabled_editor = _service(FakePreferences(preferences), FakeSecrets(), env)
+    disabled_view = disabled_editor.open(Capability.CALENDAR)
+    disabled = disabled_editor.save(
+        ConfigurationChange(
+            disabled_view.edit_id,
+            Capability.CALENDAR,
+            False,
+            disabled_view.fields,
+        )
+    )
+    enabled_editor = _service(FakePreferences(preferences), FakeSecrets(), env)
+    enabled_view = enabled_editor.open(Capability.CALENDAR)
+    enabled = enabled_editor.save(
+        ConfigurationChange(
+            enabled_view.edit_id,
+            Capability.CALENDAR,
+            True,
+            enabled_view.fields,
+            disclosure_confirmed=True,
+        )
+    )
+
+    assert disabled.legacy_reenables is False
+    assert enabled.legacy_reenables is False
 
 
 def test_false_to_compatibility_consent_is_safe_against_env_toctou(tmp_path) -> None:

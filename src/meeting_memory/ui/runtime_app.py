@@ -21,6 +21,7 @@ from meeting_memory.service.configuration_loader import (
     LoadedConfiguration,
     load_configuration,
 )
+from meeting_memory.service.configuration_surface import ConfigurationSurfaceCoordinator
 from meeting_memory.service.local_commit import LocalRecordingCommitter
 from meeting_memory.service.meeting_store import MeetingStore
 from meeting_memory.service.processing_retry import retry_failed_processing
@@ -133,7 +134,16 @@ def run_runtime_app() -> int:
             watcher.start()
         except Exception:
             LOGGER.warning("Calendar watcher could not start")
-    RumpsTrayApp(controller, readiness_report=None).run()
+    configuration_surface = ConfigurationSurfaceCoordinator(
+        event_queue.put,
+        runtime_pause=runtime_capabilities,
+        prompt_settings=settings,
+    )
+    RumpsTrayApp(
+        controller,
+        readiness_report=None,
+        configuration_surface=configuration_surface,
+    ).run()
     return 0
 
 

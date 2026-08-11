@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from meeting_memory.types.capabilities import ReadinessReport
+from meeting_memory.types.configuration_editing import ConfigurationOperationId
 from meeting_memory.types.meeting import MeetingMeta, MeetingRef
 from meeting_memory.types.recovery import RecoveryIndexEntry
 
@@ -85,4 +86,11 @@ class TranscriptionFailed:
 class ReadinessChecked:
     """An explicit background readiness check completed."""
 
+    operation_id: ConfigurationOperationId
     report: ReadinessReport
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.operation_id, ConfigurationOperationId) or not isinstance(
+            self.report, ReadinessReport
+        ):
+            raise ValueError("readiness event requires typed boundary values")

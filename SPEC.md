@@ -448,9 +448,14 @@ Open Meetings Folder
 ─────────────────
 Configuration                      (hover submenu)
   Audio Mode
-  Known Speakers…
+  Recording Core…
+  Transcription…
+  Backup…
+  Calendar…
+  Notes…
   Notes Prompt…
-  Preferences…
+  Authorize Google Calendar…
+  Import Legacy Configuration…
 Debugging                          (hover submenu)
   Pending Meeting Tasks (<count>)
   Interrupted Recordings (<count>)  (when present)
@@ -469,7 +474,11 @@ Quit
 
 **REQ-F8-05** **Open Meetings Folder** MUST open `$MEETINGS_DIR` in Finder.
 
-**REQ-F8-06** **Configuration › Preferences** MUST open a simple settings view where the user can configure: `MEETINGS_DIR`, `NOTIFY_MINUTES_BEFORE`, and `MAX_RECORDING_MINUTES`.
+**REQ-F8-06** **Configuration** MUST expose one native form per capability.
+Forms show only app-owned values, keep generic secrets blank in secure fields,
+separate app intent from value-free process/legacy provenance, and require the
+capability's egress disclosure before enabling or returning an explicit disable
+to compatibility mode.
 
 **REQ-F8-07** If recoverable temporary recordings are found, **Debugging** MUST show an **Interrupted Recordings** section with one action per recoverable item.
 
@@ -922,14 +931,13 @@ provider or contact the network. Variables marked "Integration" below are
 required only when that optional capability is enabled; missing groups are
 reported as `unconfigured` and never gate Recording Core.
 
-Phase 4C provides an inactive, digest-and-identity-bound migration engine with
+Phase 4C provides a digest-and-identity-bound migration engine with
 explicit preview, capability selection, and typed confirmation. It never
-imports process values or rewrites `.env`. Phase 4D's first internal slice now
-provides redacted app-owned edit models, immutable-secret/CAS activation, and
-monotonic current-session egress pause gates. These foundations are not yet
-reachable from the app. The dependent native-UI slice adds disclosure, secure
-entry, migration, and Calendar-auth surfaces; until then, the legacy settings
-UI continues to edit `.env` and no app surface invokes migration.
+imports process values or rewrites `.env`. Phase 4D provides redacted app-owned
+edit models, immutable-secret/CAS activation, monotonic current-session egress
+pause gates, and native disclosure, secure-entry, migration, prompt, and
+Calendar-auth surfaces. Both runtime and setup trays expose the shared surface
+explicitly. No reachable native UI action writes `.env`.
 
 | Variable | Capability | Default | Description |
 |---|---|---|---|
@@ -992,5 +1000,5 @@ All v0.1 open questions are resolved as of v0.2 (section retitled from "Open Que
 | OQ-1 | Keep `recording.m4a` locally long-term, or purge after B2 upload? | **Keep locally in v1; no purge.** REQ-F6-07 already forbids deleting meeting directories. A retention/purge policy is deferred to Future Work (§10). |
 | OQ-2 | Expected B2 bucket retention policy for audio? | **No lifecycle policy shipped in v1.** Retention is left to the bucket owner as an ops choice and noted in the README. |
 | OQ-3 | Watch multiple Google calendars, or one configured calendar ID? | **Watch all accessible calendars by default.** `GOOGLE_CALENDAR_ID=all` scans non-deleted calendars visible to the authenticated account; set `primary` or a specific calendar ID to narrow. |
-| OQ-4 | Preferences as a native macOS window, or terminal config editor? | **Native settings UI.** The legacy window writes `.env` and prompts a restart; Phase 4 moves non-secret values to app-owned preferences and secrets to Keychain while retaining environment compatibility. |
+| OQ-4 | Preferences as a native macOS window, or terminal config editor? | **Native settings UI.** Phase 4 stores non-secret values in app-owned preferences and secrets in Keychain while retaining read-only `.env` compatibility and explicit import. |
 | OQ-5 | Is `claude-haiku-4-5` right, or should the model be configurable? | **Use `claude-haiku-4-5`** as the default, with optional `ANTHROPIC_MODEL` and `SUMMARY_PROMPT_FILE` overrides (§8, REQ-EXT-09, REQ-F5-06). Speaker label display names are handled separately by per-meeting `speaker_aliases`. |

@@ -1,4 +1,4 @@
-"""Structural guards that keep Stage 4C dormant until native consent in 4D."""
+"""Structural guards for the explicit Stage 4D migration surface."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src" / "meeting_memory"
 
 
-def test_migration_engine_has_no_active_consumer_imports() -> None:
+def test_migration_engine_is_reachable_only_through_explicit_configuration_surface() -> None:
     allowed = {
         "types/configuration_migration.py",
         "service/configuration_migration.py",
@@ -17,6 +17,11 @@ def test_migration_engine_has_no_active_consumer_imports() -> None:
         "service/configuration_migration_plan.py",
         "service/configuration_migration_source.py",
         "service/configuration_migration_state.py",
+        "types/configuration_surface.py",
+        "service/configuration_surface.py",
+        "service/configuration_surface_operations.py",
+        "ui/configuration_surface.py",
+        "ui/migration_form.py",
     }
     violations = [
         str(path.relative_to(SOURCE))
@@ -26,6 +31,9 @@ def test_migration_engine_has_no_active_consumer_imports() -> None:
     ]
 
     assert violations == []
+    assert "configuration_migration" in (SOURCE / "service" / "configuration_surface.py").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_migration_engine_has_no_env_mutation_save_provider_or_event_boundary() -> None:

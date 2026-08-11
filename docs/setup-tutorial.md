@@ -7,11 +7,10 @@ This is the current source-checkout setup. Recording Core requires no cloud
 integration for a first recording; see
 [`local-first-contract.md`](local-first-contract.md). Phase 4B now composes
 exact process-environment overrides, active app preferences/immutable Keychain
-references, legacy `.env`, and defaults. The current UI still edits `.env`;
-Phase 4C's explicit non-destructive migration engine is implemented but has no
-user-facing trigger. Native capability forms, disclosure/consent, background
-configuration events, the migration trigger, secret entry, and in-app Calendar
-auth arrive in Phase 4D.
+references, legacy `.env`, and defaults. Phase 4D's native Configuration submenu
+now owns app-managed capability forms, disclosure/consent, secure secret entry,
+explicit legacy import, and explicit in-app Calendar authorization. The native
+UI never writes `.env`.
 Native onboarding validation remains Phase 5 and standalone distribution
 remains Phase 6.
 
@@ -68,7 +67,7 @@ Microphone and Screen & System Audio permissions requested by macOS.
 ## 4. Optionally Create Service Credentials
 
 Skip this section if you only want local recording. Create credentials only for
-the capabilities you want to enable before filling their `.env` group.
+the capabilities you want to enable in the native Configuration submenu.
 
 Backblaze B2:
 
@@ -102,40 +101,24 @@ not in the repository.
 
 ## 5. Optionally Enable Integrations
 
-If `make setup` created `.env`, edit only the groups you want to enable. Leave
-the other values blank or as placeholders; they will report `unconfigured` and
-will not block recording.
+Open **Configuration** from the tray, then configure only the capabilities you
+want: **Transcription...**, **Backup...**, **Calendar...**, or **Notes...**.
+Each form names the provider, data sent, and trigger before it can be enabled.
+Credential fields use native secure controls, are stored in Keychain, and are
+blank every time the form reopens. Saved enablement or credential/destination
+changes require quitting and reopening Meeting Memory; Disable pauses new work
+in the current session before reporting success.
 
-The composed loader never modifies `.env`. On profiles without an app-owned
-preference document, these values retain their legacy behavior. Exact process
-environment names override every persisted source. The inactive Phase 4C
-migration engine enforces preview, capability selection, and confirmation, but
-it has no caller until the Phase 4D native consent UI invokes it.
+Use **Configuration › Calendar...** for the native Known Speakers row editor.
+Use **Authorize Google Calendar...** only after saving Calendar settings. OAuth
+opens a browser only for that explicit action and stores the token in Keychain.
 
-```bash
-B2_APPLICATION_KEY_ID=...
-B2_APPLICATION_KEY=...
-B2_ENDPOINT=https://s3.<region>.backblazeb2.com
-B2_REGION=<region>
-B2_BUCKET_NAME=<bucket>
-ASSEMBLYAI_API_KEY=...
-GOOGLE_CALENDAR_CREDENTIALS_FILE=credentials.json
-```
-
-Optional settings:
-
-```bash
-ANTHROPIC_API_KEY=
-KNOWN_SPEAKERS={}
-MEETINGS_DIR=~/Meetings
-GOOGLE_CALENDAR_ID=all
-```
-
-Use the tray's **Configuration › Known Speakers...** item to edit this later. It saves
-`KNOWN_SPEAKERS` as a JSON object that maps display names to attendee names,
-emails, or email local-parts to match, for example
-`KNOWN_SPEAKERS='{"Alex Rivera":["alex@example.com","alex.rivera"]}'`. Do not
-commit `.env`.
+Existing `.env` profiles remain compatible. Use **Import Legacy
+Configuration...** to preview exact recognized key names and states, choose
+whole capabilities, review their disclosures, and confirm import. Nothing is
+selected by default; process values are never imported and `.env` remains
+byte-identical. Manual `.env` editing is a legacy/development fallback only;
+do not commit it.
 
 ## 6. Run Preflight Checks
 
@@ -155,6 +138,9 @@ macOS capture permissions; those remain mode-specific and are validated when a
 recording starts.
 
 ## 7. Authorize Google Calendar, Optional
+
+Prefer **Configuration › Authorize Google Calendar...**. The compatible CLI
+action remains available for development:
 
 ```bash
 .venv/bin/meeting-memory auth
@@ -178,7 +164,7 @@ The clickable app is installed at:
 You can launch it from Finder or with Spotlight by searching for
 `Meeting Memory`.
 
-After changing app code or `.env`, reload the local app bundle:
+After changing app code, reload the local app bundle:
 
 ```bash
 make PYTHON=.venv/bin/python reload-macos-app

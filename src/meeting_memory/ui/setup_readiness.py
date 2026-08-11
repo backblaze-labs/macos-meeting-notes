@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import logging
 import threading
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from meeting_memory.service.readiness import failed_readiness_report, load_readiness_report
 from meeting_memory.types.capabilities import CapabilityStatus, ReadinessReport
+from meeting_memory.types.configuration_editing import ConfigurationOperationId
 from meeting_memory.types.events import ReadinessChecked
 
 LOGGER = logging.getLogger(__name__)
@@ -24,37 +26,37 @@ class ReadinessCheck:
     event_sink: EventSink
     report_loader: ReportLoader = load_readiness_report
     thread_factory: ThreadFactory = threading.Thread
+    id_factory: Callable[[], str] = lambda: uuid.uuid4().hex
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
-    _running: bool = field(default=False, init=False, repr=False)
+    _active: ConfigurationOperationId | None = field(default=None, init=False, repr=False)
 
-    def start(self) -> None:
+    def start(self) -> ConfigurationOperationId | None:
         with self._lock:
-            if self._running:
-                return
-            self._running = True
+            if self._active is not None:
+                return None
+            operation = ConfigurationOperationId(self.id_factory())
+            self._active = operation
         try:
-            self.thread_factory(target=self._run, daemon=True).start()
+            self.thread_factory(target=self._run, args=(operation,), daemon=True).start()
         except Exception:
-            LOGGER.exception("Could not start readiness worker")
-            self._emit_and_finish(failed_readiness_report())
+            LOGGER.error("Could not start readiness worker")
+            self.event_sink(ReadinessChecked(operation, failed_readiness_report()))
+        return operation
 
-    def _run(self) -> None:
+    def acknowledge(self, operation: ConfigurationOperationId) -> bool:
+        with self._lock:
+            if self._active != operation:
+                return False
+            self._active = None
+            return True
+
+    def _run(self, operation: ConfigurationOperationId) -> None:
         try:
             report = self.report_loader()
         except Exception:
-            LOGGER.exception("Readiness worker failed")
+            LOGGER.error("Readiness worker failed")
             report = failed_readiness_report()
-        self._emit_and_finish(report)
-
-    def _emit_and_finish(self, report: ReadinessReport) -> None:
-        try:
-            self.event_sink(ReadinessChecked(report))
-        finally:
-            self._finish()
-
-    def _finish(self) -> None:
-        with self._lock:
-            self._running = False
+        self.event_sink(ReadinessChecked(operation, report))
 
 
 def readiness_menu_label(status: CapabilityStatus) -> str:

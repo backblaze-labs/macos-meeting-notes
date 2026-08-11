@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from tray_fakes import FakeRumps
+from tray_fakes import FakeRumps, submenu_titles
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.recorder import RecordingResult, RecordingSession
+from meeting_memory.types.capabilities import Capability
 from meeting_memory.types.events import MeetingDetected, NotifyEvent
 from meeting_memory.types.meeting import MeetingMeta
 from meeting_memory.ui import menu
@@ -172,8 +173,8 @@ def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
     assert app.app.icon.endswith("robot-template.png")
     assert app.app.template is True
     titles = [item.title for item in app.app.menu.items if item is not None]
-    configuration_titles = _submenu_titles(app, menu.CONFIGURATION_LABEL)
-    debugging_titles = _submenu_titles(app, menu.DEBUGGING_LABEL)
+    configuration_titles = submenu_titles(app, menu.CONFIGURATION_LABEL)
+    debugging_titles = submenu_titles(app, menu.DEBUGGING_LABEL)
     assert titles.count(menu.QUIT_LABEL) == 1
     assert titles.count(menu.CONFIGURATION_LABEL) == 1
     assert titles.count(menu.DEBUGGING_LABEL) == 1
@@ -182,9 +183,10 @@ def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
         menu.AUDIO_MODE_HEADER,
         "✓ Full Meeting",
         "Silent System Only",
-        menu.KNOWN_SPEAKERS_LABEL,
+        *(f"{capability.label}..." for capability in Capability),
         menu.NOTES_PROMPT_LABEL,
-        menu.PREFERENCES_LABEL,
+        menu.AUTHORIZE_CALENDAR_LABEL,
+        menu.IMPORT_LEGACY_LABEL,
     ]
     assert debugging_titles == [
         menu.processing_header_label(0),
@@ -207,11 +209,6 @@ def _settings(tmp_path: Path) -> Settings:
         assemblyai_api_key="assembly-key",
         meetings_dir=tmp_path / "meetings",
     )
-
-
-def _submenu_titles(app: RumpsTrayApp, title: str) -> list[str]:
-    submenu = next(item for item in app.app.menu.items if item and item.title == title)
-    return [item.title for item in submenu.items if item is not None]
 
 
 @dataclass
@@ -296,5 +293,6 @@ class ImmediateThread:
         self.target = target
         self.args = args
         self.daemon = daemon
+
     def start(self) -> None:
         self.target(*self.args)

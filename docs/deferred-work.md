@@ -41,15 +41,13 @@ names, `.env`, and app preferences once; reads only active generic Keychain
 references required by the consumer; and fails corrupt app preferences closed
 for optional egress unless a complete valid process group overrides them. It
 performs no provider request, Google OAuth-token read, migration, or write.
-The inactive digest-bound `.env` migration engine is now Phase 4C. Phase 4D D1
-adds a redacted app-owned edit/CAS service plus current-session pause gates for
-optional egress, but deliberately has no UI caller. Native per-capability
-disclosure/consent forms, secure entry, typed workers/events, the explicit
-migration trigger, and in-app Calendar auth remain the dependent Phase 4D D2
-slice. Clean-user computer validation remains Phase 5; signed/notarized
+The digest-bound `.env` migration engine is Phase 4C. Phase 4D now supplies the
+explicit native per-capability disclosure/consent forms, secure entry, typed
+workers/events, migration trigger, Calendar auth, and current-session pause
+ordering. Clean-user computer validation remains Phase 5; signed/notarized
 standalone distribution remains Phase 6.
 
-Phase 4C now provides the inactive migration engine. Its strict bounded preview
+Phase 4C provides the migration engine. Its strict bounded preview
 is privately bound to `.env` identity/digest and one preference revision;
 confirmed apply reparses the unchanged file, writes only selected new immutable
 secret generations, rechecks `.env`, and performs one preference CAS. Process
@@ -58,11 +56,11 @@ deleted. Partial failures clean only refs created by that attempt; a visible but
 directory-sync-uncertain preference activation retains its refs. An ambiguous
 CAS also retains refs without claiming activation and requires a check before
 retry. Failed cleanup may leave an unreachable immutable generation and is
-reported for attention rather than deleting any pre-existing ref. The engine has
-no CLI, UI, startup, runtime, or readiness caller yet. Phase 4D must provide the
-explicit native trigger, keep Keychain/filesystem work off the UI thread, never
-prefill or redisplay a secret, and disclose provider egress and automatic
-triggers before consent.
+reported for attention rather than deleting any pre-existing ref. The engine
+has no CLI, startup, automatic runtime, or readiness invocation; Phase 4D calls
+it only from an explicit native preview and confirmation. Keychain/filesystem
+work stays off the UI thread, secrets are never prefilled or redisplayed, and
+provider egress and automatic triggers are disclosed before consent.
 
 Legacy recording recovery is explicitly user-triggered from Debugging. Its
 successful empty scan writes the durable once marker immediately; this is

@@ -5,6 +5,7 @@ import pytest
 
 from meeting_memory.config.runtime import RuntimeSettings
 from meeting_memory.service.configuration_loader import load_configuration
+from meeting_memory.service.runtime_capabilities import RuntimeCapabilityPause
 from meeting_memory.types.capabilities import Capability
 from meeting_memory.types.configuration import (
     AppPreferences,
@@ -19,9 +20,10 @@ class Tray:
     controller = None
     ran = False
 
-    def __init__(self, controller, *, readiness_report) -> None:
+    def __init__(self, controller, *, readiness_report, configuration_surface=None) -> None:
         assert readiness_report is None
         self.__class__.controller = controller
+        self.__class__.configuration_surface = configuration_surface
 
     def run(self) -> None:
         self.__class__.ran = True
@@ -114,6 +116,33 @@ def test_optional_constructor_failures_do_not_block_core(
     assert Tray.controller.committer.policy_provider().transcription is False
     assert Tray.controller.committer.policy_provider().backup is False
     assert Tray.controller.notes_generator is None
+
+
+def test_runtime_surface_owns_registered_monotonic_pause(tmp_path: Path, monkeypatch) -> None:
+    settings = RuntimeSettings(
+        meetings_dir=tmp_path / "meetings",
+        assemblyai_api_key="assembly-key",
+        b2_application_key_id="id",
+        b2_application_key="key",
+        b2_endpoint="https://s3.example.invalid",
+        b2_region="region",
+        b2_bucket_name="bucket",
+    )
+    monkeypatch.setattr(runtime_app, "load_configuration", lambda _use: _loaded(settings))
+    monkeypatch.setattr(runtime_app, "RumpsTrayApp", Tray)
+    monkeypatch.setattr(runtime_app, "AssemblyAITranscriptionClient", lambda *_a, **_k: object())
+    monkeypatch.setattr(runtime_app, "B2S3Client", lambda *_a, **_k: object())
+
+    assert runtime_app.run_runtime_app() == 0
+
+    pause = Tray.configuration_surface._pause  # noqa: SLF001
+    assert isinstance(pause, RuntimeCapabilityPause)
+    assert Tray.controller.committer.policy_provider().transcription is True
+    assert Tray.controller.committer.policy_provider().backup is True
+    assert pause.pause(Capability.TRANSCRIPTION)
+    assert pause.pause(Capability.BACKUP)
+    assert Tray.controller.committer.policy_provider().transcription is False
+    assert Tray.controller.committer.policy_provider().backup is False
 
 
 def test_invalid_optional_settings_never_route_core_to_setup(

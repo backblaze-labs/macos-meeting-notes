@@ -1,7 +1,7 @@
 # Local-First Capability Contract
 
-**Status:** Accepted product contract; implemented through the inactive Phase
-4C migration engine
+**Status:** Accepted product contract; implemented through the Phase 4D native
+configuration surface
 **Canonical for:** onboarding, capability readiness, data lifecycle, migration,
 and optional-service behavior
 
@@ -226,8 +226,8 @@ meeting metadata, or exported support text.
 
 Existing checkouts and their files continue to work during migration.
 
-1. On first launch of the new configuration UI, detect recognized `.env` and
-   process-environment values without modifying them.
+1. Only after the explicit **Import Legacy Configuration...** action, detect
+   recognized `.env` and process-environment presence without modifying either.
 2. Show which capabilities can be migrated, never secret values.
 3. Import secrets into Keychain only after an explicit user confirmation.
 4. Import non-secret preferences into the app-managed store while preserving
@@ -243,11 +243,10 @@ Existing checkouts and their files continue to work during migration.
    current `meeting-memory` CLI. Normalize a legacy meeting to schema v2 only
    when it is next safely written; do not require an eager bulk rewrite.
 
-Until migration UI ships, `.env` remains a legacy fallback that is read-only to
-the composed loader; the existing legacy settings UI may still edit it. Phase
-4B also reads existing app-owned preferences and only their activated generic
-Keychain references, but it performs no import, preference write, secret write,
-or `.env` mutation.
+`.env` remains a legacy fallback that is read-only to the composed loader and
+native UI. Phase 4B reads existing app-owned preferences and only their
+activated generic Keychain references. Phase 4D offers an explicit preview and
+confirmed import; it performs no automatic import and never mutates `.env`.
 
 ## Phase Acceptance Criteria
 
@@ -303,7 +302,7 @@ Phase 4 is intentionally split into independently reviewable slices:
   override. Only active, in-scope generic Keychain references are read under a
   bounded deadline. Loading performs no provider request or configuration
   write, and the Google OAuth Keychain identity remains unchanged.
-- **Phase 4C (complete engine; inactive until 4D):** strict bounded `.env`
+- **Phase 4C (complete engine):** strict bounded `.env`
   preview is bound privately to file identity, content digest, and the exact
   preference revision. Typed confirmation selects whole capabilities. The
   engine writes new immutable secret generations first and activates all
@@ -313,14 +312,16 @@ Phase 4 is intentionally split into independently reviewable slices:
   process-override presence without values or source fingerprints. If CAS
   visibility is ambiguous, new refs are retained but activation is not claimed;
   configuration must be checked before retry.
-- **Phase 4D (in progress):** the internal D1 edit/CAS service and monotonic
-  runtime pause gates are complete but not reachable from UI. The dependent D2
-  slice adds native per-capability forms, disclosure/consent, background typed
-  events, an explicit 4C trigger, and Calendar auth. Secrets remain blank on
-  redisplay.
+- **Phase 4D (complete implementation):** native per-capability forms share one
+  worker coordinator in runtime and setup trays. Exact egress disclosure,
+  secure blank-on-redisplay entry, app/process/legacy provenance, explicit
+  migration, explicit Calendar authorization, prompt editing, operation-ID
+  stale suppression, and pause-before-terminal ordering are active. Setup keeps
+  Notes Prompt visibly unavailable until Recording Core is repaired and the app
+  restarts, avoiding ambient or incorrect prompt-path capture.
 
-The Phase 4 acceptance criteria above are not complete until the 4D native
-consent and disclosure surface lands.
+The Phase 4 implementation criteria above are complete; Phase 5 owns official
+computer-use validation of the installed app.
 
 ### Phase 5 — Native onboarding validation
 

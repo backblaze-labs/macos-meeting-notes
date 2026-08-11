@@ -27,9 +27,11 @@ meeting archive.
 The local-first runtime makes **Recording Core** usable without a
 Terminal, account, key, or network, with Transcription, Backup, Calendar, and
 Notes enabled progressively. See
-[the capability contract](docs/local-first-contract.md). Complete legacy
-`.env` groups opt in to AssemblyAI, B2, Calendar, or Notes independently; a
-missing or broken optional integration does not prevent local recording.
+[the capability contract](docs/local-first-contract.md). The tray's native
+**Configuration** submenu is the primary setup path. Complete legacy `.env`
+groups remain compatible and opt in to AssemblyAI, B2, Calendar, or Notes
+independently; a missing or broken optional integration does not prevent local
+recording.
 
 The first-value acceptance test is concrete: record about 30 seconds of real
 audio, stop, play the saved result, and reveal its meeting directory in Finder
@@ -201,20 +203,21 @@ source provenance through fixed consumer scopes. Runtime and explicit
 readiness load only the active generic Keychain references they need; auth,
 search, and summarize use narrower scopes. The existing Google OAuth Keychain
 identity is unchanged. Composition performs no provider request and never
-writes `.env`, preferences, or Keychain. Phase 4C now provides the inactive
-service engine for explicit, identity/digest-bound, non-destructive `.env`
-preview and confirmed migration. It is not called by startup, the CLI, or the
-current UI. Phase 4D's internal edit/CAS and runtime-pause foundation is now in
-place, but the dependent native slice still must add the trigger,
-per-capability disclosure, secure entry, background events, and Calendar auth.
-Until that UI ships, continue using the legacy configuration flow.
+writes `.env`, preferences, or Keychain. Phase 4C provides the
+identity/digest-bound, non-destructive `.env` preview and confirmed migration
+engine. Phase 4D exposes it only through an explicit native action and adds
+per-capability app-owned forms, blank secure credential fields, exact egress
+disclosures, explicit Calendar authorization, and worker-to-main typed events.
+Successful optional changes pause current-session egress before their terminal
+event; enablement and replacement take effect after relaunch. No reachable UI
+action rewrites `.env`, and startup never previews, migrates, authorizes, or
+runs readiness automatically.
 
 `KNOWN_SPEAKERS` is intentionally empty by default. Use the tray's
-**Configuration › Known Speakers...** item to add local aliases for normalizing
-Calendar speaker candidates. The app stores them in `.env` as a JSON object
-whose keys are display names and whose values are attendee names, emails, or
-email local-parts to match, for example
-`{"Alex Rivera":["alex@example.com","alex.rivera"]}`.
+**Configuration › Calendar...** structured speaker editor to add local aliases
+for normalizing Calendar speaker candidates. The app stores them in app-owned
+preferences in the canonical structured speaker list. Each row has one display
+name and zero or more attendee names, emails, or email local-parts to match.
 
 ## Costs
 
@@ -307,4 +310,6 @@ meeting-memory search "launch risks"
 - Failed B2 uploads can be retried with `Retry Pending B2 Backups`. Failed
   transcription can be retried with `Retry Failed Transcriptions`; fully automatic
   connectivity-aware background queueing is future work.
-- The preferences window edits `.env`; restart the app after saving changes.
+- Enabling a capability or changing its credentials/destination requires
+  quitting and reopening the app. Disable pauses new current-session egress;
+  process environment overrides can enable it again after restart.

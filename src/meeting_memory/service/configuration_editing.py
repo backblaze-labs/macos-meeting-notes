@@ -187,7 +187,7 @@ class CapabilityConfigurationService:
         flags = {
             "process_present": binding.process_present,
             "process_reenables": binding.process_reenables,
-            "legacy_reenables": binding.legacy_reenables,
+            "legacy_reenables": binding.legacy_reenables and change.enabled is None,
         }
         if (
             change.enabled is None

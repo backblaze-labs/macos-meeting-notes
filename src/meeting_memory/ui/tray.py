@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+from meeting_memory.service.configuration_surface import ConfigurationSurfaceCoordinator
 from meeting_memory.service.readiness import checking_readiness_report
 from meeting_memory.types.capabilities import ReadinessReport
 from meeting_memory.types.events import (
@@ -16,6 +17,7 @@ from meeting_memory.types.events import (
 )
 from meeting_memory.ui import load_rumps, menu
 from meeting_memory.ui.audio_modes import AudioModeMenu
+from meeting_memory.ui.configuration_surface import ConfigurationSurfaceUI
 from meeting_memory.ui.controller import TrayController
 from meeting_memory.ui.icons import tray_icon_path
 from meeting_memory.ui.macos import (
@@ -24,22 +26,20 @@ from meeting_memory.ui.macos import (
     configure_modern_notifications,
     keep_timer_running_during_menu_tracking,
 )
-from meeting_memory.ui.notes_prompt import open_notes_prompt_window
 from meeting_memory.ui.notifications import (
     notify_event_kwargs,
     parse_notification_candidates,
     parse_notification_datetime,
     send_notification,
 )
-from meeting_memory.ui.preferences import open_known_speakers_window, open_preferences_window
 from meeting_memory.ui.recording_health import RecordingHealthMonitor
 from meeting_memory.ui.runtime_events import runtime_notification
 from meeting_memory.ui.setup_readiness import ReadinessCheck, readiness_notification_body
 from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
 from meeting_memory.ui.submenus import (
-    ConfigurationActions,
     DebuggingActions,
     configuration_submenu,
+    configuration_surface_actions,
     debugging_submenu,
 )
 from meeting_memory.ui.title_prompt import ask_recording_title
@@ -54,6 +54,7 @@ class RumpsTrayApp:
         *,
         readiness_report: ReadinessReport | None = None,
         rumps_module=None,
+        configuration_surface: ConfigurationSurfaceCoordinator | None = None,
     ) -> None:
         self.rumps = rumps_module or load_rumps()
         self.controller = controller
@@ -75,7 +76,18 @@ class RumpsTrayApp:
         self.recording_item = None
         self.recording_label = ""
         self.recording_health = RecordingHealthMonitor(controller.recorder, controller.event_queue)
-        self.audio_mode_menu = AudioModeMenu(self.rumps, self.controller, rebuild_menu=self.rebuild_menu)  # noqa: E501
+        self.audio_mode_menu = AudioModeMenu(
+            self.rumps, self.controller, rebuild_menu=self.rebuild_menu
+        )  # noqa: E501
+        if configuration_surface is None:
+            configuration_surface = ConfigurationSurfaceCoordinator(
+                controller.event_queue.put, prompt_settings=controller.settings
+            )
+        self.configuration_ui = ConfigurationSurfaceUI(
+            configuration_surface,
+            self.rumps,
+            rebuild_menu=self.rebuild_menu,
+        )
         self.rebuild_menu()
 
     def run(self) -> None:
@@ -87,7 +99,9 @@ class RumpsTrayApp:
         self.app.menu.clear()
         self.app.menu.add(self.rumps.MenuItem(menu.APP_TITLE, callback=None))
         self.app.menu.add(None)
-        self.recording_item = self.rumps.MenuItem(self.current_recording_label(), self.toggle_recording)  # noqa: E501
+        self.recording_item = self.rumps.MenuItem(
+            self.current_recording_label(), self.toggle_recording
+        )  # noqa: E501
         self.recording_label = self.recording_item.title
         self.app.menu.add(self.recording_item)
         self.app.menu.add(None)
@@ -110,20 +124,15 @@ class RumpsTrayApp:
             )
         )
         self.app.menu.add(None)
-        self.app.menu.add(self._configuration_submenu())
+        self.app.menu.add(
+            configuration_submenu(
+                self.rumps,
+                self.audio_mode_menu,
+                configuration_surface_actions(self.configuration_ui),
+            )
+        )
         self.app.menu.add(self._debugging_submenu())
         self.app.menu.add(self.rumps.MenuItem(menu.QUIT_LABEL, self.rumps.quit_application))
-
-    def _configuration_submenu(self):
-        return configuration_submenu(
-            self.rumps,
-            self.audio_mode_menu,
-            ConfigurationActions(
-                open_known_speakers=self.open_known_speakers,
-                open_notes_prompt=self.open_notes_prompt,
-                open_preferences=self.open_preferences,
-            ),
-        )
 
     def _debugging_submenu(self):
         return debugging_submenu(
@@ -150,15 +159,6 @@ class RumpsTrayApp:
             self.controller.start_recording()
         self.rebuild_menu()
 
-    def open_preferences(self, _sender=None) -> None:
-        open_preferences_window(self.controller.settings)
-
-    def open_known_speakers(self, _sender=None) -> None:
-        open_known_speakers_window(self.controller.settings)
-
-    def open_notes_prompt(self, _sender=None) -> None:
-        open_notes_prompt_window(self.controller.settings, rumps_module=self.rumps)
-
     def open_speaker_review(self, meeting_path: Path) -> None:
         open_speaker_review_window(
             meeting_path,
@@ -172,9 +172,9 @@ class RumpsTrayApp:
         self.rebuild_menu()
 
     def run_diagnostics(self, _sender=None) -> None:
-        self.readiness_report = checking_readiness_report()
-        self.rebuild_menu()
-        self.readiness_check.start()
+        if self.readiness_check.start() is not None:
+            self.readiness_report = checking_readiness_report()
+            self.rebuild_menu()
 
     def send_test_notification(self, _sender=None) -> None:
         LOGGER.info("Test macOS Notifications selected")
@@ -216,7 +216,11 @@ class RumpsTrayApp:
         self.recording_label = label
 
     def handle_event(self, event: object) -> None:
-        if isinstance(event, ReadinessChecked):
+        if self.configuration_ui.handle_event(event):
+            return
+        if isinstance(event, ReadinessChecked) and self.readiness_check.acknowledge(
+            event.operation_id
+        ):
             self.readiness_report = event.report
             self._send_notification(
                 "Meeting Memory setup", "", readiness_notification_body(event.report)

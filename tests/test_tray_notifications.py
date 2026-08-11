@@ -149,6 +149,7 @@ class FakeRecorder:
 @dataclass
 class FakeController:
     tmp_path: Path
+    settings: object = field(default_factory=object)
     recorder: FakeRecorder = field(default_factory=FakeRecorder)
     event_queue: queue.Queue[object] = field(default_factory=queue.Queue)
     recent: list[RecentMeeting] = field(default_factory=list)

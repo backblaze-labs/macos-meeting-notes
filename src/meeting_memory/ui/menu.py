@@ -24,6 +24,8 @@ TEST_NOTIFICATION_LABEL = "Test macOS Notifications"
 KNOWN_SPEAKERS_LABEL = "Known Speakers..."
 NOTES_PROMPT_LABEL = "Notes Prompt..."
 PREFERENCES_LABEL = "Preferences..."
+IMPORT_LEGACY_LABEL = "Import Legacy Configuration..."
+AUTHORIZE_CALENDAR_LABEL = "Authorize Google Calendar..."
 QUIT_LABEL = "Quit"
 
 

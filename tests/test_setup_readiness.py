@@ -46,17 +46,17 @@ def test_exact_report_is_loaded_off_thread_and_emitted_as_typed_event() -> None:
     assert len(events) == 1
     assert isinstance(events[0], ReadinessChecked)
     assert events[0].report is report
+    assert check.acknowledge(events[0].operation_id)
 
 
 def test_exact_background_report_is_the_one_rendered_by_the_tray() -> None:
     report = _report()
     events: list[object] = []
-    check = ReadinessCheck(
-        events.append,
-        report_loader=lambda: report,
-        thread_factory=ImmediateThread,
-    )
     app = RumpsTrayApp(FakeController(), rumps_module=FakeRumps())
+    check = app.readiness_check
+    check.event_sink = events.append
+    check.report_loader = lambda: report
+    check.thread_factory = ImmediateThread
 
     check.start()
     app.handle_event(events[0])
@@ -105,17 +105,46 @@ def test_repeated_check_is_single_flight_and_cannot_overwrite_with_stale_result(
     threads.items[0].run()
     assert len(events) == 1
 
+    assert check.start() is None
+    assert check.acknowledge(events[0].operation_id)
     check.start()
     assert len(threads.items) == 2
 
 
+def test_queued_old_result_cannot_overwrite_a_new_check() -> None:
+    first_report = _report()
+    second_report = ReadinessReport(
+        tuple(
+            CapabilityStatus(capability, CapabilityState.FAILED, "Failed.", "Try again.")
+            for capability in Capability
+        )
+    )
+    reports = iter((first_report, second_report))
+    controller = FakeController()
+    app = RumpsTrayApp(controller, rumps_module=FakeRumps())
+    app.readiness_check.report_loader = lambda: next(reports)
+    app.readiness_check.thread_factory = ImmediateThread
+
+    app.run_diagnostics()
+    first = controller.event_queue.get_nowait()
+    assert app.readiness_check.start() is None
+    app.handle_event(first)
+    app.run_diagnostics()
+    second = controller.event_queue.get_nowait()
+    app.handle_event(first)
+    app.handle_event(second)
+
+    assert app.readiness_report is second_report
+
+
 class ImmediateThread:
-    def __init__(self, *, target, daemon=False):
+    def __init__(self, *, target, args=(), daemon=False):
         self.target = target
+        self.args = args
         self.daemon = daemon
 
     def start(self) -> None:
-        self.target()
+        self.target(*self.args)
 
 
 class FailingStartThread(ImmediateThread):
@@ -148,8 +177,9 @@ class FakeController:
 class DeferredThread:
     target = None
 
-    def configure(self, *, target, daemon=False):
+    def configure(self, *, target, args=(), daemon=False):
         self.target = target
+        self.args = args
         self.daemon = daemon
         return self
 
@@ -158,7 +188,7 @@ class DeferredThread:
 
     def run(self) -> None:
         assert self.target is not None
-        self.target()
+        self.target(*self.args)
 
 
 class ThreadCollector:

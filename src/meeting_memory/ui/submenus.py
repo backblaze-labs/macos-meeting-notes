@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from meeting_memory.types.capabilities import ReadinessReport
+from meeting_memory.types.capabilities import Capability, ReadinessReport
 from meeting_memory.types.processing import ProcessingTask
 from meeting_memory.ui import menu
 from meeting_memory.ui.audio_modes import AudioModeMenu
@@ -15,22 +15,28 @@ from meeting_memory.ui.processing_actions import run_processing_task
 from meeting_memory.ui.setup_readiness import readiness_menu_label, readiness_tooltip
 
 B2_SYNC_TOOLTIP = "Upload meetings whose B2 backup is pending or failed."
-TRANSCRIPTION_RETRY_TOOLTIP = (
-    "Re-run AssemblyAI transcription using the saved local audio."
-)
+TRANSCRIPTION_RETRY_TOOLTIP = "Re-run AssemblyAI transcription using the saved local audio."
 DIAGNOSTICS_TOOLTIP = (
     "Check all five capabilities without making optional services block recording."
 )
-TEST_NOTIFICATION_TOOLTIP = (
-    "Send a local notification to verify macOS notification permissions."
-)
+TEST_NOTIFICATION_TOOLTIP = "Send a local notification to verify macOS notification permissions."
 
 
 @dataclass(frozen=True)
 class ConfigurationActions:
-    open_known_speakers: Callable[..., None]
-    open_notes_prompt: Callable[..., None]
-    open_preferences: Callable[..., None]
+    open_capability: Callable[[Capability], None]
+    import_legacy: Callable[[], None]
+    authorize_calendar: Callable[[], None]
+    open_notes_prompt: Callable[[], None]
+
+
+def configuration_surface_actions(surface: Any) -> ConfigurationActions:
+    return ConfigurationActions(
+        open_capability=surface.open_capability,
+        import_legacy=surface.preview_migration,
+        authorize_calendar=surface.authorize_calendar,
+        open_notes_prompt=surface.edit_notes_prompt,
+    )
 
 
 @dataclass(frozen=True)
@@ -47,14 +53,42 @@ class DebuggingActions:
 
 def configuration_submenu(
     rumps: Any,
-    audio_mode_menu: AudioModeMenu,
+    audio_mode_menu: AudioModeMenu | None,
     actions: ConfigurationActions,
+    *,
+    notes_prompt_available: bool = True,
 ) -> Any:
     submenu = rumps.MenuItem(menu.CONFIGURATION_LABEL)
-    audio_mode_menu.add_items(submenu)
-    submenu.add(rumps.MenuItem(menu.KNOWN_SPEAKERS_LABEL, actions.open_known_speakers))
-    submenu.add(rumps.MenuItem(menu.NOTES_PROMPT_LABEL, actions.open_notes_prompt))
-    submenu.add(rumps.MenuItem(menu.PREFERENCES_LABEL, actions.open_preferences))
+    if audio_mode_menu is not None:
+        audio_mode_menu.add_items(submenu)
+        submenu.add(None)
+    for capability in Capability:
+        submenu.add(
+            rumps.MenuItem(
+                f"{capability.label}...",
+                lambda _sender, item=capability: actions.open_capability(item),
+            )
+        )
+    submenu.add(None)
+    submenu.add(
+        _menu_item(
+            rumps,
+            menu.NOTES_PROMPT_LABEL,
+            (lambda _sender: actions.open_notes_prompt()) if notes_prompt_available else None,
+            tooltip=(
+                "Edit the prompt used for the next Notes run."
+                if notes_prompt_available
+                else "Available after Recording Core setup is complete and the app restarts."
+            ),
+        )
+    )
+    submenu.add(
+        rumps.MenuItem(
+            menu.AUTHORIZE_CALENDAR_LABEL,
+            lambda _sender: actions.authorize_calendar(),
+        )
+    )
+    submenu.add(rumps.MenuItem(menu.IMPORT_LEGACY_LABEL, lambda _sender: actions.import_legacy()))
     return submenu
 
 
@@ -173,9 +207,7 @@ def _add_recovered_recordings(
             _menu_item(
                 rumps,
                 menu.recovered_recording_label(recording.meta.slug),
-                callback=lambda _sender, item=recording: (
-                    actions.process_recovered_recording(item)
-                ),
+                callback=lambda _sender, item=recording: actions.process_recovered_recording(item),
                 tooltip="Recover this recording and resume transcription.",
             )
         )
