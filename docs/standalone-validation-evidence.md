@@ -39,6 +39,9 @@ These checks cannot be claimed from the developer-host smoke:
   Silent System Only behavior, quit/relaunch, keyboard navigation, and explicit
   VoiceOver labels;
 - the same validation on a notarized Developer ID artifact;
+- a two-version N to N+1 replacement fixture proving preferences, exact
+  Keychain accounts/refs, OAuth status, meeting bytes, recovery state, prompt,
+  logs, and the single LaunchAgent target remain intact with zero provider work;
 - real Intel audio/TCC validation when Intel is a supported release artifact.
 
 A real recording captures private microphone and system audio. Do not execute

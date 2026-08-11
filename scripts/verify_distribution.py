@@ -19,12 +19,10 @@ from meeting_memory.version import APP_VERSION, BUNDLE_BUILD
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_EXECUTABLE, HELPER_NAME = "Meeting Memory", "MeetingMemoryCapture"
-FORBIDDEN_BASENAMES = {
-    ".env",
-    ".env.example",
-    "credentials.json",
-    "token.json",
-}
+FORBIDDEN_BASENAMES = frozenset(
+    ".env .env.example credentials.json token.json "
+    "notes.md preferences.json recording.m4a transcript.md".split()
+)
 FORBIDDEN_PRIVATE_PATTERNS = (
     "client_secret*.json",
     "credentials*.json",
@@ -39,8 +37,6 @@ FORBIDDEN_ENTITLEMENTS = {
 
 
 class DistributionVerificationError(RuntimeError):
-    """Value-free verifier failure with one allowlisted stage."""
-
     def __init__(self, stage: str) -> None:
         super().__init__(f"distribution verification failed at {stage}")
         self.stage = stage
@@ -216,13 +212,9 @@ def _verify_no_build_paths(app: Path) -> None:
 
 def _build_path_sentinels() -> tuple[tuple[str, bytes], ...]:
     values = [("checkout-path", str(ROOT))]
-    if Path(sys.prefix) != Path(sys.base_prefix):
+    if Path(sys.prefix) not in {Path(sys.base_prefix), ROOT}:
         values.append(("python-prefix", str(Path(sys.prefix))))
-    return tuple(
-        (stage, value.encode())
-        for stage, value in values
-        if value and value != "/" and (stage == "checkout-path" or Path(value) != ROOT)
-    )
+    return tuple((stage, value.encode()) for stage, value in values if value and value != "/")
 
 
 def _verify_signature(

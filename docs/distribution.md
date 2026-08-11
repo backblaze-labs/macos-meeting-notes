@@ -79,3 +79,22 @@ available, the project can claim only a reproducible ad-hoc standalone build.
 
 Sanitized completed and pending validation evidence is tracked in
 [standalone-validation-evidence.md](standalone-validation-evidence.md).
+
+## Upgrades
+
+An upgrade replaces only the existing `Meeting Memory.app`; it never moves or
+stores mutable state inside the signed bundle. Quit the app, replace the one
+installed copy in place, then reopen it. Do not keep old and new copies under
+different names because LaunchServices and TCC may select the wrong bundle.
+
+The stable bundle ID, Application Support path, generic secret service, Google
+OAuth service/account, LaunchAgent label, meeting root, recovery state, prompt,
+and log paths are versioned compatibility boundaries. An upgrade must not
+redisplay, export, rotate, delete, or migrate their contents automatically, and
+must not schedule historical provider work. A checkout `.env` is not installed
+state; use the explicit in-app import before replacing the checkout wrapper.
+
+Moving from an ad-hoc wrapper to Developer ID, or changing the signing team,
+may cause a one-time macOS permission prompt even when the bundle ID is stable.
+The release must document that OS-owned transition instead of deleting TCC
+state or installing a second app copy.

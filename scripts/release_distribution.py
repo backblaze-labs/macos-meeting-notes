@@ -13,7 +13,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from meeting_memory.version import APP_VERSION
-from scripts.verify_distribution import verify_distribution
+
+if __package__:
+    from scripts.verify_distribution import verify_distribution
+else:
+    from verify_distribution import verify_distribution
 
 APP_NAME = "Meeting Memory.app"
 

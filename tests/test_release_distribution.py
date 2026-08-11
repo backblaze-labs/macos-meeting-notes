@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from scripts import release_distribution as release
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _release_inputs(tmp_path: Path) -> tuple[Path, Path, Path]:
@@ -161,3 +164,16 @@ def test_release_main_sanitizes_notary_failure(tmp_path: Path, monkeypatch, caps
     captured = capsys.readouterr()
     assert result == 2
     assert "private-key-sentinel" not in captured.err
+
+
+def test_release_script_is_directly_executable() -> None:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts/release_distribution.py"), "--help"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "Notarize and archive" in result.stdout
