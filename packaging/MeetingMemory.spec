@@ -32,8 +32,13 @@ hiddenimports = [
     "anthropic",
     "assemblyai",
     "boto3",
+    "google.auth.external_account_authorized_user",
+    "google.auth.transport.requests",
+    "google.oauth2.credentials",
     "google_auth_oauthlib.flow",
+    "google_auth_oauthlib.helpers",
     "googleapiclient.discovery",
+    "requests_oauthlib",
     "rumps",
 ]
 

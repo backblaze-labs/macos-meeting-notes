@@ -22,9 +22,14 @@ REQUIRED_IMPORTS = (
     "boto3",
     "botocore",
     "certifi",
+    "google.auth.external_account_authorized_user",
+    "google.auth.transport.requests",
+    "google.oauth2.credentials",
+    "google_auth_oauthlib.helpers",
     "google_auth_oauthlib.flow",
     "googleapiclient.discovery",
     "keyring.backends.macOS",
+    "requests_oauthlib",
     "rumps",
 )
 RESOURCE_PATHS = (

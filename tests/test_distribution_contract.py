@@ -38,6 +38,15 @@ def test_spec_is_onedir_windowed_and_has_minimal_security_metadata() -> None:
     assert 'collect_submodules("meeting_memory")' not in text
     assert '"meeting_memory.ui.preferences"' in text
     assert '"meeting_memory.ui.notes_prompt"' in text
+    for oauth_import in (
+        "google.auth.external_account_authorized_user",
+        "google.auth.transport.requests",
+        "google.oauth2.credentials",
+        "google_auth_oauthlib.flow",
+        "google_auth_oauthlib.helpers",
+        "requests_oauthlib",
+    ):
+        assert f'"{oauth_import}"' in text
     for forbidden in (
         "allow-jit",
         "allow-unsigned-executable-memory",
