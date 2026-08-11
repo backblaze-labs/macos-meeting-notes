@@ -189,8 +189,11 @@ def _verify_linkage(path: Path, app: Path, runner) -> None:
 
 
 def _verify_no_build_paths(app: Path) -> None:
+    values = (("checkout-path", str(ROOT)), ("python-prefix", str(Path(sys.prefix))))
     sentinels = tuple(
-        value.encode() for value in {str(ROOT), str(Path(sys.prefix))} if value and value != "/"
+        (stage, value.encode())
+        for stage, value in values
+        if value and value != "/" and (stage == "checkout-path" or Path(value) != ROOT)
     )
     for path in app.rglob("*"):
         if not path.is_file() or path.is_symlink():
@@ -199,9 +202,10 @@ def _verify_no_build_paths(app: Path) -> None:
             tail = b""
             while chunk := handle.read(1_048_576):
                 searchable = tail + chunk
-                if any(sentinel in searchable for sentinel in sentinels):
-                    raise RuntimeError("bundle contains an absolute build-machine path")
-                overlap = max((len(sentinel) for sentinel in sentinels), default=1) - 1
+                for stage, sentinel in sentinels:
+                    if sentinel in searchable:
+                        raise DistributionVerificationError(stage)
+                overlap = max((len(sentinel) for _stage, sentinel in sentinels), default=1) - 1
                 tail = searchable[-overlap:] if overlap else b""
 
 
