@@ -20,6 +20,7 @@ def test_encoder_configuration_is_offline_and_allowlisted() -> None:
     assert "--disable-everything" in arguments
     assert "--disable-network" in arguments
     assert "--disable-autodetect" in arguments
+    assert "--disable-x86asm" in arguments
     assert "--disable-shared" in arguments
     assert "--enable-static" in arguments
     assert {
@@ -74,6 +75,32 @@ def test_encoder_archive_requires_exact_regular_file(
         native_audio_source.read_verified_source_archive(archive)
 
 
+def test_encoder_source_prefers_the_verified_vendored_archive(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    payload = b"vendored-source"
+    monkeypatch.setattr(
+        native_audio_source,
+        "FFMPEG_ARCHIVE_SHA256",
+        hashlib.sha256(payload).hexdigest(),
+    )
+    vendored = (
+        tmp_path
+        / native_audio_source.VENDORED_SOURCE_DIRECTORY
+        / native_audio_source.FFMPEG_SOURCE_ARCHIVE_NAME
+    )
+    vendored.parent.mkdir(parents=True)
+    vendored.write_bytes(payload)
+    monkeypatch.setattr(
+        native_audio_source,
+        "_cached_archive",
+        lambda _root: pytest.fail("vendored source must avoid network/cache fallback"),
+    )
+
+    assert native_audio_source.verified_source_archive(tmp_path) == payload
+
+
 def test_encoder_archive_rejects_link_members(tmp_path: Path) -> None:
     archive = tmp_path / "ffmpeg.tar.xz"
     with tarfile.open(archive, "w:xz") as destination:
@@ -89,10 +116,18 @@ def test_encoder_archive_rejects_link_members(tmp_path: Path) -> None:
 def test_source_offer_matches_the_pinned_archive() -> None:
     root = Path(__file__).resolve().parents[1]
     offer = (root / "packaging" / "FFMPEG_SOURCE_OFFER.md").read_text(encoding="utf-8")
+    vendored = (
+        root
+        / native_audio_source.VENDORED_SOURCE_DIRECTORY
+        / native_audio_source.FFMPEG_SOURCE_ARCHIVE_NAME
+    )
 
     assert native_audio_source.FFMPEG_ARCHIVE_URL in offer
     assert native_audio_source.FFMPEG_ARCHIVE_SHA256 in offer
     assert native_audio_source.FFMPEG_VERSION in offer
+    assert hashlib.sha256(vendored.read_bytes()).hexdigest() == (
+        native_audio_source.FFMPEG_ARCHIVE_SHA256
+    )
 
 
 def test_encoder_build_rejects_non_native_architecture_before_source_access(

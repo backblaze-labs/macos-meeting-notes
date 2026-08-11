@@ -213,9 +213,9 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
 
 ## Troubleshooting
 
-- Native audio build fails: confirm Xcode Command Line Tools and network access
-  to the pinned FFmpeg source release, then rerun `make setup`. The checksum is
-  verified before any source is extracted or compiled.
+- Native audio build fails: confirm Xcode Command Line Tools are installed and
+  the vendored FFmpeg source archive is present, then rerun `make setup`. The
+  checksum is verified before any source is extracted or compiled.
 - No audio capture: open System Settings › Privacy & Security and allow Meeting
   Memory under Microphone and Screen & System Audio Recording, then restart the
   app.

@@ -15,6 +15,7 @@ FFMPEG_VERSION = "8.1.2"
 FFMPEG_SOURCE_ARCHIVE_NAME = f"ffmpeg-{FFMPEG_VERSION}.tar.xz"
 FFMPEG_ARCHIVE_URL = f"https://ffmpeg.org/releases/{FFMPEG_SOURCE_ARCHIVE_NAME}"
 FFMPEG_ARCHIVE_SHA256 = "464beb5e7bf0c311e68b45ae2f04e9cc2af88851abb4082231742a74d97b524c"
+VENDORED_SOURCE_DIRECTORY = Path("packaging/vendor")
 MAX_ARCHIVE_BYTES = 32 * 1024 * 1024
 
 
@@ -28,7 +29,12 @@ def verified_source_archive(
 ) -> bytes:
     """Return one stable source snapshot that matches the pinned release hash."""
 
-    return read_verified_source_archive(archive_path or _cached_archive(project_dir))
+    if archive_path is not None:
+        return read_verified_source_archive(archive_path)
+    vendored = project_dir / VENDORED_SOURCE_DIRECTORY / FFMPEG_SOURCE_ARCHIVE_NAME
+    if vendored.exists() or vendored.is_symlink():
+        return read_verified_source_archive(vendored)
+    return read_verified_source_archive(_cached_archive(project_dir))
 
 
 def read_verified_source_archive(path: Path) -> bytes:

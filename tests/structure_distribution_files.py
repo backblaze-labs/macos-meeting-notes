@@ -19,4 +19,5 @@ REQUIRED_DISTRIBUTION_REPO_FILES = (
     "scripts/validate_release_context.py",
     "scripts/verify_distribution.py",
     "packaging/FFMPEG_SOURCE_OFFER.md",
+    "packaging/vendor/ffmpeg-8.1.2.tar.xz",
 )

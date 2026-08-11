@@ -20,5 +20,6 @@ build deliberately disables network support, shared libraries, autodetection,
 and every codec or container not needed for PCM WAV to AAC/M4A conversion.
 
 The bundled `FFMPEG-COPYING.LGPLv2.1` file contains the applicable license.
-The exact verified `ffmpeg-8.1.2.tar.xz` source archive is included alongside
-this document in the app's Resources directory.
+The exact verified source is versioned at
+`packaging/vendor/ffmpeg-8.1.2.tar.xz` and is included alongside this document
+in the app's Resources directory.

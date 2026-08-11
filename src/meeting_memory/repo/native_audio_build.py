@@ -157,6 +157,7 @@ def _configure_args(architecture: str) -> list[str]:
         "--disable-ffplay",
         "--disable-network",
         "--disable-autodetect",
+        "--disable-x86asm",
         "--enable-protocol=file",
         "--enable-demuxer=wav",
         "--enable-decoder=pcm_s16le",
