@@ -124,3 +124,32 @@ def test_relocated_smoke_reports_value_free_self_check_stage(tmp_path: Path) -> 
         verifier._verify_smoke(app, runner)
 
     assert raised.value.stage == "self-check-result"
+
+
+def test_relocated_smoke_propagates_only_exact_child_stage(tmp_path: Path) -> None:
+    app = tmp_path / "Meeting Memory.app"
+    executable = app / "Contents/MacOS/Meeting Memory"
+    executable.parent.mkdir(parents=True)
+    executable.write_bytes(b"app")
+
+    def runner(command, **kwargs):
+        del kwargs
+        if "--version" in command:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=f"meeting-memory {verifier.APP_VERSION}\n",
+            )
+        raise subprocess.CalledProcessError(
+            2,
+            command,
+            stderr=(
+                "Bundle self-check failed safely at import-keyring-backends-macOS. "
+                "Reinstall the app.\n"
+            ),
+        )
+
+    with pytest.raises(verifier.DistributionVerificationError) as raised:
+        verifier._verify_smoke(app, runner)
+
+    assert raised.value.stage == "self-check-import-keyring-backends-macOS"

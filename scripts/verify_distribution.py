@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import plistlib
+import re
 import shutil
 import subprocess
 import sys
@@ -36,6 +37,9 @@ FORBIDDEN_ENTITLEMENTS = {
     "com.apple.security.cs.disable-library-validation",
     "com.apple.security.get-task-allow",
 }
+SELF_CHECK_FAILURE_RE = re.compile(
+    r"Bundle self-check failed safely at ([A-Za-z0-9-]+)\. Reinstall the app\.\n?"
+)
 
 
 class DistributionVerificationError(RuntimeError):
@@ -261,17 +265,22 @@ def _verify_smoke(app: Path, runner) -> None:
         )
         if APP_VERSION not in version.stdout:
             raise DistributionVerificationError("version-result")
-        smoke = _run_stage(
-            "self-check-launch",
-            runner,
-            [str(executable), "bundle-self-check"],
-            cwd=home,
-            env=environment,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+        try:
+            smoke = runner(
+                [str(executable), "bundle-self-check"],
+                cwd=home,
+                env=environment,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+        except subprocess.CalledProcessError as exc:
+            matched = SELF_CHECK_FAILURE_RE.fullmatch(exc.stderr or "")
+            stage = f"self-check-{matched.group(1)}" if matched else "self-check-launch"
+            raise DistributionVerificationError(stage) from None
+        except Exception:
+            raise DistributionVerificationError("self-check-launch") from None
         payload = _run_stage("self-check-result", json.loads, smoke.stdout)
         if payload.get("event") != "bundle-self-check" or payload.get("ready") is not True:
             raise DistributionVerificationError("self-check-result")
