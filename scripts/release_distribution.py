@@ -109,12 +109,15 @@ def create_release(
                 "--issuer",
                 notary_issuer,
                 "--wait",
+                "--timeout",
+                "30m",
                 "--output-format",
                 "json",
             ],
             check=True,
             capture_output=True,
             text=True,
+            timeout=2_100,
         )
         response = json.loads(result.stdout)
         job_id = response.get("id") if isinstance(response, dict) else None
@@ -143,6 +146,7 @@ def create_release(
             check=True,
             capture_output=True,
             text=True,
+            timeout=120,
         )
         log = json.loads(log_result.stdout)
         if (
@@ -152,7 +156,7 @@ def create_release(
         ):
             raise RuntimeError("notarization log did not pass verification")
 
-    runner(["xcrun", "stapler", "staple", str(app)], check=True)
+    runner(["xcrun", "stapler", "staple", str(app)], check=True, timeout=120)
     verify_distribution(
         app,
         architecture,

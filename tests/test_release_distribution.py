@@ -58,8 +58,11 @@ def test_release_verifies_notarizes_staples_and_archives(tmp_path: Path, monkeyp
     )
 
     assert verifications == [("developer-id", False), ("developer-id", True)]
-    assert next(command for command in calls if "notarytool" in command)[-3:] == [
+    submit = next(command for command in calls if "submit" in command)
+    assert submit[-5:] == [
         "--wait",
+        "--timeout",
+        "30m",
         "--output-format",
         "json",
     ]
