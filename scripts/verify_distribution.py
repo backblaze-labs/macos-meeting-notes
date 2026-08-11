@@ -276,7 +276,13 @@ def _verify_smoke(app: Path, runner) -> None:
                 timeout=60,
             )
         except subprocess.CalledProcessError as exc:
-            matched = SELF_CHECK_FAILURE_RE.fullmatch(exc.stderr or "")
+            outputs = (exc.stdout or "", exc.stderr or "")
+            matches = tuple(
+                matched
+                for output in outputs
+                if (matched := SELF_CHECK_FAILURE_RE.fullmatch(output)) is not None
+            )
+            matched = matches[0] if len(matches) == 1 else None
             stage = f"self-check-{matched.group(1)}" if matched else "self-check-launch"
             raise DistributionVerificationError(stage) from None
         except Exception:

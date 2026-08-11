@@ -107,10 +107,10 @@ def run_bundle_self_check() -> int:
     try:
         report = inspect_bundle()
     except BundleSelfCheckError as exc:
-        sys.stderr.write(f"Bundle self-check failed safely at {exc.stage}. Reinstall the app.\n")
+        sys.stdout.write(f"Bundle self-check failed safely at {exc.stage}. Reinstall the app.\n")
         return 2
     except Exception:
-        sys.stderr.write("Bundle self-check failed safely. Reinstall the application.\n")
+        sys.stdout.write("Bundle self-check failed safely. Reinstall the application.\n")
         return 2
     sys.stdout.write(report.render() + "\n")
     return 0

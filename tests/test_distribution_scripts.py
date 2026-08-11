@@ -143,7 +143,7 @@ def test_relocated_smoke_propagates_only_exact_child_stage(tmp_path: Path) -> No
         raise subprocess.CalledProcessError(
             2,
             command,
-            stderr=(
+            output=(
                 "Bundle self-check failed safely at import-keyring-backends-macOS. "
                 "Reinstall the app.\n"
             ),

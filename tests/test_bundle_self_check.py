@@ -12,6 +12,7 @@ from meeting_memory.service.bundle_self_check import (
     RESOURCE_PATHS,
     BundleSelfCheckError,
     inspect_bundle,
+    run_bundle_self_check,
 )
 from meeting_memory.types.runtime_layout import RuntimeLayout
 from meeting_memory.version import APP_VERSION
@@ -75,3 +76,18 @@ def test_bundle_self_check_identifies_import_without_leaking_exception(tmp_path:
 
     assert raised.value.stage == "import-keyring-backends-macOS"
     assert "keychain-private-sentinel" not in str(raised.value)
+
+
+def test_bundle_self_check_failure_uses_windowed_safe_stdout(monkeypatch, capsys) -> None:
+    def fail() -> None:
+        raise BundleSelfCheckError("import-keyring-backends-macOS", "private-sentinel")
+
+    monkeypatch.setattr("meeting_memory.service.bundle_self_check.inspect_bundle", fail)
+
+    assert run_bundle_self_check() == 2
+    captured = capsys.readouterr()
+    assert captured.out == (
+        "Bundle self-check failed safely at import-keyring-backends-macOS. Reinstall the app.\n"
+    )
+    assert captured.err == ""
+    assert "private-sentinel" not in captured.out
