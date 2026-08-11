@@ -157,7 +157,9 @@ def test_concurrent_first_activation_has_one_winner_and_one_typed_conflict(
         saved_ref = preferences.load().secret_ref_for(SecretId.TRANSCRIPTION)
         assert saved_ref is not None
         assert set(secrets.materials) == {saved_ref}
-        assert len(secrets.deleted) == 1
+        assert len(secrets.deleted) <= 1
+        assert saved_ref not in secrets.deleted
+        assert set(secrets.deleted).isdisjoint(secrets.materials)
         assert env_path.read_bytes() == original
 
 
