@@ -14,12 +14,12 @@ import sys
 import tempfile
 from pathlib import Path
 
+from meeting_memory.service.bundle_self_check import BUNDLE_SELF_CHECK_STAGES
 from meeting_memory.service.macos_app import BUNDLE_IDENTIFIER, macos_app_plist
 from meeting_memory.version import APP_VERSION, BUNDLE_BUILD
 
 ROOT = Path(__file__).resolve().parents[1]
-APP_EXECUTABLE = "Meeting Memory"
-HELPER_NAME = "MeetingMemoryCapture"
+APP_EXECUTABLE, HELPER_NAME = "Meeting Memory", "MeetingMemoryCapture"
 FORBIDDEN_BASENAMES = {
     ".env",
     ".env.example",
@@ -277,13 +277,14 @@ def _verify_smoke(app: Path, runner) -> None:
             )
         except subprocess.CalledProcessError as exc:
             outputs = (exc.stdout or "", exc.stderr or "")
-            matches = tuple(
-                matched
+            stages = {
+                matched.group(1)
                 for output in outputs
-                if (matched := SELF_CHECK_FAILURE_RE.fullmatch(output)) is not None
-            )
-            matched = matches[0] if len(matches) == 1 else None
-            stage = f"self-check-{matched.group(1)}" if matched else "self-check-launch"
+                for matched in SELF_CHECK_FAILURE_RE.finditer(output)
+            }
+            child_stage = next(iter(stages)) if len(stages) == 1 else None
+            valid = child_stage in BUNDLE_SELF_CHECK_STAGES
+            stage = f"self-check-{child_stage}" if valid else "self-check-launch"
             raise DistributionVerificationError(stage) from None
         except Exception:
             raise DistributionVerificationError("self-check-launch") from None

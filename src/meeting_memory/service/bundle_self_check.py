@@ -34,6 +34,11 @@ RESOURCE_PATHS = (
     Path("meeting_memory/ui/assets/robot-template.png"),
     Path("meeting_memory/ui/assets/robot-template.svg"),
 )
+BUNDLE_SELF_CHECK_STAGES = frozenset(
+    ("layout", "frozen", "native-helper")
+    + tuple(f"resource-{index}" for index in range(len(RESOURCE_PATHS)))
+    + tuple(f"import-{name.replace('.', '-')}" for name in REQUIRED_IMPORTS)
+)
 
 
 class BundleSelfCheckError(RuntimeError):

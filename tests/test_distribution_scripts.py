@@ -126,7 +126,7 @@ def test_relocated_smoke_reports_value_free_self_check_stage(tmp_path: Path) -> 
     assert raised.value.stage == "self-check-result"
 
 
-def test_relocated_smoke_propagates_only_exact_child_stage(tmp_path: Path) -> None:
+def test_relocated_smoke_extracts_only_allowlisted_child_stage(tmp_path: Path) -> None:
     app = tmp_path / "Meeting Memory.app"
     executable = app / "Contents/MacOS/Meeting Memory"
     executable.parent.mkdir(parents=True)
@@ -144,8 +144,9 @@ def test_relocated_smoke_propagates_only_exact_child_stage(tmp_path: Path) -> No
             2,
             command,
             output=(
+                "private-bootstrap-sentinel\n"
                 "Bundle self-check failed safely at import-keyring-backends-macOS. "
-                "Reinstall the app.\n"
+                "Reinstall the app.\nprivate-trailing-sentinel\n"
             ),
         )
 
