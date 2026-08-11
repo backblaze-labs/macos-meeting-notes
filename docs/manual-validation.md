@@ -31,7 +31,8 @@ Pass criteria:
 - Recording Core, Transcription, Backup, Calendar, and Notes each appear once.
 - Recording Core is `ready` or `degraded`, and the command exits `0`.
 - The local meetings folder passes the temporary write and durability check.
-- The native audio helper is installed and reports local hardware support.
+- The native audio helper and offline AAC encoder are installed, and the helper
+  reports local hardware support.
 - The doctor explains that mode-specific macOS capture permissions are checked
   when a recording starts; it does not claim to pre-authorize them.
 - Missing optional groups appear as `unconfigured`, not as app failures.
@@ -316,6 +317,13 @@ Standalone acceptance additionally requires:
   directory before interactive validation.
 - The bundled native helper is selected exactly; no checkout helper or `.env`
   is discovered.
+- `MeetingMemoryFFmpegAudioEncoder`, `FFMPEG-COPYING.LGPLv2.1`,
+  `FFMPEG_SOURCE_OFFER.md`, and the exact `ffmpeg-8.1.2.tar.xz` source are
+  present in the bundle; the encoder has the same thin architecture as the app
+  and helper.
+- On a host without an AudioToolbox AAC encoder, stopping or recovering a real
+  recording still produces a playable 16 kHz mono AAC M4A through the bundled
+  offline fallback. No system/Homebrew FFmpeg is consulted.
 - An ad-hoc app is described only as a validation build. Gatekeeper-ready claims
   require the Developer ID/notarized workflow and stapled artifact.
 

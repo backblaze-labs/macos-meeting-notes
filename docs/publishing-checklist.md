@@ -81,4 +81,8 @@ ai-notes, local-first, menu-bar-app, google-calendar, backblaze-b2, python
   local meeting data.
 - Confirm the README links work.
 - Confirm the setup tutorial is enough for a fresh clone.
+- Confirm standalone artifacts contain `THIRD_PARTY_NOTICES.md`,
+  `FFMPEG-COPYING.LGPLv2.1`, `FFMPEG_SOURCE_OFFER.md`, and the exact
+  `ffmpeg-8.1.2.tar.xz` source, and that their encoder checksum/build recipe
+  matches the committed source.
 - Keep provider keys scoped to the minimum required permissions.

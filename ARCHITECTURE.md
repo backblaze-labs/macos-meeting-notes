@@ -155,10 +155,19 @@ newline-delimited lifecycle events through `repo/native_audio.py`.
   captures system audio, excludes the microphone, and leaves the selected audio
   devices unchanged.
 - The helper aligns and mixes captured streams into an incremental 16 kHz mono
-  WAV. The same helper converts the completed WAV to M4A through AVFoundation.
+  WAV. The same helper first converts the completed WAV to M4A through
+  AVFoundation. If that host does not expose an AAC encoder, the helper invokes
+  its exact bundled sibling `MeetingMemoryFFmpegAudioEncoder`: a thin, static,
+  source-pinned LGPL FFmpeg build with networking, autodetection, shared
+  libraries, and unrelated codecs/containers disabled. Its arguments are a
+  fixed PCM-WAV-to-16-kHz-mono-AAC/M4A allowlist; no caller-provided option is
+  forwarded.
 
 This boundary intentionally avoids virtual audio drivers, Aggregate Devices,
-`sounddevice`, and `ffmpeg`.
+`sounddevice`, and arbitrary system or Homebrew FFmpeg installations. The
+fallback encoder is built reproducibly for the app architecture, shipped as a
+separate executable with its LGPL license, source offer, and exact verified
+source archive, and verified as a bundle resource.
 
 ## Boundary Rules
 

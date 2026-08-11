@@ -82,12 +82,12 @@ successful empty scan writes the durable once marker immediately; this is
 separate from `.env` configuration migration. A nonempty result stays
 in memory and unmarked until every discovered entry is explicitly committed,
 so a crash before selection intentionally permits a safe rescan. Normal launch
-does not scan the legacy temp root. The real WAV-to-M4A validator test may
-report the host encoder as unavailable inside a restricted sandbox. On the
-same macOS host outside that sandbox, the original AVFoundation exporter and
-strong validator complete successfully. The validator checks M4A type, AAC,
-16 kHz mono, positive packets/duration, and a full packet read; do not weaken it
-to accommodate a sandbox limitation.
+does not scan the legacy temp root. WAV-to-M4A conversion now prefers the
+original AVFoundation exporter and falls back to a source-pinned, minimal,
+offline LGPL encoder when the host exposes no AAC encoder. The real conversion
+test therefore MUST run rather than skip on encoder availability. The strong
+validator checks M4A type, AAC, 16 kHz mono, positive packets/duration, and a
+full packet read; do not weaken it to accommodate a host limitation.
 
 First thing to check: read `docs/local-first-contract.md`, then inspect
 `service/configuration_loader.py` and `service/configuration_migration.py` with

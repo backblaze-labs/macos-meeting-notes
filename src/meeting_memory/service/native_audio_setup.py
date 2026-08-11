@@ -12,7 +12,7 @@ from meeting_memory.repo.native_audio import (
 
 
 def build_native_audio(project_dir: Path) -> int:
-    """Build the helper in the project's local build directory."""
+    """Build the capture helper and AAC encoder in the local build directory."""
     output = build_native_capture_helper(project_dir, default_build_helper_path(project_dir))
-    sys.stderr.write(f"Native audio helper built: {output}\n")
+    sys.stderr.write(f"Native audio toolchain built: {output.parent}\n")
     return 0

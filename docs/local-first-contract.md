@@ -99,7 +99,10 @@ failure.
    two closed, readable artifacts—`recording.m4a` plus a compatible
    `transcript.md` metadata stub—then publish that whole directory into
    `MEETINGS_DIR` with one same-filesystem atomic rename before any cloud
-   request. A partially assembled final meeting directory is never visible.
+   request. WAV conversion prefers AVFoundation and otherwise uses the bundled
+   offline, source-pinned minimal LGPL encoder. Either route MUST produce the
+   same validated 16 kHz mono AAC-bearing M4A. A partially assembled final
+   meeting directory is never visible.
 4. **Queuing optional work:** record independent local state for transcription
    and backup. Missing configuration leaves the meeting job `not_requested`,
    not lost or failed.

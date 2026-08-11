@@ -5,6 +5,7 @@ from __future__ import annotations
 import plistlib
 from pathlib import Path
 
+from meeting_memory.repo.native_audio_build import ENCODER_NAME
 from meeting_memory.service.launch_agent import (
     LABEL,
     install_launch_agent,
@@ -18,6 +19,9 @@ def _fake_helper_builder(project_dir, output_path, *, runner):
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(b"native-helper")
     output_path.chmod(0o755)
+    encoder = output_path.with_name(ENCODER_NAME)
+    encoder.write_bytes(b"native-encoder")
+    encoder.chmod(0o755)
     return output_path
 
 

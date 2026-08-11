@@ -162,7 +162,7 @@ def _recording_core_status(
         return _failed(
             Capability.RECORDING_CORE,
             f"Native audio capture is unavailable: {detail}",
-            "Run make setup to rebuild the native audio helper, then check macOS permissions.",
+            "Run make setup to rebuild the native audio toolchain, then check macOS permissions.",
         )
     except Exception:
         return _failed(
@@ -176,7 +176,7 @@ def _recording_core_status(
         return CapabilityStatus(
             Capability.RECORDING_CORE,
             CapabilityState.DEGRADED,
-            "Local storage and the native audio helper are available; capture "
+            "Local storage and the native audio toolchain are available; capture "
             "permissions are unchecked, and Full Meeting has no microphone.",
             "Connect or select a macOS input device for Full Meeting, then start a "
             "short recording and grant the mode-specific permissions when prompted.",
@@ -184,7 +184,8 @@ def _recording_core_status(
     return CapabilityStatus(
         Capability.RECORDING_CORE,
         CapabilityState.DEGRADED,
-        "Local storage and the native audio helper are ready; capture permissions are unchecked.",
+        "Local storage and the native audio toolchain are ready; capture "
+        "permissions are unchecked.",
         "Start a short recording and grant the mode-specific macOS permissions when prompted.",
     )
 

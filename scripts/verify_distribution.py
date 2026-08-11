@@ -13,8 +13,14 @@ import sys
 import tempfile
 from pathlib import Path
 
+from meeting_memory.repo.native_audio_source import (
+    FFMPEG_SOURCE_ARCHIVE_NAME,
+    NativeAudioSourceError,
+    read_verified_source_archive,
+)
 from meeting_memory.service.bundle_self_check import BUNDLE_SELF_CHECK_EXIT_CODES
 from meeting_memory.service.macos_app import BUNDLE_IDENTIFIER, macos_app_plist
+from meeting_memory.types.runtime_layout import NATIVE_ENCODER_NAME
 from meeting_memory.version import APP_VERSION, BUNDLE_BUILD
 
 if __package__:
@@ -143,9 +149,17 @@ def _verify_manifest(app: Path) -> None:
             raise RuntimeError("bundle contains a symlink outside the application")
     executable = app / "Contents/MacOS" / APP_EXECUTABLE
     helper = app / "Contents/MacOS" / HELPER_NAME
-    for path in (executable, helper):
-        if not path.is_file() or not os.access(path, os.X_OK):
+    encoder = app / "Contents/MacOS" / NATIVE_ENCODER_NAME
+    for path in (executable, helper, encoder):
+        if path.is_symlink() or not path.is_file() or not os.access(path, os.X_OK):
             raise RuntimeError("bundle executable is missing or not executable")
+    source = app / "Contents/Resources" / FFMPEG_SOURCE_ARCHIVE_NAME
+    if source.is_symlink() or not source.is_file():
+        raise RuntimeError("bundled FFmpeg source is unavailable")
+    try:
+        read_verified_source_archive(source)
+    except NativeAudioSourceError:
+        raise RuntimeError("bundled FFmpeg source does not match the encoder build") from None
 
 
 def _macho_files(app: Path, runner) -> tuple[Path, ...]:
