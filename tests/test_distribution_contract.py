@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -55,3 +56,13 @@ def test_distribution_lock_pins_packager_and_runtime_dependencies() -> None:
     assert "anthropic==0.121.0" in requirements
     assert "boto3==1.43.68" in requirements
     assert all(item == "-e ." or "==" in item for item in requirements)
+
+
+def test_ci_actions_are_immutable_and_use_node_24_generations() -> None:
+    text = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    action_refs = re.findall(r"uses: [^@\s]+@([0-9a-f]{40})", text)
+
+    assert len(action_refs) == 5
+    assert "# v7" in text
+    assert "actions/checkout@v4" not in text
+    assert "actions/setup-python@v5" not in text
