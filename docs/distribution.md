@@ -43,6 +43,9 @@ CI builds two separate validation artifacts:
 The same spec, version, bundle identifier, resources, and verifier are used for
 both. PyInstaller receives a native Python and native third-party extensions on
 each runner rather than attempting to manufacture missing universal slices.
+The distribution lock deliberately holds `cryptography==48.0.1`: version 49
+[removed macOS x86_64 support](https://cryptography.io/en/stable/changelog/#v49-0-0).
+Do not raise that pin while Meeting Memory publishes an Intel artifact.
 
 ## Release boundary
 

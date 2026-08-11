@@ -87,6 +87,7 @@ def test_distribution_lock_pins_packager_and_runtime_dependencies() -> None:
     assert "pyinstaller==6.21.0" in requirements
     assert "anthropic==0.121.0" in requirements
     assert "boto3==1.43.68" in requirements
+    assert "cryptography==48.0.1" in requirements
     assert all(item == "-e ." or "==" in item for item in requirements)
 
 
