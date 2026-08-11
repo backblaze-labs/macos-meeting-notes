@@ -21,6 +21,7 @@ from meeting_memory.repo.native_audio import (
     default_build_helper_path,
 )
 from meeting_memory.repo.native_layout import HELPER_ENV_VAR
+from meeting_memory.version import APP_VERSION, BUNDLE_BUILD
 
 APP_NAME = "Meeting Memory"
 APP_BUNDLE_NAME = f"{APP_NAME}.app"
@@ -102,8 +103,8 @@ def macos_app_plist() -> dict[str, Any]:
         "CFBundleInfoDictionaryVersion": "6.0",
         "CFBundleName": APP_NAME,
         "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "0.1.0",
-        "CFBundleVersion": "1",
+        "CFBundleShortVersionString": APP_VERSION,
+        "CFBundleVersion": BUNDLE_BUILD,
         "LSMinimumSystemVersion": "15.0",
         "LSUIElement": True,
         "NSMicrophoneUsageDescription": (

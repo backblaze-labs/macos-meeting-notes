@@ -36,6 +36,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="generate notes.md from reviewed transcript.md",
     )
     summarize_parser.add_argument("path", type=Path, help="meeting folder or transcript.md path")
+    subcommands.add_parser(
+        "bundle-self-check",
+        help="validate a frozen application bundle without external side effects",
+    )
     return parser
 
 
@@ -70,6 +74,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_relabel(args.path)
     if args.command == "summarize":
         return run_summarize(args.path)
+    if args.command == "bundle-self-check":
+        from meeting_memory.service.bundle_self_check import run_bundle_self_check
+
+        return run_bundle_self_check()
 
     return run_app()
 

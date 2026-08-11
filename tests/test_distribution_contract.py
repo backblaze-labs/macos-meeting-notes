@@ -1,0 +1,57 @@
+"""Static standalone-distribution contracts stay versioned and minimal."""
+
+from __future__ import annotations
+
+import tomllib
+from pathlib import Path
+
+from meeting_memory import __version__
+from meeting_memory.service.macos_app import macos_app_plist
+from meeting_memory.version import APP_VERSION, BUNDLE_BUILD
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_version_has_one_python_source_and_matches_plist() -> None:
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    plist = macos_app_plist()
+
+    assert project["project"]["dynamic"] == ["version"]
+    assert project["tool"]["setuptools"]["dynamic"]["version"] == {
+        "attr": "meeting_memory.version.APP_VERSION"
+    }
+    assert __version__ == APP_VERSION
+    assert plist["CFBundleShortVersionString"] == APP_VERSION
+    assert plist["CFBundleVersion"] == BUNDLE_BUILD
+
+
+def test_spec_is_onedir_windowed_and_has_minimal_security_metadata() -> None:
+    text = (ROOT / "packaging/MeetingMemory.spec").read_text(encoding="utf-8")
+
+    assert "COLLECT(" in text
+    assert "BUNDLE(" in text
+    assert "console=False" in text
+    assert 'bundle_identifier="com.meeting-memory.app"' in text
+    assert '"LSMinimumSystemVersion": "15.0"' in text
+    assert "entitlements_file=None" in text
+    assert 'collect_submodules("meeting_memory")' not in text
+    assert '"meeting_memory.ui.preferences"' in text
+    assert '"meeting_memory.ui.notes_prompt"' in text
+    for forbidden in (
+        "allow-jit",
+        "allow-unsigned-executable-memory",
+        "disable-library-validation",
+        "get-task-allow",
+    ):
+        assert forbidden not in text
+
+
+def test_distribution_lock_pins_packager_and_runtime_dependencies() -> None:
+    lines = (ROOT / "requirements-distribution.lock").read_text(encoding="utf-8").splitlines()
+    requirements = [line for line in lines if line and not line.startswith("#")]
+
+    assert requirements[0] == "-e ."
+    assert "pyinstaller==6.21.0" in requirements
+    assert "anthropic==0.121.0" in requirements
+    assert "boto3==1.43.68" in requirements
+    assert all(item == "-e ." or "==" in item for item in requirements)

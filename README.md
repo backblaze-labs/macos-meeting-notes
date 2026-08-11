@@ -301,6 +301,9 @@ meeting-memory search "launch risks"
 - The `.app` bundle is a local wrapper around this repo and its Python virtual
   environment, not yet the standalone signed/notarized artifact. Runtime paths
   are already checkout/bundle aware and do not depend on the launch cwd.
+- Reproducible thin `arm64` and `x86_64` standalone builds are documented in
+  [docs/distribution.md](docs/distribution.md). Current CI artifacts are ad-hoc
+  validation builds, not public Gatekeeper-ready releases.
 - Recording requires an explicit user start. The app can remind the user to
   stop at the calendar event end time, but fully automatic recording is out of
   scope.
