@@ -40,8 +40,12 @@ def test_spec_is_onedir_windowed_and_has_minimal_security_metadata() -> None:
     assert '"meeting_memory.ui.notes_prompt"' in text
     for oauth_import in (
         "cryptography.hazmat.backends",
+        "cryptography.hazmat.bindings._rust",
+        "cryptography.hazmat.primitives._serialization",
         "cryptography.hazmat.primitives.asymmetric.ec",
         "cryptography.hazmat.primitives.asymmetric.rsa",
+        "cryptography.hazmat.primitives.asymmetric.utils",
+        "cryptography.hazmat.primitives.hashes",
         "cryptography.x509",
         "google.auth._service_account_info",
         "google.auth.crypt._cryptography_rsa",
