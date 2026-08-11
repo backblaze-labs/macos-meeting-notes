@@ -10,6 +10,7 @@ import pytest
 from meeting_memory.service.bundle_self_check import (
     REQUIRED_IMPORTS,
     RESOURCE_PATHS,
+    BundleSelfCheckError,
     inspect_bundle,
 )
 from meeting_memory.types.runtime_layout import RuntimeLayout
@@ -55,7 +56,22 @@ def test_bundle_self_check_rejects_missing_resource_before_imports(tmp_path: Pat
     (layout.resources_path / RESOURCE_PATHS[0]).unlink()
     imported: list[str] = []
 
-    with pytest.raises(RuntimeError, match="required bundled resource"):
+    with pytest.raises(BundleSelfCheckError, match="required bundled resource") as raised:
         inspect_bundle(layout, importer=lambda name: imported.append(name))
 
+    assert raised.value.stage == "resource-0"
     assert imported == []
+
+
+def test_bundle_self_check_identifies_import_without_leaking_exception(tmp_path: Path) -> None:
+    layout, _bundle_path = _bundle(tmp_path)
+
+    def importer(module_name: str) -> None:
+        if module_name == "keyring.backends.macOS":
+            raise RuntimeError("keychain-private-sentinel")
+
+    with pytest.raises(BundleSelfCheckError) as raised:
+        inspect_bundle(layout, importer=importer)
+
+    assert raised.value.stage == "import-keyring-backends-macOS"
+    assert "keychain-private-sentinel" not in str(raised.value)

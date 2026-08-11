@@ -36,6 +36,14 @@ RESOURCE_PATHS = (
 )
 
 
+class BundleSelfCheckError(RuntimeError):
+    """Value-free failure with an allowlisted bundle component stage."""
+
+    def __init__(self, stage: str, message: str) -> None:
+        super().__init__(message)
+        self.stage = stage
+
+
 @dataclass(frozen=True, slots=True)
 class BundleSelfCheckReport:
     """Value-free smoke result safe for CI logs."""
@@ -66,21 +74,30 @@ def inspect_bundle(
 ) -> BundleSelfCheckReport:
     """Import packaged boundaries and validate immutable bundle resources."""
 
-    layout = runtime_layout or current_runtime_layout()
+    try:
+        layout = runtime_layout or current_runtime_layout()
+    except Exception:
+        raise BundleSelfCheckError("layout", "bundle layout is unavailable") from None
     if layout.mode is not RuntimeMode.BUNDLED:
-        raise RuntimeError("bundle self-check requires bundled execution")
+        raise BundleSelfCheckError("layout", "bundle self-check requires bundled execution")
     if not getattr(sys, "frozen", False) and runtime_layout is None:
-        raise RuntimeError("bundle self-check requires a frozen executable")
+        raise BundleSelfCheckError("frozen", "bundle self-check requires a frozen executable")
 
     helper = layout.native_helper_path
     if not helper.is_file() or not os.access(helper, os.X_OK):
-        raise RuntimeError("bundled native helper is missing or not executable")
-    for relative in RESOURCE_PATHS:
+        raise BundleSelfCheckError("native-helper", "bundled native helper is unavailable")
+    for index, relative in enumerate(RESOURCE_PATHS):
         resource = layout.resources_path / relative
         if not resource.is_file():
-            raise RuntimeError("a required bundled resource is missing")
+            raise BundleSelfCheckError(
+                f"resource-{index}", "a required bundled resource is missing"
+            )
     for module_name in REQUIRED_IMPORTS:
-        importer(module_name)
+        try:
+            importer(module_name)
+        except Exception:
+            stage = f"import-{module_name.replace('.', '-')}"
+            raise BundleSelfCheckError(stage, "a required bundled import is unavailable") from None
     return BundleSelfCheckReport(True, APP_VERSION, len(REQUIRED_IMPORTS), len(RESOURCE_PATHS))
 
 
@@ -89,6 +106,9 @@ def run_bundle_self_check() -> int:
 
     try:
         report = inspect_bundle()
+    except BundleSelfCheckError as exc:
+        sys.stderr.write(f"Bundle self-check failed safely at {exc.stage}. Reinstall the app.\n")
+        return 2
     except Exception:
         sys.stderr.write("Bundle self-check failed safely. Reinstall the application.\n")
         return 2
