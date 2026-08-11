@@ -20,6 +20,7 @@ from meeting_memory.service.configuration_editing_cas import (
 from meeting_memory.service.configuration_editing_outcomes import configuration_outcome
 from meeting_memory.service.configuration_editing_support import (
     editable_fields,
+    editing_legacy_source,
     legacy_reenables,
     replacement_preferences,
     secret_id_for_capability,
@@ -49,6 +50,7 @@ from meeting_memory.types.configuration_editing import (
     SecretAvailability,
 )
 from meeting_memory.types.configuration_resolution import SettingSource
+from meeting_memory.types.runtime_layout import RuntimeLayout
 
 
 class PreferenceEditorStore(Protocol):
@@ -97,12 +99,13 @@ class CapabilityConfigurationService:
         env_path: str | Path | None = ".env",
         process_environment: Mapping[str, str] | None = None,
         id_factory: Callable[[], str] | None = None,
+        runtime_layout: RuntimeLayout | None = None,
     ) -> None:
         self._preferences = (
             preference_store if preference_store is not None else PreferenceStore.default()
         )
         self._secrets = secret_store if secret_store is not None else KeychainSecretStore()
-        self._env_path = env_path
+        self._env_path = editing_legacy_source(env_path, runtime_layout)
         self._process = process_environment
         self._id_factory = id_factory if id_factory is not None else lambda: uuid.uuid4().hex
         self._lock = threading.Lock()

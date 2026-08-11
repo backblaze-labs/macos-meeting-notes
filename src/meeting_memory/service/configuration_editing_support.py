@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from meeting_memory.config.resolution import resolve_configuration
+from meeting_memory.config.runtime_layout import current_runtime_layout
 from meeting_memory.config.schema import definitions_for, required_keys
 from meeting_memory.config.settings import Settings
 from meeting_memory.config.validation import configured_value, valid_required_setting
@@ -28,12 +29,24 @@ from meeting_memory.types.configuration_editing import (
     ConfigurationValue,
 )
 from meeting_memory.types.configuration_resolution import SettingSource
+from meeting_memory.types.runtime_layout import RelativeRuntimePathError, RuntimeLayout
 
 _CAPABILITY_SECRET = {
     Capability.TRANSCRIPTION: SecretId.TRANSCRIPTION,
     Capability.BACKUP: SecretId.BACKUP,
     Capability.NOTES: SecretId.NOTES,
 }
+
+
+def editing_legacy_source(
+    env_path: str | Path | None,
+    runtime_layout: RuntimeLayout | None,
+) -> Path | None:
+    layout = runtime_layout or current_runtime_layout()
+    try:
+        return layout.legacy_source_path(env_path)
+    except RelativeRuntimePathError:
+        return None
 
 
 def editable_fields(

@@ -1,5 +1,3 @@
-"""Worker-only coordinator for explicit native configuration actions."""
-
 from __future__ import annotations
 
 import threading
@@ -18,6 +16,7 @@ from meeting_memory.service.configuration_surface_operations import (
     failed_configuration_save,
     failed_migration_apply,
     open_configuration,
+    preview_migration_operation,
     save_configuration,
     surface_is_busy,
 )
@@ -133,14 +132,20 @@ class ConfigurationSurfaceCoordinator:
             self._bound_edit = None
             return True
 
+    @property
+    def migration_source_required(self) -> bool:
+        return self._migration.requires_source_selection
+
     def preview_migration(
-        self, process_environment: Mapping[str, str] | None = None
+        self,
+        process_environment: Mapping[str, str] | None = None,
+        *,
+        source_path: Path | None = None,
     ) -> ConfigurationOperationId | None:
         return self._start(
             SurfaceOperationKind.MIGRATION,
-            lambda operation: MigrationPreviewed(
-                operation,
-                self._migration.preview(process_environment=process_environment),
+            lambda operation: preview_migration_operation(
+                self._migration, operation, process_environment, source_path
             ),
             MigrationPreviewFailed,
         )

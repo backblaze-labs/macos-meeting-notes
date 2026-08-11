@@ -133,7 +133,7 @@ def test_confirmed_selection_writes_only_selected_secrets_then_one_atomic_cas(
     assert saved.enabled_for(Capability.CALENDAR) is True
     assert saved.enabled_for(Capability.NOTES) is True
     assert saved.enabled_for(Capability.TRANSCRIPTION) is None
-    assert saved.value_for(PreferenceKey.MEETINGS_DIR) == "./private-meetings"
+    assert saved.value_for(PreferenceKey.MEETINGS_DIR) == str(env_path.parent / "private-meetings")
     assert saved.value_for(PreferenceKey.B2_REGION) == "legacy-region"
     assert all(item.capability is not Capability.RECORDING_CORE for item in saved.capabilities)
     after = env_path.stat()

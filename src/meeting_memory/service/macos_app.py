@@ -16,11 +16,11 @@ from pathlib import Path
 from typing import Any
 
 from meeting_memory.repo.native_audio import (
-    HELPER_ENV_VAR,
     HELPER_NAME,
     build_native_capture_helper,
     default_build_helper_path,
 )
+from meeting_memory.repo.native_layout import HELPER_ENV_VAR
 
 APP_NAME = "Meeting Memory"
 APP_BUNDLE_NAME = f"{APP_NAME}.app"
@@ -39,14 +39,14 @@ HelperBuilder = Callable[..., Path]
 
 def install_macos_app(
     *,
-    project_dir: Path | None = None,
+    project_dir: Path,
     app_path: Path | None = None,
     python_executable: str | None = None,
     runner: Runner = subprocess.run,
     helper_builder: HelperBuilder = build_native_capture_helper,
 ) -> Path:
     target = app_path or default_app_path()
-    root = (project_dir or Path.cwd()).resolve()
+    root = project_dir.resolve()
     contents = target / "Contents"
     macos_dir = contents / "MacOS"
     resources_dir = contents / "Resources"
@@ -74,7 +74,7 @@ def install_macos_app(
 
 def reload_macos_app(
     *,
-    project_dir: Path | None = None,
+    project_dir: Path,
     app_path: Path | None = None,
     python_executable: str | None = None,
     runner: Runner = subprocess.run,
@@ -129,7 +129,7 @@ def macos_app_executable(project_dir: Path, python_executable: str) -> str:
             f"export PATH={shlex.quote(DEFAULT_PATH)}",
             'export PYTHONUNBUFFERED="1"',
             f'export {HELPER_ENV_VAR}="${{0:A:h}}/{HELPER_NAME}"',
-            f'export PYTHONPATH={pythonpath}${{PYTHONPATH:+:$PYTHONPATH}}',
+            f"export PYTHONPATH={pythonpath}${{PYTHONPATH:+:$PYTHONPATH}}",
             f"{python} -m meeting_memory",
             "",
         ]

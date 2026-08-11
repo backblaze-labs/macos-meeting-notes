@@ -8,6 +8,7 @@ import uuid
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
+from meeting_memory.config.runtime_layout import current_runtime_layout
 from meeting_memory.repo.secret_store import (
     KeychainSecretStore,
     SecretStoreCleanupUncertain,
@@ -18,6 +19,7 @@ from meeting_memory.service.configuration_migration_outcomes import (
     migration_preview_empty,
     migration_preview_failed,
 )
+from meeting_memory.service.configuration_migration_paths import migration_apply_plan
 from meeting_memory.service.configuration_migration_plan import (
     MigrationPlan,
     build_migration_plan,
@@ -30,6 +32,7 @@ from meeting_memory.service.configuration_migration_state import (
     MigrationPreferenceStore,
     MigrationPreviewBinding,
     MigrationSecretStore,
+    valid_new_ref,
 )
 from meeting_memory.service.preference_store import (
     PreferencesConflictError,
@@ -40,7 +43,6 @@ from meeting_memory.service.preference_store import (
 from meeting_memory.types.capabilities import Capability
 from meeting_memory.types.configuration import (
     PreferenceSnapshot,
-    SecretBundle,
     SecretRef,
     SettingKey,
 )
@@ -52,6 +54,7 @@ from meeting_memory.types.configuration_migration import (
     MigrationPreviewId,
     MigrationPreviewState,
 )
+from meeting_memory.types.runtime_layout import RuntimeLayout
 
 
 class EnvironmentMigrationService:
@@ -63,6 +66,7 @@ class EnvironmentMigrationService:
         "_id_factory",
         "_lock",
         "_preferences",
+        "_runtime_layout",
         "_secrets",
     )
 
@@ -73,8 +77,10 @@ class EnvironmentMigrationService:
         preference_store: MigrationPreferenceStore | None = None,
         secret_store: MigrationSecretStore | None = None,
         id_factory: Callable[[], str] | None = None,
+        runtime_layout: RuntimeLayout | None = None,
     ) -> None:
-        self._env_path = Path(env_path).absolute()
+        self._runtime_layout = runtime_layout or current_runtime_layout()
+        self._env_path = self._runtime_layout.legacy_source_path(env_path)
         self._preferences = (
             preference_store if preference_store is not None else PreferenceStore.default()
         )
@@ -83,10 +89,15 @@ class EnvironmentMigrationService:
         self._lock = threading.Lock()
         self._binding: MigrationPreviewBinding | None = None
 
+    @property
+    def requires_source_selection(self) -> bool:
+        return self._env_path is None
+
     def preview(
         self,
         *,
         process_environment: Mapping[str, str] | None = None,
+        source_path: str | Path | None = None,
     ) -> MigrationPreview:
         """Create a new preview, invalidating any earlier unconsumed preview."""
 
@@ -97,7 +108,14 @@ class EnvironmentMigrationService:
                 process = os.environ if process_environment is None else process_environment
                 process_names = frozenset(process.keys())
                 process_keys = frozenset(key for key in SettingKey if key.value in process_names)
-                source = read_migration_source(self._env_path)
+                env_path = (
+                    self._env_path
+                    if source_path is None
+                    else self._runtime_layout.legacy_source_path(source_path)
+                )
+                if env_path is None:
+                    raise ValueError("legacy source selection is required")
+                source = read_migration_source(env_path)
             except Exception:
                 preview_id = MigrationPreviewId("0" * 32)
                 process_keys = frozenset()
@@ -118,7 +136,7 @@ class EnvironmentMigrationService:
                 return migration_preview_empty(preview_id, process_keys, plan.candidates)
             self._binding = MigrationPreviewBinding(
                 preview_id,
-                self._env_path,
+                env_path,
                 source.fingerprint,
                 snapshot,
                 frozenset(plan.selectable),
@@ -157,10 +175,16 @@ class EnvironmentMigrationService:
         if not isinstance(current, PreferenceSnapshot) or current != binding.preferences:
             return migration_outcome(MigrationOutcomeState.PREFERENCES_CONFLICT, selected)
         try:
-            plan = build_migration_plan(source.values, current.preferences)
+            plan = migration_apply_plan(
+                source.values,
+                current.preferences,
+                selected,
+                self._runtime_layout,
+                binding.path,
+            )
         except Exception:
             return migration_outcome(MigrationOutcomeState.FAILED, selected)
-        if not set(selected) <= set(plan.selectable):
+        if plan is None:
             return migration_outcome(MigrationOutcomeState.REJECTED, selected)
         return self._apply_plan(binding, plan, selected)
 
@@ -190,7 +214,7 @@ class EnvironmentMigrationService:
                     selected,
                     created,
                 )
-            if not _valid_new_ref(ref, bundle, created, binding.preferences):
+            if not valid_new_ref(ref, bundle, created, binding.preferences):
                 return self._failure_with_cleanup(
                     MigrationOutcomeState.CLEANUP_FAILED,
                     selected,
@@ -265,17 +289,3 @@ class EnvironmentMigrationService:
 
     def __repr__(self) -> str:
         return "EnvironmentMigrationService(source=<private>, binding=<private>)"
-
-
-def _valid_new_ref(
-    ref: object,
-    bundle: SecretBundle,
-    created: list[SecretRef],
-    snapshot: PreferenceSnapshot,
-) -> bool:
-    return (
-        isinstance(ref, SecretRef)
-        and ref.secret_id is bundle.secret_id
-        and ref not in created
-        and ref not in snapshot.preferences.secret_refs
-    )

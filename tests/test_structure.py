@@ -6,6 +6,7 @@ import ast
 from pathlib import Path
 
 from structure_d2_files import REQUIRED_D2_SOURCE_FILES
+from structure_distribution_files import REQUIRED_DISTRIBUTION_SOURCE_FILES
 from structure_native_files import REQUIRED_NATIVE_SOURCE_FILES
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +30,7 @@ EXTERNAL_SDK_PREFIXES = (
 
 REQUIRED_SOURCE_FILES = (
     *REQUIRED_D2_SOURCE_FILES,
+    *REQUIRED_DISTRIBUTION_SOURCE_FILES,
     "__init__.py",
     "__main__.py",
     "doctor.py",

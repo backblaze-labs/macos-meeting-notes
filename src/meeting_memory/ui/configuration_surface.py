@@ -26,6 +26,7 @@ from meeting_memory.types.configuration_surface import (
 )
 from meeting_memory.ui.configuration_forms import open_configuration_form
 from meeting_memory.ui.migration_form import (
+    choose_legacy_environment_file,
     confirm_calendar_authorization,
     open_migration_preview,
 )
@@ -56,7 +57,21 @@ class ConfigurationSurfaceUI:
     def preview_migration(self) -> None:
         if self._modal:
             return
-        if self._coordinator.preview_migration() is None:
+        source = None
+        if self._coordinator.migration_source_required:
+            self._modal = True
+            try:
+                source = choose_legacy_environment_file()
+            except Exception:
+                self._alert(
+                    "Legacy configuration could not be selected safely.",
+                    "Choose a regular .env file and try again.",
+                )
+            finally:
+                self._modal = False
+            if source is None:
+                return
+        if self._coordinator.preview_migration(source_path=source) is None:
             self._busy()
 
     def authorize_calendar(self) -> None:

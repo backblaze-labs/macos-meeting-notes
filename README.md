@@ -299,7 +299,8 @@ meeting-memory search "launch risks"
 ## Known Limitations
 
 - The `.app` bundle is a local wrapper around this repo and its Python virtual
-  environment, not a standalone signed/notarized binary.
+  environment, not yet the standalone signed/notarized artifact. Runtime paths
+  are already checkout/bundle aware and do not depend on the launch cwd.
 - Recording requires an explicit user start. The app can remind the user to
   stop at the calendar event end time, but fully automatic recording is out of
   scope.

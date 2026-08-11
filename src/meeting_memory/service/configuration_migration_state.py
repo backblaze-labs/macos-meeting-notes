@@ -48,3 +48,17 @@ class MigrationPreviewBinding:
     fingerprint: MigrationSourceFingerprint = field(repr=False)
     preferences: PreferenceSnapshot = field(repr=False)
     selectable: frozenset[Capability] = field(repr=False)
+
+
+def valid_new_ref(
+    ref: object,
+    bundle: SecretBundle,
+    created: list[SecretRef],
+    snapshot: PreferenceSnapshot,
+) -> bool:
+    return (
+        isinstance(ref, SecretRef)
+        and ref.secret_id is bundle.secret_id
+        and ref not in created
+        and ref not in snapshot.preferences.secret_refs
+    )

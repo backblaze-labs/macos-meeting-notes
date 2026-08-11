@@ -11,7 +11,7 @@ from meeting_memory.service.configuration_loader import load_configuration
 from meeting_memory.service.configuration_migration import EnvironmentMigrationService
 from meeting_memory.service.preference_store import PreferenceStore
 from meeting_memory.types.capabilities import Capability
-from meeting_memory.types.configuration import SecretId, SettingKey
+from meeting_memory.types.configuration import PreferenceKey, SecretId, SettingKey
 from meeting_memory.types.configuration_migration import (
     MigrationConfirmation,
     MigrationOutcomeState,
@@ -99,6 +99,9 @@ def test_unselected_capabilities_and_google_oauth_identity_are_never_touched(
     assert outcome.state is MigrationOutcomeState.APPLIED
     assert secrets.written == []
     assert preferences.load().enabled_for(Capability.CALENDAR) is True
+    assert preferences.load().value_for(PreferenceKey.GOOGLE_CALENDAR_CREDENTIALS_FILE) == str(
+        env_path.parent / "credentials.json"
+    )
     assert preferences.load().enabled_for(Capability.TRANSCRIPTION) is None
 
 

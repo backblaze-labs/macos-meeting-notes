@@ -47,6 +47,13 @@ workers/events, migration trigger, Calendar auth, and current-session pause
 ordering. Clean-user computer validation remains Phase 5; signed/notarized
 standalone distribution remains Phase 6.
 
+The Phase 6 runtime-path prerequisite is now implemented. One captured
+checkout/bundled layout anchors every active path by provenance and removes
+ambient-cwd fallbacks. Bundled mode does not auto-discover `.env`; its migration
+action must receive an explicit absolute selection. The PyInstaller artifact,
+dual-architecture verification, clean-user evidence, and signed/notarized
+release pipeline remain the next distribution slices.
+
 Phase 4C provides the migration engine. Its strict bounded preview
 is privately bound to `.env` identity/digest and one preference revision;
 confirmed apply reparses the unchanged file, writes only selected new immutable

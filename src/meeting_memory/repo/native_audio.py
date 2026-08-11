@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import platform
 import queue
 import shutil
@@ -15,9 +14,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TextIO
 
-HELPER_ENV_VAR = "MEETING_MEMORY_CAPTURE_HELPER"
-HELPER_NAME = "MeetingMemoryCapture"
-BUILD_DIR_NAME = ".build"
+from meeting_memory.repo.native_layout import (
+    BUILD_DIR_NAME,
+    HELPER_NAME,
+    resolve_native_capture_helper,
+)
+from meeting_memory.types.runtime_layout import RuntimeLayout
+
 START_TIMEOUT_SECONDS = 60
 STOP_TIMEOUT_SECONDS = 20
 
@@ -185,15 +188,10 @@ def convert_native_audio(wav_path: Path, m4a_path: Path) -> Path:
     return m4a_path
 
 
-def native_capture_helper_path() -> Path:
-    configured = os.environ.get(HELPER_ENV_VAR)
-    candidates = [
-        Path(configured).expanduser() if configured else None,
-        Path.cwd() / BUILD_DIR_NAME / HELPER_NAME,
-    ]
-    for candidate in candidates:
-        if candidate is not None and candidate.is_file() and os.access(candidate, os.X_OK):
-            return candidate
+def native_capture_helper_path(runtime_layout: RuntimeLayout | None = None) -> Path:
+    helper = resolve_native_capture_helper(runtime_layout)
+    if helper is not None:
+        return helper
     raise NativeAudioCaptureError(
         "Native audio helper is missing. Run make setup or make install-macos-app."
     )

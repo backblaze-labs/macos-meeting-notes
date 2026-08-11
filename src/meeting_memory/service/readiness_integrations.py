@@ -179,7 +179,9 @@ def _notes_status(settings: RuntimeSettings) -> CapabilityStatus:
 
 def _local_path(path: Path) -> Path:
     expanded = path.expanduser()
-    return expanded if expanded.is_absolute() else Path.cwd() / expanded
+    if not expanded.is_absolute():
+        raise ValueError("runtime configuration paths must be absolute")
+    return expanded
 
 
 def _valid_google_credentials(path: Path) -> bool:

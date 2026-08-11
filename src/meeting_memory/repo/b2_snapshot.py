@@ -53,10 +53,7 @@ def open_verified_backup_snapshot(
             os.close(transcript_fd)
         os.close(directory_fd)
     try:
-        if (
-            _revision(private_audio, private_transcript, request.meeting_slug)
-            != request.revision
-        ):
+        if _revision(private_audio, private_transcript, request.meeting_slug) != request.revision:
             raise ValueError("backup snapshot bytes do not match the claimed revision")
         yield VerifiedBackupSnapshot(private_audio, private_transcript)
     except BaseException:
@@ -67,7 +64,9 @@ def open_verified_backup_snapshot(
 
 
 def _open_directory_tree(path: Path) -> int:
-    absolute = path if path.is_absolute() else Path.cwd() / path
+    if not path.is_absolute():
+        raise ValueError("backup snapshot paths must be absolute")
+    absolute = path
     descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
     try:
         for part in absolute.parts[1:]:

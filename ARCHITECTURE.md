@@ -263,3 +263,16 @@ runtime pause controls before emitting any possibly activated terminal event.
 Typed operation IDs keep AppKit on the main thread and storage, OAuth,
 migration, and prompt I/O on workers. Both tray modes share the native surface;
 no reachable UI action imports the legacy `.env` writers.
+
+## Captured Runtime Layout
+
+`types/runtime_layout.py` defines the pure checkout/bundled filesystem contract,
+and `config/runtime_layout.py` captures it once per process. Active configuration,
+migration, readiness, OAuth/prompt reads, native-helper lookup, and pinned local
+I/O no longer consult the ambient working directory. Checkout-relative process
+paths use the captured project root; selected legacy paths use the selected
+`.env` parent; app-owned relative paths use Application Support. Bundled mode
+does not scan for `.env`, rejects relative process paths, uses the exact bundled
+Swift helper, and requires an explicit file selection before legacy preview.
+Migration converts selected legacy path values to absolute app preferences before
+the final CAS while leaving the source file byte-identical.

@@ -18,7 +18,7 @@ def open_directory_tree(
 
     absolute = path.expanduser()
     if not absolute.is_absolute():
-        absolute = Path.cwd() / absolute
+        raise ValueError("pinned filesystem paths must be absolute")
     if require_private_final and absolute == Path("/"):
         raise ValueError("filesystem root cannot be used as private staging")
     descriptor = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
