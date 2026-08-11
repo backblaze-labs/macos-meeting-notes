@@ -14,7 +14,13 @@ from meeting_memory.config.defaults import (
     DEFAULT_SUMMARY_PROMPT_TEMPLATE,
 )
 from meeting_memory.config.settings import Settings
-from meeting_memory.repo.retry import DEFAULT_RETRY_DELAYS, RetryPolicy, is_likely_transient_error
+from meeting_memory.repo.prompt_source import read_prompt_text
+from meeting_memory.repo.retry import (
+    DEFAULT_RETRY_DELAYS,
+    RetryPolicy,
+    is_likely_transient_error,
+)
+from meeting_memory.types.egress import EgressPaused
 from meeting_memory.types.summary import ActionItem, SummaryResult
 
 MAX_TRANSCRIPT_CHARS = 60_000
@@ -38,6 +44,7 @@ class ClaudeSummarizer:
         "request_timeout_seconds",
         "retry_delays",
         "sleeper",
+        "_admit_request",
     )
 
     def __init__(
@@ -50,6 +57,7 @@ class ClaudeSummarizer:
         request_timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
         retry_delays: tuple[float, ...] = DEFAULT_RETRY_DELAYS,
         sleeper: Callable[[float], None] = time.sleep,
+        admit_request: Callable[[], bool] = lambda: True,
     ) -> None:
         object.__setattr__(self, "_api_key", api_key)
         object.__setattr__(self, "model", model)
@@ -59,6 +67,7 @@ class ClaudeSummarizer:
         object.__setattr__(self, "request_timeout_seconds", request_timeout_seconds)
         object.__setattr__(self, "retry_delays", retry_delays)
         object.__setattr__(self, "sleeper", sleeper)
+        object.__setattr__(self, "_admit_request", admit_request)
 
     def __setattr__(self, _name: str, _value: object) -> None:
         raise AttributeError("notes adapter is immutable")
@@ -81,7 +90,12 @@ class ClaudeSummarizer:
     def summarize(self, transcript_text: str) -> SummaryResult:
         if not self.api_key:
             return SummaryResult.skipped()
+        if not self._admit_request():
+            raise EgressPaused("Notes provider operation is disabled")
 
+        prompt = self._prompt(transcript_text)
+        if not self._admit_request():
+            raise EgressPaused("Notes provider operation is disabled")
         client = _anthropic_client(
             self.api_key,
             timeout_seconds=self.request_timeout_seconds,
@@ -92,9 +106,10 @@ class ClaudeSummarizer:
                 max_tokens=1200,
                 temperature=0,
                 system=SUMMARY_OUTPUT_CONTRACT,
-                messages=[{"role": "user", "content": self._prompt(transcript_text)}],
+                messages=[{"role": "user", "content": prompt}],
             ),
             is_retryable=_is_retryable_anthropic_error,
+            enabled=self._admit_request,
         )
         return summary_result_from_json(_response_text(response))
 
@@ -111,9 +126,7 @@ class ClaudeSummarizer:
 
 def load_prompt_template(path: Path | None) -> str:
     prompt_path = path or Path(DEFAULT_SUMMARY_PROMPT_FILE)
-    if prompt_path.exists():
-        return prompt_path.read_text(encoding="utf-8")
-    return DEFAULT_SUMMARY_PROMPT_TEMPLATE
+    return read_prompt_text(prompt_path) or DEFAULT_SUMMARY_PROMPT_TEMPLATE
 
 
 def _insert_transcript(template: str, clipped: str) -> str:

@@ -14,6 +14,7 @@ from meeting_memory.types.artifacts import (
     BackupUploadDisposition,
     LegacyBackupUpload,
 )
+from meeting_memory.types.egress import EgressPaused
 from meeting_memory.types.meeting import B2UploadResult, MeetingFiles
 
 USER_AGENT_EXTRA = "b2ai-meeting-memory"
@@ -31,6 +32,7 @@ class B2S3Client:
         "bucket_name",
         "retry_delays",
         "sleeper",
+        "_admit_request",
     )
 
     def __init__(
@@ -42,6 +44,7 @@ class B2S3Client:
         bucket_name: str,
         retry_delays: tuple[float, ...] = DEFAULT_RETRY_DELAYS,
         sleeper: Callable[[float], None] = time.sleep,
+        admit_request: Callable[[], bool] = lambda: True,
     ) -> None:
         object.__setattr__(self, "_application_key_id", application_key_id)
         object.__setattr__(self, "_application_key", application_key)
@@ -50,6 +53,7 @@ class B2S3Client:
         object.__setattr__(self, "bucket_name", bucket_name)
         object.__setattr__(self, "retry_delays", retry_delays)
         object.__setattr__(self, "sleeper", sleeper)
+        object.__setattr__(self, "_admit_request", admit_request)
 
     def __setattr__(self, _name: str, _value: object) -> None:
         raise AttributeError("backup adapter is immutable")
@@ -118,7 +122,10 @@ class B2S3Client:
         with open_verified_backup_snapshot(request) as snapshot:
             if cancellation.cancelled:
                 return _stopped_upload(request, BackupUploadDisposition.CANCELLED)
-            client = self._client()
+            try:
+                client = self._client()
+            except EgressPaused:
+                return _stopped_upload(request, BackupUploadDisposition.CANCELLED)
             if not self._upload_stream_while_enabled(
                 client,
                 snapshot.audio,
@@ -152,6 +159,7 @@ class B2S3Client:
         )
 
     def _client(self):
+        self._require_enabled()
         boto3 = _load_boto3()
         Config = _load_botocore_config()
         return boto3.client(
@@ -165,16 +173,19 @@ class B2S3Client:
 
     def _upload_file(self, client, filename: str, key: str) -> None:
         for attempt, delay in enumerate((*self.retry_delays, None)):
+            self._require_enabled()
             try:
                 client.upload_file(filename, self.bucket_name, key)
                 return
             except Exception:
                 if delay is None:
                     raise
+                self._require_enabled()
                 self.sleeper(delay)
 
     def _upload_stream(self, client, stream, key: str) -> None:
         for delay in (*self.retry_delays, None):
+            self._require_enabled()
             try:
                 stream.seek(0)
                 client.upload_fileobj(stream, self.bucket_name, key)
@@ -182,6 +193,7 @@ class B2S3Client:
             except Exception:
                 if delay is None:
                     raise
+                self._require_enabled()
                 self.sleeper(delay)
 
     def _upload_stream_while_enabled(
@@ -192,7 +204,7 @@ class B2S3Client:
         cancellation: BackupUploadCancellation,
     ) -> bool:
         for delay in (*self.retry_delays, None):
-            if cancellation.cancelled:
+            if cancellation.cancelled or not self._admit_request():
                 return False
             try:
                 stream.seek(0)
@@ -201,10 +213,14 @@ class B2S3Client:
             except Exception:
                 if delay is None:
                     raise
-                if cancellation.cancelled:
+                if cancellation.cancelled or not self._admit_request():
                     return False
                 self.sleeper(delay)
         return False
+
+    def _require_enabled(self) -> None:
+        if not self._admit_request():
+            raise EgressPaused("Backup provider operation is disabled")
 
 
 def _stopped_upload(

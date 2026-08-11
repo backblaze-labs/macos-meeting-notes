@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Protocol
@@ -11,6 +12,7 @@ from meeting_memory.service.legacy_snapshot import (
     replace_legacy_metadata,
 )
 from meeting_memory.service.markdown import render_transcript_markdown
+from meeting_memory.types.egress import EgressPaused
 from meeting_memory.types.transcript import TranscriptResult
 
 
@@ -29,12 +31,16 @@ class ProcessingRetryResult:
 def retry_failed_processing(
     meetings_dir: Path,
     processor: MeetingProcessor,
+    *,
+    enabled: Callable[[], bool] = lambda: True,
 ) -> ProcessingRetryResult:
     if not meetings_dir.exists():
         return ProcessingRetryResult()
 
     attempted = completed = failed = 0
     for meeting_dir in sorted(path for path in meetings_dir.iterdir() if path.is_dir()):
+        if not enabled():
+            break
         try:
             manager = capture_legacy_snapshot(meeting_dir)
             snapshot = manager.__enter__()
@@ -43,14 +49,22 @@ def retry_failed_processing(
         try:
             if not should_retry_processing(snapshot.frontmatter):
                 continue
+            if not enabled():
+                break
             attempted += 1
             try:
                 transcript = processor.transcribe(snapshot.audio[0].stream)
-            except Exception as exc:
+            except EgressPaused:
+                return ProcessingRetryResult(
+                    attempted=attempted,
+                    completed=completed,
+                    failed=failed,
+                )
+            except Exception:
                 transcript = TranscriptResult(
                     "transcription-failed",
                     (),
-                    error=str(exc),
+                    error="Provider request failed.",
                 )
             replace_legacy_metadata(
                 snapshot,
@@ -59,9 +73,7 @@ def retry_failed_processing(
                     transcript,
                     speaker_candidates=snapshot.meta.speaker_candidates,
                     b2_audio=_optional_text(snapshot.frontmatter.get("b2_audio")),
-                    b2_transcript=_optional_text(
-                        snapshot.frontmatter.get("b2_transcript")
-                    ),
+                    b2_transcript=_optional_text(snapshot.frontmatter.get("b2_transcript")),
                     b2_status=str(snapshot.frontmatter.get("b2_status") or "pending"),
                 ),
             )

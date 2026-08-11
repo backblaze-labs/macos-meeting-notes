@@ -7,6 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TypeVar
 
+from meeting_memory.types.egress import EgressPaused
+
 T = TypeVar("T")
 
 DEFAULT_RETRY_DELAYS = (2.0, 4.0, 8.0)
@@ -39,16 +41,21 @@ class RetryPolicy:
         *,
         is_retryable: Callable[[BaseException], bool] | None = None,
         timeout_message: str = "operation timed out before retry",
+        enabled: Callable[[], bool] = lambda: True,
     ) -> T:
         retryable = is_retryable or is_likely_transient_error
         deadline = self._deadline()
         for delay in (*self.delays, None):
+            if not enabled():
+                raise EgressPaused("provider operation is disabled")
             self._raise_if_expired(deadline, timeout_message)
             try:
                 return operation()
             except Exception as exc:
                 if delay is None or not retryable(exc):
                     raise
+                if not enabled():
+                    raise EgressPaused("provider operation is disabled") from None
                 self._raise_if_expired(deadline, timeout_message, cause=exc)
                 self.sleeper(self._bounded_delay(delay, deadline, timeout_message, exc))
 

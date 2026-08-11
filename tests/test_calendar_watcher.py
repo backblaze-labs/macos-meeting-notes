@@ -122,7 +122,7 @@ def test_calendar_watcher_with_zero_catches_recently_started_meetings() -> None:
     ]
 
 
-def test_calendar_watcher_reports_poll_errors_as_events() -> None:
+def test_calendar_watcher_reports_sanitized_poll_errors(caplog) -> None:
     events: list[object] = []
     watcher = CalendarWatcher(
         client=FailingCalendarClient(),
@@ -136,7 +136,33 @@ def test_calendar_watcher_reports_poll_errors_as_events() -> None:
 
     assert isinstance(events[0], NotifyEvent)
     assert events[0].title == "Calendar watcher error"
-    assert events[0].body == "calendar unavailable"
+    assert events[0].body == "Calendar polling failed. Check setup and try again."
+    assert "calendar unavailable" not in caplog.text
+
+
+def test_calendar_pause_after_provider_return_emits_no_meeting() -> None:
+    enabled = True
+    events: list[object] = []
+    now = datetime(2026, 6, 11, 9, 0, tzinfo=UTC)
+
+    class PausingClient:
+        def list_upcoming_meetings(self, **_kwargs):
+            nonlocal enabled
+            enabled = False
+            return [CalendarMeeting("event", "Private", now, "meet")]
+
+    watcher = CalendarWatcher(
+        client=PausingClient(),
+        event_sink=events.append,
+        notify_minutes_before=0,
+        poll_interval_seconds=120,
+        now=lambda: now,
+        enabled=lambda: enabled,
+    )
+
+    watcher.poll_once()
+
+    assert events == []
 
 
 def test_calendar_watcher_notifies_once_per_consecutive_outage() -> None:

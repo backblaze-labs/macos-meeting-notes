@@ -17,6 +17,8 @@ class Jobs:
     def __init__(self) -> None:
         self.transcription = []
         self.backup = []
+        self.transcription_enabled = True
+        self.backup_enabled = True
 
     def retry_transcription(self, files, *, resume_id=None) -> None:
         self.transcription.append((files, resume_id))
@@ -48,8 +50,7 @@ def test_explicit_retry_scans_owned_v2_without_legacy_writers(
     legacy.mkdir()
     (legacy / "recording.m4a").write_bytes(b"legacy")
     (legacy / "transcript.md").write_text(
-        "---\nid: legacy\ndate: 2026-08-10T10:00:00+00:00\n"
-        "assemblyai_id: old\n---\nlegacy\n",
+        "---\nid: legacy\ndate: 2026-08-10T10:00:00+00:00\nassemblyai_id: old\n---\nlegacy\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(

@@ -9,6 +9,7 @@ from typing import BinaryIO
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.repo.retry import DEFAULT_RETRY_DELAYS, RetryPolicy, is_likely_transient_error
+from meeting_memory.types.egress import EgressPaused
 from meeting_memory.types.transcript import TranscriptResult, TranscriptSegment
 
 DEFAULT_POLL_INTERVAL_SECONDS = 5
@@ -23,6 +24,7 @@ class AssemblyAITranscriptionClient:
         "retry_delays",
         "sleeper",
         "clock",
+        "_admit_request",
     )
 
     def __init__(
@@ -33,6 +35,7 @@ class AssemblyAITranscriptionClient:
         retry_delays: tuple[float, ...] = DEFAULT_RETRY_DELAYS,
         sleeper: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        admit_request: Callable[[], bool] = lambda: True,
     ) -> None:
         object.__setattr__(self, "_api_key", api_key)
         object.__setattr__(self, "poll_interval_seconds", poll_interval_seconds)
@@ -40,6 +43,7 @@ class AssemblyAITranscriptionClient:
         object.__setattr__(self, "retry_delays", retry_delays)
         object.__setattr__(self, "sleeper", sleeper)
         object.__setattr__(self, "clock", clock)
+        object.__setattr__(self, "_admit_request", admit_request)
 
     def __setattr__(self, _name: str, _value: object) -> None:
         raise AttributeError("transcription adapter is immutable")
@@ -73,6 +77,7 @@ class AssemblyAITranscriptionClient:
             transcribe_once,
             is_retryable=is_likely_transient_error,
             timeout_message="AssemblyAI transcription timed out before retry",
+            enabled=self._admit_request,
         )
         return transcript_result_from_response(transcript)
 
@@ -84,6 +89,8 @@ class AssemblyAITranscriptionClient:
         config = aai.TranscriptionConfig(speaker_labels=True)
         transcriber = aai.Transcriber()
         audio.seek(0)
+        if not self._admit_request():
+            raise EgressPaused("Transcription provider operation is disabled")
         transcript = transcriber.submit(audio, config=config)
         job_id = str(getattr(transcript, "id", "") or "").strip()
         if not job_id:
@@ -102,6 +109,7 @@ class AssemblyAITranscriptionClient:
             lambda: aai.Transcript.get_by_id(identifier),
             is_retryable=is_likely_transient_error,
             timeout_message="AssemblyAI transcription timed out before retry",
+            enabled=self._admit_request,
         )
         return transcript_result_from_response(transcript)
 

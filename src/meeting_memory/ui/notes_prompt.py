@@ -29,8 +29,8 @@ def open_notes_prompt_window(
     path = summary_prompt_path(settings)
     try:
         current_prompt = read_summary_prompt(settings)
-    except Exception as exc:
-        _alert(rumps, "Notes Prompt", _format_exception(exc))
+    except Exception:
+        _alert(rumps, "Notes Prompt", "The prompt could not be loaded safely.")
         return False
 
     try:
@@ -43,11 +43,14 @@ def open_notes_prompt_window(
         edited_prompt = _prompt_notes_fallback(current_prompt, path, rumps)
     if edited_prompt is None:
         return False
+    if not edited_prompt.strip():
+        _alert(rumps, "Notes Prompt", "The notes prompt cannot be empty.")
+        return False
 
     try:
         saved_path = write_summary_prompt(settings, edited_prompt)
-    except Exception as exc:
-        _alert(rumps, "Notes Prompt", _format_exception(exc))
+    except Exception:
+        _alert(rumps, "Notes Prompt", "The prompt could not be saved safely.")
         return False
 
     _alert(
@@ -135,7 +138,3 @@ def _disable_smart_replacements(text_view: Any) -> None:
 
 def _alert(rumps: Any, title: str, message: str) -> None:
     rumps.alert(title=title, message=message)
-
-
-def _format_exception(exc: Exception) -> str:
-    return str(exc).strip() or exc.__class__.__name__

@@ -22,21 +22,36 @@ class FakeOAuthCredentials:
     token = "fresh-token"
 
     def to_json(self) -> str:
-        return json.dumps({"token": self.token})
+        return authorized_token_json(self.token)
 
 
 class FakeFlow:
-    secrets_file: str | None = None
+    client_config: dict[str, object] | None = None
     scopes: list[str] | None = None
 
-    def from_client_secrets_file(self, secrets_file: str, scopes: list[str]):
-        self.secrets_file = secrets_file
+    def from_client_config(self, client_config: dict[str, object], scopes: list[str]):
+        self.client_config = client_config
         self.scopes = scopes
         return self
 
-    def run_local_server(self, *, port: int) -> FakeOAuthCredentials:
+    run_kwargs: dict[str, object] | None = None
+
+    def run_local_server(self, *, port: int, **kwargs) -> FakeOAuthCredentials:
         assert port == 0
+        self.run_kwargs = kwargs
         return FakeOAuthCredentials()
+
+
+def desktop_client_config() -> dict[str, object]:
+    return {
+        "installed": {
+            "client_id": "desktop-client-id",
+            "client_secret": "desktop-client-secret",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": ["http://localhost"],
+        }
+    }
 
 
 class FakeCredentials:
@@ -49,7 +64,7 @@ class FakeCredentials:
 
     @classmethod
     def from_authorized_user_info(cls, info: dict[str, str], scopes: list[str]):
-        assert info == {"token": "old"}
+        assert info == json.loads(authorized_token_json("old"))
         assert scopes == [GOOGLE_CALENDAR_SCOPE]
         return cls()
 
@@ -58,7 +73,7 @@ class FakeCredentials:
         self.refreshed = True
 
     def to_json(self) -> str:
-        return json.dumps({"token": "refreshed"})
+        return authorized_token_json("refreshed")
 
 
 class ValidCredentials:
@@ -66,13 +81,26 @@ class ValidCredentials:
 
     @classmethod
     def from_authorized_user_info(cls, info: dict[str, str], scopes: list[str]):
-        assert info == {"token": "valid"}
+        assert info == json.loads(authorized_token_json("valid"))
         assert scopes == [GOOGLE_CALENDAR_SCOPE]
         return cls()
 
 
 class FakeRequest:
     pass
+
+
+def authorized_token_json(token: str = "fresh-token") -> str:
+    return json.dumps(
+        {
+            "token": token,
+            "refresh_token": "refresh-token",
+            "client_id": "desktop-client-id",
+            "client_secret": "desktop-client-secret",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "scopes": [GOOGLE_CALENDAR_SCOPE],
+        }
+    )
 
 
 class FakeCalendarService:

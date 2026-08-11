@@ -76,6 +76,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def run_auth() -> int:
     from meeting_memory.repo.calendar_client import GoogleCalendarClient
+    from meeting_memory.repo.calendar_oauth import CalendarAuthorizationError
     from meeting_memory.service.configuration_loader import (
         ConfigurationLoadError,
         load_configuration,
@@ -93,16 +94,17 @@ def run_auth() -> int:
         return 2
 
     credentials_path = _resolve_project_path(settings.credentials_file)
-    if not credentials_path.exists():
-        sys.stderr.write(f"Google OAuth credentials file is missing: {credentials_path}\n")
-        sys.stderr.write("Download Desktop app credentials and update .env if needed.\n")
+    try:
+        GoogleCalendarClient(
+            credentials_file=credentials_path,
+            calendar_id=settings.calendar_id,
+            known_speakers=settings.known_speakers,
+        ).authenticate()
+    except CalendarAuthorizationError:
+        sys.stderr.write("Google Calendar authorization failed safely.\n")
+        sys.stderr.write("Check Calendar setup and try the explicit auth command again.\n")
         return 2
 
-    GoogleCalendarClient(
-        credentials_file=credentials_path,
-        calendar_id=settings.calendar_id,
-        known_speakers=settings.known_speakers,
-    ).authenticate()
     sys.stderr.write("Google Calendar auth token saved to Keychain.\n")
     return 0
 
@@ -237,15 +239,19 @@ def run_summarize(path: Path) -> int:
     meeting_dir = path.expanduser()
     if not meeting_dir.is_dir():
         meeting_dir = meeting_dir.parent
-    notes_path = generate_owned_notes(
-        loaded.meetings_dir_path,
-        meeting_dir,
-        ClaudeSummarizer(
-            api_key=config.api_key,
-            model=config.model,
-            prompt_file=config.prompt_file,
-        ),
-    )
+    try:
+        notes_path = generate_owned_notes(
+            loaded.meetings_dir_path,
+            meeting_dir,
+            ClaudeSummarizer(
+                api_key=config.api_key,
+                model=config.model,
+                prompt_file=config.prompt_file,
+            ),
+        )
+    except Exception:
+        sys.stderr.write("Notes generation failed safely; the transcript is unchanged.\n")
+        return 2
     sys.stderr.write(f"Notes written: {notes_path}\n")
     return 0
 

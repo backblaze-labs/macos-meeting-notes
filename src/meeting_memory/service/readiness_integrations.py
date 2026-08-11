@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-import json
-import os
 import queue
-import stat
 import threading
 from collections.abc import Callable
 from pathlib import Path
 
 from meeting_memory.config.runtime import RuntimeSettings
 from meeting_memory.config.validation import valid_b2_endpoint
+from meeting_memory.repo.calendar_oauth import (
+    is_valid_calendar_token_json,
+    is_valid_desktop_client_file,
+)
+from meeting_memory.repo.prompt_source import read_prompt_text
 from meeting_memory.service.configuration_loader import LoadedConfiguration
 from meeting_memory.service.readiness_configuration import (
     effective_optional_status,
@@ -164,11 +166,11 @@ def _notes_status(settings: RuntimeSettings) -> CapabilityStatus:
 
     prompt = settings.notes.prompt_file
     if prompt is not None:
-        prompt_problem = _prompt_problem(_local_path(prompt))
+        prompt_state, prompt_problem = _prompt_problem(_local_path(prompt))
         if prompt_problem is not None:
             return CapabilityStatus(
                 Capability.NOTES,
-                CapabilityState.DEGRADED,
+                prompt_state,
                 prompt_problem,
                 "Fix SUMMARY_PROMPT_FILE or unset it to use the built-in prompt.",
             )
@@ -181,58 +183,28 @@ def _local_path(path: Path) -> Path:
 
 
 def _valid_google_credentials(path: Path) -> bool:
-    text = _read_bounded_regular_text(path)
-    if text is None:
-        return False
+    return is_valid_desktop_client_file(path)
+
+
+def _prompt_problem(path: Path) -> tuple[CapabilityState, str | None]:
     try:
-        payload = json.loads(text)
-    except json.JSONDecodeError:
-        return False
-    installed = payload.get("installed") if isinstance(payload, dict) else None
-    return isinstance(installed, dict) and all(
-        str(installed.get(key) or "").strip()
-        for key in ("client_id", "client_secret", "auth_uri", "token_uri")
-    )
-
-
-def _prompt_problem(path: Path) -> str | None:
-    text = _read_bounded_regular_text(path)
+        text = read_prompt_text(path)
+    except Exception:
+        return (
+            CapabilityState.FAILED,
+            "Notes is blocked because its configured prompt source was rejected safely.",
+        )
     if text is None:
         return (
-            "Notes is configured, but its prompt file is unavailable or too large; "
-            "built-in text will be used."
+            CapabilityState.DEGRADED,
+            "Notes is configured, but its prompt file is missing; built-in text will be used.",
         )
     if not text.strip():
-        return "Notes is configured, but its prompt file is empty; built-in text will be used."
-    return None
-
-
-def _read_bounded_regular_text(path: Path) -> str | None:
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NONBLOCK", 0)
-    try:
-        descriptor = os.open(path, flags)
-    except OSError:
-        return None
-    try:
-        info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_LOCAL_CONFIG_BYTES:
-            return None
-        chunks: list[bytes] = []
-        remaining = MAX_LOCAL_CONFIG_BYTES + 1
-        while remaining:
-            chunk = os.read(descriptor, min(65_536, remaining))
-            if not chunk:
-                break
-            chunks.append(chunk)
-            remaining -= len(chunk)
-        content = b"".join(chunks)
-        if len(content) > MAX_LOCAL_CONFIG_BYTES:
-            return None
-        return content.decode("utf-8")
-    except (OSError, UnicodeError):
-        return None
-    finally:
-        os.close(descriptor)
+        return (
+            CapabilityState.DEGRADED,
+            "Notes is configured, but its prompt file is empty; built-in text will be used.",
+        )
+    return CapabilityState.READY, None
 
 
 def _read_calendar_token() -> str | None:
@@ -261,14 +233,7 @@ def _read_token_bounded(reader: TokenReader) -> str | None:
 
 
 def _valid_calendar_token(token: str) -> bool:
-    try:
-        payload = json.loads(token)
-    except json.JSONDecodeError:
-        return False
-    required = ("refresh_token", "client_id", "client_secret")
-    return isinstance(payload, dict) and all(
-        str(payload.get(key) or "").strip() for key in required
-    )
+    return is_valid_calendar_token_json(token)
 
 
 def _ready(capability: Capability, summary: str) -> CapabilityStatus:

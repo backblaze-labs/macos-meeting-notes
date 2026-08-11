@@ -924,10 +924,12 @@ reported as `unconfigured` and never gate Recording Core.
 
 Phase 4C provides an inactive, digest-and-identity-bound migration engine with
 explicit preview, capability selection, and typed confirmation. It never
-imports process values or rewrites `.env`. Phase 4D adds the native
-configuration, disclosure, secret-writing, migration-trigger, and in-app
-Calendar-auth surfaces. Until then, the legacy settings UI continues to edit
-`.env`; no app surface invokes the migration engine.
+imports process values or rewrites `.env`. Phase 4D's first internal slice now
+provides redacted app-owned edit models, immutable-secret/CAS activation, and
+monotonic current-session egress pause gates. These foundations are not yet
+reachable from the app. The dependent native-UI slice adds disclosure, secure
+entry, migration, and Calendar-auth surfaces; until then, the legacy settings
+UI continues to edit `.env` and no app surface invokes migration.
 
 | Variable | Capability | Default | Description |
 |---|---|---|---|

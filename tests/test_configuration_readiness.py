@@ -78,8 +78,9 @@ def test_complete_process_groups_override_stored_disable_in_runtime_and_readines
                 "installed": {
                     "client_id": "client",
                     "client_secret": "secret",
-                    "auth_uri": "https://accounts.example/auth",
-                    "token_uri": "https://accounts.example/token",
+                    "auth_uri": "https://accounts.google.com/o/oauth2/v2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": ["http://localhost"],
                 }
             }
         ),

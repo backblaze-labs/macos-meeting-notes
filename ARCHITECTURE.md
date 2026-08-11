@@ -254,6 +254,10 @@ written or deleted, process values are presence-only and never imported, and
 the compatible Google OAuth identity is untouched.
 
 No runtime, readiness, auth, search, summarize, doctor, startup, or UI module
-imports the engine. Phase 4D adds native disclosure/consent forms, background
-store writes/events, the explicit migration trigger, and in-app Calendar auth.
-The legacy UI continues to edit `.env` until 4D.
+imports the engine. Phase 4D's internal editing service now binds forms to an
+exact preference snapshot, verifies only the capability's exact secret ref,
+and activates immutable replacements through one CAS. It also exposes runtime
+pause controls for the dependent UI coordinator to invoke before its terminal
+event. That native-UI slice still owns disclosures, background events,
+migration, and Calendar auth; the legacy UI continues to edit `.env` until that
+slice.

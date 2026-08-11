@@ -72,6 +72,64 @@ def test_cli_consumers_request_their_fixed_scopes(tmp_path, monkeypatch) -> None
     ]
 
 
+def test_cli_auth_failure_is_sanitized_without_source_path(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    from meeting_memory.repo.calendar_oauth import CalendarAuthorizationError
+
+    credentials = tmp_path / "private-credentials-sentinel.json"
+    monkeypatch.setattr(
+        configuration_loader,
+        "load_configuration",
+        lambda _use: SimpleNamespace(calendar_auth=CalendarAuthConfig(credentials, "primary", ())),
+    )
+
+    class FailedClient:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        def authenticate(self) -> None:
+            raise CalendarAuthorizationError("oauth-secret-sentinel")
+
+    monkeypatch.setattr(
+        "meeting_memory.repo.calendar_client.GoogleCalendarClient",
+        FailedClient,
+    )
+
+    assert cli.run_auth() == 2
+    error = capsys.readouterr().err
+    assert "authorization failed safely" in error
+    assert "private-credentials-sentinel" not in error
+    assert "oauth-secret-sentinel" not in error
+
+
+def test_cli_notes_failure_is_sanitized_and_preserves_local_files(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    transcript = tmp_path / "meeting" / "transcript.md"
+    transcript.parent.mkdir()
+    transcript.write_text("private transcript sentinel", encoding="utf-8")
+    loaded = SimpleNamespace(
+        notes=NotesConfig("api-secret-sentinel", "model", tmp_path / "unsafe-prompt"),
+        meetings_dir_path=tmp_path,
+    )
+    monkeypatch.setattr(configuration_loader, "load_configuration", lambda _use: loaded)
+    monkeypatch.setattr(
+        "meeting_memory.service.runtime_notes.generate_owned_notes",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("api-secret-sentinel")),
+    )
+
+    assert cli.run_summarize(transcript) == 2
+    error = capsys.readouterr().err
+    assert error == "Notes generation failed safely; the transcript is unchanged.\n"
+    assert transcript.read_text(encoding="utf-8") == "private transcript sentinel"
+    assert not (transcript.parent / "notes.md").exists()
+
+
 def test_readiness_uses_the_exact_composed_snapshot(monkeypatch) -> None:
     settings = RuntimeSettings(_env_file=None)
     loaded = SimpleNamespace(settings=settings)

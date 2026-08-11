@@ -25,6 +25,7 @@ from meeting_memory.service.local_commit import LocalRecordingCommitter
 from meeting_memory.service.meeting_store import MeetingStore
 from meeting_memory.service.processing_retry import retry_failed_processing
 from meeting_memory.service.recorder import RecorderService
+from meeting_memory.service.runtime_capabilities import RuntimeCapabilityPause
 from meeting_memory.service.runtime_jobs import RuntimeJobs
 from meeting_memory.service.runtime_legacy_recovery import LegacyRecoveryRuntime
 from meeting_memory.service.runtime_notes import generate_owned_notes
@@ -33,6 +34,7 @@ from meeting_memory.service.runtime_retry import (
     retry_v2_transcriptions,
 )
 from meeting_memory.service.sync import sync_pending_meetings
+from meeting_memory.types.capabilities import Capability
 from meeting_memory.types.configuration_resolution import ConfigurationUse
 from meeting_memory.types.meeting import PostCommitPolicy
 from meeting_memory.ui.controller import TrayController
@@ -51,13 +53,21 @@ def run_runtime_app() -> int:
     settings = configuration.settings
     configure_logging()
     event_queue: queue.Queue[object] = queue.Queue()
-    transcription_client = _transcription_client(configuration)
-    backup_client = _backup_client(configuration)
+    runtime_capabilities = RuntimeCapabilityPause()
+    transcription_client = _transcription_client(
+        configuration,
+        enabled=lambda: runtime_capabilities.allows(Capability.TRANSCRIPTION),
+    )
+    backup_client = _backup_client(
+        configuration,
+        enabled=lambda: runtime_capabilities.allows(Capability.BACKUP),
+    )
     jobs = RuntimeJobs(
         settings.meetings_dir_path,
         event_queue.put,
         transcription_client=transcription_client,
         backup_client=backup_client,
+        capability_enabled=runtime_capabilities.allows,
     )
     committer = LocalRecordingCommitter(
         MeetingStore(settings.meetings_dir_path),
@@ -65,7 +75,7 @@ def run_runtime_app() -> int:
         convert_native_audio,
         validate_native_m4a,
         policy_provider=lambda: PostCommitPolicy(
-            transcription=transcription_client is not None,
+            transcription=jobs.transcription_enabled,
             backup=jobs.backup_enabled,
         ),
         post_commit_launcher=lambda files, policy: jobs.launch_for_commit(
@@ -92,10 +102,32 @@ def run_runtime_app() -> int:
             jobs,
             transcription_client,
         ),
-        notes_generator=_notes_generator(configuration),
+        notes_generator=_notes_generator(
+            configuration,
+            enabled=lambda: runtime_capabilities.allows(Capability.NOTES),
+        ),
+        notes_allowed=lambda: runtime_capabilities.allows(Capability.NOTES),
         legacy_recovery=legacy_recovery,
     )
-    watcher = _calendar_watcher(configuration, event_queue)
+    watcher = _calendar_watcher(
+        configuration,
+        event_queue,
+        enabled=lambda: runtime_capabilities.allows(Capability.CALENDAR),
+    )
+    runtime_capabilities.register(
+        Capability.TRANSCRIPTION,
+        lambda: jobs.set_transcription_enabled(False),
+    )
+    runtime_capabilities.register(
+        Capability.BACKUP,
+        lambda: jobs.set_backup_enabled(False),
+    )
+    runtime_capabilities.register(
+        Capability.NOTES,
+        lambda: controller.set_notes_enabled(False),
+    )
+    if watcher is not None:
+        runtime_capabilities.register(Capability.CALENDAR, watcher.stop)
     if watcher is not None:
         try:
             watcher.start()
@@ -107,18 +139,24 @@ def run_runtime_app() -> int:
 
 def _transcription_client(
     configuration: LoadedConfiguration,
+    *,
+    enabled=lambda: True,
 ) -> AssemblyAITranscriptionClient | None:
     config = configuration.transcription
     if config is None:
         return None
     try:
-        return AssemblyAITranscriptionClient(config.api_key)
+        return AssemblyAITranscriptionClient(config.api_key, admit_request=enabled)
     except Exception:
         LOGGER.warning("Transcription capability could not start")
         return None
 
 
-def _backup_client(configuration: LoadedConfiguration) -> B2S3Client | None:
+def _backup_client(
+    configuration: LoadedConfiguration,
+    *,
+    enabled=lambda: True,
+) -> B2S3Client | None:
     config = configuration.backup
     if config is None:
         return None
@@ -129,13 +167,14 @@ def _backup_client(configuration: LoadedConfiguration) -> B2S3Client | None:
             config.endpoint,
             config.region,
             config.bucket_name,
+            admit_request=enabled,
         )
     except Exception:
         LOGGER.warning("Backup capability could not start")
         return None
 
 
-def _notes_generator(configuration: LoadedConfiguration):
+def _notes_generator(configuration: LoadedConfiguration, *, enabled=lambda: True):
     config = configuration.notes
     if config is None:
         return None
@@ -144,6 +183,7 @@ def _notes_generator(configuration: LoadedConfiguration):
             api_key=config.api_key,
             model=config.model,
             prompt_file=config.prompt_file,
+            admit_request=enabled,
         )
     except Exception:
         LOGGER.warning("Notes capability could not start")
@@ -163,6 +203,8 @@ def _notes_generator(configuration: LoadedConfiguration):
 def _calendar_watcher(
     configuration: LoadedConfiguration,
     event_queue: queue.Queue[object],
+    *,
+    enabled=lambda: True,
 ) -> CalendarWatcher | None:
     config = configuration.calendar
     if config is None or not config.credentials_file.is_file():
@@ -172,12 +214,14 @@ def _calendar_watcher(
             credentials_file=config.credentials_file,
             calendar_id=config.calendar_id,
             known_speakers=configuration.settings.known_speakers,
+            admit_request=enabled,
         )
         return CalendarWatcher(
             client=client,
             event_sink=event_queue.put,
             notify_minutes_before=config.notify_minutes_before,
             poll_interval_seconds=config.poll_interval,
+            enabled=enabled,
         )
     except Exception:
         LOGGER.warning("Calendar capability could not start")
@@ -198,17 +242,27 @@ def _legacy_recovery_marker(settings: RuntimeSettings):
 
 
 def _retry_transcriptions(settings, jobs, client) -> None:
-    if client is None:
+    if client is None or not jobs.transcription_enabled:
         return
     retry_v2_transcriptions(settings.meetings_dir_path, jobs)
-    retry_failed_processing(settings.meetings_dir_path, client)
+    if jobs.transcription_enabled:
+        retry_failed_processing(
+            settings.meetings_dir_path,
+            client,
+            enabled=lambda: jobs.transcription_enabled,
+        )
 
 
 def _retry_backups(settings, jobs, client) -> None:
-    if client is None:
+    if client is None or not jobs.backup_enabled:
         return
     retry_v2_backups(settings.meetings_dir_path, jobs)
-    sync_pending_meetings(settings.meetings_dir_path, client)
+    if jobs.backup_enabled:
+        sync_pending_meetings(
+            settings.meetings_dir_path,
+            client,
+            enabled=lambda: jobs.backup_enabled,
+        )
 
 
 def _run_setup_app() -> int:

@@ -44,6 +44,8 @@ def retry_v2_transcriptions(meetings_dir: Path, jobs: RuntimeJobs) -> int:
 
     attempts = 0
     for meeting in _runtime_meetings(meetings_dir):
+        if not jobs.transcription_enabled:
+            break
         if meeting.transcription_status in RETRYABLE:
             resume_id = (
                 meeting.provider_job_id
@@ -60,6 +62,8 @@ def retry_v2_backups(meetings_dir: Path, jobs: RuntimeJobs) -> int:
 
     attempts = 0
     for meeting in _runtime_meetings(meetings_dir):
+        if not jobs.backup_enabled:
+            break
         if meeting.backup_status in RETRYABLE:
             jobs.retry_backup(meeting.handle)
             attempts += 1

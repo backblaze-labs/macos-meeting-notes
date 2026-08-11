@@ -19,6 +19,7 @@ from meeting_memory.service.processing_state import list_pending_processing_task
 from meeting_memory.service.recorder import RecorderService, RecordingResult
 from meeting_memory.service.recording_context import context_from_meetings
 from meeting_memory.service.runtime_legacy_recovery import LegacyRecoveryRuntime
+from meeting_memory.service.runtime_notes_gate import RuntimeNotesGate
 from meeting_memory.service.storage import list_recent_meetings
 from meeting_memory.service.transcript_review import confirm_speaker_aliases, load_speaker_review
 from meeting_memory.types.events import MeetingDetected, NotifyEvent, RecordingTitleNeeded
@@ -40,6 +41,7 @@ EventQueue = queue.Queue[object]
 ThreadFactory = Callable[..., threading.Thread]
 LOGGER = logging.getLogger(__name__)
 
+
 @dataclass
 class TrayController:
     settings: Settings | RuntimeSettings
@@ -51,6 +53,7 @@ class TrayController:
     sync_runner: Callable[[], object] | None = None
     processing_retry_runner: Callable[[], object] | None = None
     notes_generator: Callable[[Path], Path] | None = None
+    notes_allowed: Callable[[], bool] = field(default_factory=lambda: lambda: True)
     legacy_recovery: LegacyRecoveryRuntime | None = None
     thread_factory: ThreadFactory = threading.Thread
     timer_thread_factory: ThreadFactory = threading.Thread
@@ -60,8 +63,15 @@ class TrayController:
     _known_meetings: dict[str, CalendarMeeting] = field(default_factory=dict, init=False)
     _recording_token: object | None = field(default=None, init=False)
     _transitions: RecordingTransitions = field(init=False)
+    _notes_runtime: RuntimeNotesGate = field(init=False)
 
     def __post_init__(self) -> None:
+        self._notes_runtime = RuntimeNotesGate(
+            self.notes_generator,
+            self.event_queue.put,
+            self.thread_factory,
+            self.notes_allowed,
+        )
         self._transitions = RecordingTransitions(
             self.recorder,
             self.event_queue,
@@ -114,10 +124,10 @@ class TrayController:
                 self.thread_factory(
                     target=self.run_local_commit, args=(recovery, meta), daemon=True
                 ).start()
-            except Exception as exc:
-                LOGGER.exception("Could not launch local commit worker")
+            except Exception:
+                LOGGER.warning("Could not launch local commit worker")
                 self.event_queue.put(
-                    NotifyEvent("Recording could not finish", _format_exception(exc))
+                    NotifyEvent("Recording could not finish", "Local commit could not start.")
                 )
             return
         if self.pipeline is None:
@@ -141,7 +151,7 @@ class TrayController:
                 return False
             return self.committer.commit(recovery, meta) is not None
         except Exception:
-            LOGGER.exception("Local meeting commit failed")
+            LOGGER.warning("Local meeting commit failed")
             self.event_queue.put(
                 NotifyEvent(
                     title="Recording could not finish",
@@ -172,7 +182,12 @@ class TrayController:
         return confirm_speaker_aliases(path, aliases)
 
     def generate_notes(self, path: Path) -> None:
-        self.thread_factory(target=self._generate_notes, args=(path,), daemon=True).start()
+        self._notes_runtime.start(path)
+
+    def set_notes_enabled(self, enabled: bool) -> None:
+        """Stop new Notes generations without interrupting one already in flight."""
+
+        self._notes_runtime.set_enabled(enabled)
 
     def recovered_recordings(self) -> list[RecoveryIndexEntry]:
         return list_recoveries(self.recorder, self.legacy_recovery)
@@ -205,9 +220,14 @@ class TrayController:
         if self.recording_context_provider is not None:
             try:
                 return self.recording_context_provider()
-            except Exception as exc:
-                LOGGER.exception("Could not resolve recording context")
-                self.event_queue.put(NotifyEvent("Calendar lookup failed", _format_exception(exc)))
+            except Exception:
+                LOGGER.warning("Could not resolve recording context")
+                self.event_queue.put(
+                    NotifyEvent(
+                        "Calendar lookup failed",
+                        "Calendar context is unavailable for this recording.",
+                    )
+                )
         return context_from_meetings(list(self._known_meetings.values()), now=self.now())
 
     def recording_duration_seconds(self) -> int:
@@ -270,29 +290,3 @@ class TrayController:
                 )
             )
             self.stop_recording()
-
-    def _generate_notes(self, path: Path) -> None:
-        if self.notes_generator is None:
-            event = NotifyEvent("Notes generation failed", "Summarizer not configured")
-            self.event_queue.put(event)
-            return
-        try:
-            notes_path = self.notes_generator(path)
-        except Exception:
-            LOGGER.exception("Notes generation failed")
-            self.event_queue.put(
-                NotifyEvent("Notes generation failed", "Transcript remains saved locally")
-            )
-            return
-        self.event_queue.put(
-            NotifyEvent(
-                title="Notes generated",
-                body=f"{notes_path.parent.name} · notes.md ready",
-                action_label="Open",
-                meeting_directory=notes_path.parent,
-            )
-        )
-
-
-def _format_exception(exc: Exception) -> str:
-    return str(exc).strip() or exc.__class__.__name__

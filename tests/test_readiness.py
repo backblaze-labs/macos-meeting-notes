@@ -229,8 +229,9 @@ def _write_desktop_credentials(path: Path) -> None:
                 "installed": {
                     "client_id": "client",
                     "client_secret": "secret",
-                    "auth_uri": "https://accounts.example/auth",
-                    "token_uri": "https://accounts.example/token",
+                    "auth_uri": "https://accounts.google.com/o/oauth2/v2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "redirect_uris": ["http://localhost"],
                 }
             }
         ),

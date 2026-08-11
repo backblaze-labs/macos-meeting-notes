@@ -313,9 +313,11 @@ Phase 4 is intentionally split into independently reviewable slices:
   process-override presence without values or source fingerprints. If CAS
   visibility is ambiguous, new refs are retained but activation is not claimed;
   configuration must be checked before retry.
-- **Phase 4D (deferred):** native per-capability forms, disclosure/consent,
-  background configuration events, an explicit trigger for the 4C engine, and
-  explicit Calendar auth. Secrets remain blank on redisplay.
+- **Phase 4D (in progress):** the internal D1 edit/CAS service and monotonic
+  runtime pause gates are complete but not reachable from UI. The dependent D2
+  slice adds native per-capability forms, disclosure/consent, background typed
+  events, an explicit 4C trigger, and Calendar auth. Secrets remain blank on
+  redisplay.
 
 The Phase 4 acceptance criteria above are not complete until the 4D native
 consent and disclosure surface lands.

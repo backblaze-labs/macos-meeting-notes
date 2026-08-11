@@ -19,6 +19,7 @@ from meeting_memory.service.transcript_state import TranscriptStateStore
 from meeting_memory.service.transcription_audio import capture_transcription_audio
 from meeting_memory.types.artifacts import MeetingJob
 from meeting_memory.types.capabilities import MeetingJobState
+from meeting_memory.types.egress import EgressPaused
 from meeting_memory.types.events import TranscriptionFailed, TranscriptReady
 from meeting_memory.types.meeting import MeetingFiles, MeetingRef
 from meeting_memory.types.transcript import TranscriptResult
@@ -45,16 +46,20 @@ class RuntimeTranscription:
         event_sink: EventSink,
         client: RuntimeTranscriptionClient,
         thread_factory: ThreadFactory,
+        enabled: Callable[[], bool] = lambda: True,
     ) -> None:
         self._state = MeetingStateStore(meetings_dir)
         self._transcripts = TranscriptStateStore(meetings_dir)
         self._event_sink = event_sink
         self._client = client
         self._thread_factory = thread_factory
+        self._enabled = enabled
         self._lock = threading.Lock()
         self._active: set[str] = set()
 
     def start(self, meeting: MeetingFiles | RuntimeMeetingHandle) -> None:
+        if not self._enabled():
+            return
         handle = self._validated_handle(meeting)
         if handle is not None and self._reserve(handle.files.meta.slug):
             self._launch_reserved(handle, resume_id=None)
@@ -64,6 +69,8 @@ class RuntimeTranscription:
         meeting: MeetingFiles | RuntimeMeetingHandle,
         resume_id: str | None = None,
     ) -> None:
+        if not self._enabled():
+            return
         handle = self._validated_handle(meeting)
         if handle is None or not self._reserve(handle.files.meta.slug):
             return
@@ -116,6 +123,8 @@ class RuntimeTranscription:
             self._release(handle.files.meta.slug)
 
     def _run(self, handle: RuntimeMeetingHandle, *, resume_id: str | None) -> None:
+        if not self._enabled():
+            return
         files = handle.files
         if resume_id is None and not self._claim_pending(handle):
             return
@@ -127,6 +136,8 @@ class RuntimeTranscription:
                     files,
                     expected_directory_identity=handle.directory_identity,
                 ) as audio:
+                    if self._defer_if_disabled(handle, has_provider_id=False):
+                        return
                     job_id = self._client.submit(audio)
                 self._transcripts.record_job_id(
                     files.directory,
@@ -140,6 +151,8 @@ class RuntimeTranscription:
                     expected_id=job_id,
                     expected_directory_identity=handle.directory_identity,
                 )
+            if self._defer_if_disabled(handle, has_provider_id=True):
+                return
             transcript = self._client.resume(job_id)
             self._transcripts.succeed(
                 files.directory,
@@ -147,6 +160,9 @@ class RuntimeTranscription:
                 transcript,
                 expected_directory_identity=handle.directory_identity,
             )
+        except EgressPaused:
+            self._defer_if_disabled(handle, has_provider_id=job_id is not None)
+            return
         except MeetingStateConflict:
             return
         except Exception:
@@ -170,6 +186,31 @@ class RuntimeTranscription:
         except Exception:
             LOGGER.exception("Could not claim Transcription job")
             return False
+        return True
+
+    def _defer_if_disabled(
+        self,
+        handle: RuntimeMeetingHandle,
+        *,
+        has_provider_id: bool,
+    ) -> bool:
+        if self._enabled():
+            return False
+        if has_provider_id:
+            return True
+        try:
+            self._state.transition_job(
+                handle.files.directory,
+                MeetingJob.TRANSCRIPTION,
+                MeetingJobState.RUNNING,
+                MeetingJobState.PENDING,
+                expected_directory_identity=handle.directory_identity,
+            )
+        except MeetingStateConflict:
+            # Another worker already moved the durable job to a safe state.
+            return True
+        except Exception:
+            LOGGER.warning("Could not defer paused Transcription job")
         return True
 
     def _record_failure(

@@ -4,19 +4,25 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from html import unescape
 from pathlib import Path
-from typing import Protocol
 from urllib.parse import parse_qs, urlsplit
 
 from meeting_memory.config.settings import Settings
+from meeting_memory.repo.calendar_oauth import (
+    TokenStore,
+    authorize_calendar,
+    is_valid_calendar_token_json,
+    write_verified_token,
+)
 from meeting_memory.repo.google_http import authorized_google_http
 from meeting_memory.repo.speaker_candidates import (
     speaker_candidates_from_event as _speaker_candidates,
 )
+from meeting_memory.types.egress import EgressPaused
 from meeting_memory.types.meeting import CalendarMeeting
 from meeting_memory.types.speakers import KnownSpeaker
 
@@ -28,11 +34,6 @@ MEETING_URL_RE = re.compile(
 )
 GOOGLE_REDIRECT_RE = re.compile(r"https://www\.google\.com/url\?[^\s<>'\"]+")
 ALL_CALENDARS = "all"
-
-
-class TokenStore(Protocol):
-    def read_token(self) -> str | None: ...
-    def write_token(self, token_json: str) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,7 @@ class GoogleCalendarClient:
     known_speakers: tuple[KnownSpeaker, ...] = ()
     token_store: TokenStore = field(default_factory=KeychainTokenStore)
     scopes: tuple[str, ...] = (GOOGLE_CALENDAR_SCOPE,)
+    admit_request: Callable[[], bool] = field(default=lambda: True, repr=False, compare=False)
 
     @classmethod
     def from_settings(cls, settings: Settings) -> GoogleCalendarClient:
@@ -63,14 +65,17 @@ class GoogleCalendarClient:
             known_speakers=settings.known_speakers,
         )
 
-    def authenticate(self):
-        flow_cls = _load_installed_app_flow()
-        flow = flow_cls.from_client_secrets_file(str(self.credentials_file), list(self.scopes))
-        credentials = flow.run_local_server(port=0)
-        self.token_store.write_token(credentials.to_json())
-        return credentials
+    def authenticate(self, *, timeout_seconds: int = 180):
+        return authorize_calendar(
+            _load_installed_app_flow(),
+            self.credentials_file,
+            self.scopes,
+            self.token_store,
+            timeout_seconds=timeout_seconds,
+        )
 
     def credentials(self, *, interactive: bool = False):
+        self._require_enabled()
         token_json = self.token_store.read_token()
         if token_json:
             credentials = self._credentials_from_token(token_json)
@@ -80,8 +85,9 @@ class GoogleCalendarClient:
                 credentials, "refresh_token", None
             )
             if can_refresh:
+                self._require_enabled()
                 credentials.refresh(_load_request()())
-                self.token_store.write_token(credentials.to_json())
+                write_verified_token(self.token_store, credentials.to_json())
                 return credentials
 
         if interactive:
@@ -95,25 +101,28 @@ class GoogleCalendarClient:
         lookahead_minutes: int,
         lookbehind_minutes: int = 0,
     ) -> list[CalendarMeeting]:
-        service = _load_google_build()(
+        self._require_enabled()
+        credentials = self.credentials()
+        builder = _load_google_build()
+        self._require_enabled()
+        service = builder(
             "calendar",
             "v3",
-            http=authorized_google_http(self.credentials()),
+            http=authorized_google_http(credentials),
             cache_discovery=False,
         )
         meetings: list[CalendarMeeting] = []
         for calendar_id in self._calendar_ids(service):
-            response = (
-                service.events()
-                .list(
-                    calendarId=calendar_id,
-                    timeMin=(now - timedelta(minutes=lookbehind_minutes)).isoformat(),
-                    timeMax=(now + timedelta(minutes=lookahead_minutes)).isoformat(),
-                    singleEvents=True,
-                    orderBy="startTime",
-                )
-                .execute()
+            self._require_enabled()
+            request = service.events().list(
+                calendarId=calendar_id,
+                timeMin=(now - timedelta(minutes=lookbehind_minutes)).isoformat(),
+                timeMax=(now + timedelta(minutes=lookahead_minutes)).isoformat(),
+                singleEvents=True,
+                orderBy="startTime",
             )
+            self._require_enabled()
+            response = request.execute()
             meetings.extend(
                 meeting
                 for item in response.get("items", ())
@@ -122,6 +131,8 @@ class GoogleCalendarClient:
         return sorted(meetings, key=lambda meeting: meeting.starts_at)
 
     def _credentials_from_token(self, token_json: str):
+        if not is_valid_calendar_token_json(token_json):
+            raise RuntimeError("Google Calendar authorization is invalid.")
         credentials_cls = _load_google_credentials()
         return credentials_cls.from_authorized_user_info(json.loads(token_json), list(self.scopes))
 
@@ -129,12 +140,19 @@ class GoogleCalendarClient:
         if self.calendar_id.strip().lower() != ALL_CALENDARS:
             return [self.calendar_id]
 
-        response = service.calendarList().list().execute()
+        self._require_enabled()
+        request = service.calendarList().list()
+        self._require_enabled()
+        response = request.execute()
         return [
             str(item["id"])
             for item in response.get("items", ())
             if item.get("id") and not item.get("deleted")
         ]
+
+    def _require_enabled(self) -> None:
+        if not self.admit_request():
+            raise EgressPaused("Calendar provider operation is disabled")
 
 
 def _meeting_from_event(

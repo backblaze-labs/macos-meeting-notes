@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -12,6 +13,8 @@ from calendar_client_fakes import (
     FakeRequest,
     InMemoryTokenStore,
     ValidCredentials,
+    authorized_token_json,
+    desktop_client_config,
 )
 
 from meeting_memory.config.settings import Settings
@@ -28,20 +31,22 @@ def test_calendar_auth_stores_oauth_token(monkeypatch, tmp_path: Path):
     token_store = InMemoryTokenStore()
     fake_flow = FakeFlow()
     monkeypatch.setattr(calendar_client, "_load_installed_app_flow", lambda: fake_flow)
+    credentials_path = tmp_path / "credentials.json"
+    credentials_path.write_text(json.dumps(desktop_client_config()), encoding="utf-8")
 
     credentials = GoogleCalendarClient(
-        credentials_file=tmp_path / "credentials.json",
+        credentials_file=credentials_path,
         token_store=token_store,
     ).authenticate()
 
     assert credentials.token == "fresh-token"
-    assert fake_flow.secrets_file == str(tmp_path / "credentials.json")
+    assert fake_flow.client_config == desktop_client_config()
     assert fake_flow.scopes == [GOOGLE_CALENDAR_SCOPE]
-    assert token_store.token_json == '{"token": "fresh-token"}'
+    assert token_store.token_json == authorized_token_json("fresh-token")
 
 
 def test_calendar_credentials_refresh_expired_token(monkeypatch, tmp_path: Path):
-    token_store = InMemoryTokenStore('{"token":"old"}')
+    token_store = InMemoryTokenStore(authorized_token_json("old"))
     monkeypatch.setattr(calendar_client, "_load_google_credentials", lambda: FakeCredentials)
     monkeypatch.setattr(calendar_client, "_load_request", lambda: FakeRequest)
 
@@ -51,11 +56,11 @@ def test_calendar_credentials_refresh_expired_token(monkeypatch, tmp_path: Path)
     ).credentials()
 
     assert credentials.refreshed is True
-    assert token_store.token_json == '{"token": "refreshed"}'
+    assert token_store.token_json == authorized_token_json("refreshed")
 
 
 def test_calendar_lists_only_video_meetings(monkeypatch, tmp_path: Path):
-    token_store = InMemoryTokenStore('{"token":"valid"}')
+    token_store = InMemoryTokenStore(authorized_token_json("valid"))
     fake_service = FakeCalendarService()
     monkeypatch.setattr(calendar_client, "_load_google_credentials", lambda: ValidCredentials)
     monkeypatch.setattr(calendar_client, "_load_google_build", lambda: fake_service.build)
@@ -219,7 +224,7 @@ def test_calendar_email_matching_does_not_use_first_initial_only():
 
 
 def test_calendar_lists_all_accessible_calendars(monkeypatch, tmp_path: Path):
-    token_store = InMemoryTokenStore('{"token":"valid"}')
+    token_store = InMemoryTokenStore(authorized_token_json("valid"))
     fake_service = FakeCalendarService()
     monkeypatch.setattr(calendar_client, "_load_google_credentials", lambda: ValidCredentials)
     monkeypatch.setattr(calendar_client, "_load_google_build", lambda: fake_service.build)

@@ -72,9 +72,7 @@ class BackupClient:
             request.meeting_slug,
             request.revision,
             audio_key=(
-                audio_key
-                if self.disposition is not BackupUploadDisposition.CANCELLED
-                else None
+                audio_key if self.disposition is not BackupUploadDisposition.CANCELLED else None
             ),
             transcript_key=(
                 f"meetings/{request.meeting_slug}/transcript.md"
@@ -189,6 +187,28 @@ def test_disabling_backup_does_not_scan_or_launch_historical_work(tmp_path: Path
     frontmatter, _ = split_frontmatter(files.transcript_path.read_text(encoding="utf-8"))
     assert backup.calls == []
     assert frontmatter["backup_status"] == "pending"
+
+
+def test_disabling_transcription_before_queued_worker_prevents_provider_call(
+    tmp_path: Path,
+) -> None:
+    DeferredThread.created = []
+    files = _meeting(tmp_path)
+    client = TranscriptionClient(files.transcript_path)
+    jobs = RuntimeJobs(
+        files.directory.parent,
+        lambda _event: None,
+        transcription_client=client,
+        thread_factory=DeferredThread,
+    )
+
+    jobs.launch_for_commit(files, transcription=True, backup=False)
+    jobs.set_transcription_enabled(False)
+    DeferredThread.created[0].run()
+
+    assert client.calls == []
+    jobs.retry_transcription(files)
+    assert len(DeferredThread.created) == 1
 
 
 def test_two_concurrent_resume_requests_poll_provider_once(tmp_path: Path) -> None:

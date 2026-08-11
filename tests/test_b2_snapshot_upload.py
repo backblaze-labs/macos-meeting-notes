@@ -42,6 +42,17 @@ def test_cancelled_at_entry_does_no_snapshot_or_client_work(
     snapshot.cleanup()
 
 
+def test_pause_at_client_construction_returns_cancelled_snapshot(tmp_path: Path) -> None:
+    snapshot = _snapshot(tmp_path)
+    result = _adapter(admit_request=lambda: False).upload_backup_snapshot(
+        snapshot.upload_request(),
+        cancellation=BackupUploadCancellation(),
+    )
+
+    assert result.disposition is BackupUploadDisposition.CANCELLED
+    snapshot.cleanup()
+
+
 def test_complete_upload_uses_exact_snapshot_objects(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -70,9 +81,7 @@ def test_old_worker_stays_cancelled_after_audio_even_if_new_token_exists(
     provider = FakeStreamClient(after_upload=old_token.cancel)
     monkeypatch.setattr(B2S3Client, "_client", lambda _self: provider)
 
-    result = _adapter().upload_backup_snapshot(
-        snapshot.upload_request(), cancellation=old_token
-    )
+    result = _adapter().upload_backup_snapshot(snapshot.upload_request(), cancellation=old_token)
     new_enabled_worker = BackupUploadCancellation()
 
     assert not new_enabled_worker.cancelled

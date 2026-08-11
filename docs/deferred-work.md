@@ -41,10 +41,13 @@ names, `.env`, and app preferences once; reads only active generic Keychain
 references required by the consumer; and fails corrupt app preferences closed
 for optional egress unless a complete valid process group overrides them. It
 performs no provider request, Google OAuth-token read, migration, or write.
-The inactive digest-bound `.env` migration engine is now Phase 4C; native
-per-capability disclosure/consent forms, the explicit migration trigger, secret
-entry, and in-app Calendar auth remain Phase 4D; clean-user computer validation
-remains Phase 5; signed/notarized standalone distribution remains Phase 6.
+The inactive digest-bound `.env` migration engine is now Phase 4C. Phase 4D D1
+adds a redacted app-owned edit/CAS service plus current-session pause gates for
+optional egress, but deliberately has no UI caller. Native per-capability
+disclosure/consent forms, secure entry, typed workers/events, the explicit
+migration trigger, and in-app Calendar auth remain the dependent Phase 4D D2
+slice. Clean-user computer validation remains Phase 5; signed/notarized
+standalone distribution remains Phase 6.
 
 Phase 4C now provides the inactive migration engine. Its strict bounded preview
 is privately bound to `.env` identity/digest and one preference revision;

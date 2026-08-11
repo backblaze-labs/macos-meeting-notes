@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from types import SimpleNamespace
+
+import pytest
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.repo import summarizer
@@ -136,6 +139,37 @@ def test_custom_prompt_is_separate_from_contract_and_cannot_duplicate_transcript
     assert "Additional instructions:\nReturn markdown instead." in prompt
     assert prompt.count("9") == MAX_TRANSCRIPT_CHARS
     assert prompt.count("{transcript}") == 0
+
+
+@pytest.mark.parametrize("kind", ["symlink", "fifo", "oversize"])
+def test_unsafe_prompt_never_reaches_anthropic(
+    tmp_path,
+    monkeypatch,
+    kind: str,
+) -> None:
+    prompt = tmp_path / "summary.md"
+    if kind == "symlink":
+        target = tmp_path / "target.md"
+        target.write_text("private prompt", encoding="utf-8")
+        prompt.symlink_to(target)
+    elif kind == "fifo":
+        os.mkfifo(prompt)
+    else:
+        prompt.write_bytes(b"x" * 1_048_577)
+
+    called = False
+
+    def fail_provider(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        raise AssertionError("provider must not be constructed")
+
+    monkeypatch.setattr(summarizer, "_anthropic_client", fail_provider)
+
+    with pytest.raises(OSError):
+        ClaudeSummarizer(api_key="secret", prompt_file=prompt).summarize("transcript")
+
+    assert called is False
 
 
 def test_summary_parser_accepts_fenced_json() -> None:

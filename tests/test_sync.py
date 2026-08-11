@@ -14,6 +14,7 @@ from meeting_memory.service.storage import (
     write_meeting_dir,
 )
 from meeting_memory.service.sync import sync_pending_meetings
+from meeting_memory.types.egress import EgressPaused
 from meeting_memory.types.meeting import B2UploadResult, MeetingFiles, MeetingMeta
 from meeting_memory.types.summary import SummaryResult
 from meeting_memory.types.transcript import TranscriptResult, TranscriptSegment
@@ -63,6 +64,37 @@ def test_sync_pending_meetings_marks_failures(tmp_path: Path) -> None:
     assert result.uploaded == 0
     assert result.failed == 1
     assert read_frontmatter(stored.markdown_path)["b2_status"] == "upload_failed"
+
+
+def test_paused_legacy_backup_preserves_retryable_metadata(tmp_path: Path) -> None:
+    meetings = tmp_path / "meetings"
+    stored = _write_meeting(meetings, "paused")
+    before = stored.markdown_path.read_bytes()
+
+    class Paused:
+        def upload_legacy_snapshot(self, _request):
+            raise EgressPaused("paused")
+
+    result = sync_pending_meetings(meetings, Paused())
+
+    assert result.failed == result.uploaded == 0
+    assert stored.markdown_path.read_bytes() == before
+
+
+def test_sync_stops_before_next_provider_call_after_disable(tmp_path: Path) -> None:
+    meetings = tmp_path / "meetings"
+    _write_meeting(meetings, "first")
+    _write_meeting(meetings, "second")
+    client = FakeB2()
+
+    result = sync_pending_meetings(
+        meetings,
+        client,
+        enabled=lambda: not client.uploaded,
+    )
+
+    assert result.attempted == 1
+    assert len(client.uploaded) == 1
 
 
 def test_sync_failure_preserves_existing_remote_keys(tmp_path: Path) -> None:
@@ -126,9 +158,7 @@ def test_sync_pending_meetings_uploads_recording_parts(tmp_path: Path) -> None:
 
     assert result.uploaded == 1
     assert b2.uploaded[0].audio[0].filename == "recording-part-1_17-00.m4a"
-    assert [item.filename for item in b2.uploaded[0].audio[1:]] == [
-        "recording-part-2_17-03.m4a"
-    ]
+    assert [item.filename for item in b2.uploaded[0].audio[1:]] == ["recording-part-2_17-03.m4a"]
 
 
 def test_legacy_sync_path_swap_never_uploads_or_mutates_v2_bytes(tmp_path: Path) -> None:

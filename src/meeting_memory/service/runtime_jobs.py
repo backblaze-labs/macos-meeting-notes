@@ -6,10 +6,14 @@ import logging
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
 
 from meeting_memory.service.backup_revision import capture_backup_snapshot
 from meeting_memory.service.meeting_state import MeetingStateConflict, MeetingStateStore
+from meeting_memory.service.runtime_backup_gate import (
+    RuntimeBackupClient,
+    RuntimeBackupGate,
+    defer_paused_backup,
+)
 from meeting_memory.service.runtime_files import (
     RuntimeMeetingHandle,
     bind_runtime_meeting_files,
@@ -20,30 +24,18 @@ from meeting_memory.service.runtime_transcription import (
     RuntimeTranscriptionClient,
 )
 from meeting_memory.types.artifacts import (
-    BackupSnapshotUpload,
     BackupSnapshotUploadResult,
     BackupUploadCancellation,
     BackupUploadDisposition,
     MeetingJob,
 )
-from meeting_memory.types.capabilities import MeetingJobState
+from meeting_memory.types.capabilities import Capability, MeetingJobState
+from meeting_memory.types.egress import EgressPaused
 from meeting_memory.types.meeting import MeetingFiles
 
 LOGGER = logging.getLogger(__name__)
 EventSink = Callable[[object], None]
 ThreadFactory = Callable[..., threading.Thread]
-
-
-class RuntimeBackupClient(Protocol):
-    """Upload one immutable snapshot without owning durable meeting state."""
-
-    def upload_backup_snapshot(
-        self,
-        request: BackupSnapshotUpload,
-        *,
-        cancellation: BackupUploadCancellation,
-    ) -> BackupSnapshotUploadResult:
-        raise NotImplementedError
 
 
 class RuntimeJobs:
@@ -57,23 +49,29 @@ class RuntimeJobs:
         transcription_client: RuntimeTranscriptionClient | None = None,
         backup_client: RuntimeBackupClient | None = None,
         thread_factory: ThreadFactory = threading.Thread,
+        capability_enabled: Callable[[Capability], bool] = lambda _capability: True,
     ) -> None:
         self._state = MeetingStateStore(meetings_dir)
         self._backup_client = backup_client
         self._thread_factory = thread_factory
+        self._capability_enabled = capability_enabled
         self._transcription = (
             RuntimeTranscription(
                 meetings_dir,
                 event_sink,
                 transcription_client,
                 thread_factory,
+                enabled=lambda: self.transcription_enabled,
             )
             if transcription_client is not None
             else None
         )
-        self._backup_lock = threading.Lock()
-        self._backup_enabled = backup_client is not None
-        self._backup_tokens: dict[str, BackupUploadCancellation] = {}
+        self._backup_gate = RuntimeBackupGate(
+            backup_client is not None,
+            lambda: self._capability_enabled(Capability.BACKUP),
+        )
+        self._transcription_lock = threading.Lock()
+        self._transcription_enabled = transcription_client is not None
 
     def launch_for_commit(
         self,
@@ -87,24 +85,35 @@ class RuntimeJobs:
         handle = self._bind(files)
         if handle is None:
             return
-        if transcription and self._transcription is not None:
+        if transcription and self._transcription is not None and self.transcription_enabled:
             self._transcription.start(handle)
         if backup and self._backup_client is not None and self.backup_enabled:
             self._start(self._run_backup, handle)
 
     @property
     def backup_enabled(self) -> bool:
-        with self._backup_lock:
-            return self._backup_enabled
+        return self._backup_gate.enabled
 
     def set_backup_enabled(self, enabled: bool) -> None:
         """Cancel current attempts monotonically; re-enable affects only new work."""
 
-        with self._backup_lock:
-            self._backup_enabled = enabled and self._backup_client is not None
-            if not self._backup_enabled:
-                for token in self._backup_tokens.values():
-                    token.cancel()
+        self._backup_gate.set_enabled(
+            enabled,
+            client_present=self._backup_client is not None,
+        )
+
+    @property
+    def transcription_enabled(self) -> bool:
+        if not self._capability_enabled(Capability.TRANSCRIPTION):
+            return False
+        with self._transcription_lock:
+            return self._transcription_enabled
+
+    def set_transcription_enabled(self, enabled: bool) -> None:
+        """Stop new claims/retries; an already-started provider request may finish."""
+
+        with self._transcription_lock:
+            self._transcription_enabled = enabled and self._transcription is not None
 
     def retry_transcription(
         self,
@@ -112,7 +121,7 @@ class RuntimeJobs:
         *,
         resume_id: str | None = None,
     ) -> None:
-        if self._transcription is None:
+        if self._transcription is None or not self.transcription_enabled:
             return
         handle = self._bind(meeting)
         if handle is not None:
@@ -125,9 +134,6 @@ class RuntimeJobs:
         if handle is None or not self._valid_backup_files(handle):
             return
         files = handle.files
-        with self._backup_lock:
-            if files.meta.slug in self._backup_tokens:
-                return
         for expected in (MeetingJobState.FAILED, MeetingJobState.RUNNING):
             try:
                 self._state.transition_job(
@@ -182,10 +188,10 @@ class RuntimeJobs:
                 expected_directory_identity=handle.directory_identity,
             )
         except MeetingStateConflict:
-            self._release_backup_token(files.meta.slug, token)
+            self._backup_gate.release(files.meta.slug, token)
             return
         except Exception:
-            self._release_backup_token(files.meta.slug, token)
+            self._backup_gate.release(files.meta.slug, token)
             LOGGER.exception("Could not claim Backup job")
             return
 
@@ -194,6 +200,10 @@ class RuntimeJobs:
                 files.directory,
                 expected_directory_identity=handle.directory_identity,
             ) as snapshot:
+                if not self.backup_enabled:
+                    token.cancel()
+                    defer_paused_backup(self._state, handle)
+                    return
                 result = client.upload_backup_snapshot(
                     snapshot.upload_request(),
                     cancellation=token,
@@ -203,12 +213,15 @@ class RuntimeJobs:
                     snapshot.revision,
                     result,
                 )
+        except EgressPaused:
+            defer_paused_backup(self._state, handle)
+            return
         except MeetingStateConflict:
             return
         except Exception:
             self._mark_backup_failed(handle)
         finally:
-            self._release_backup_token(files.meta.slug, token)
+            self._backup_gate.release(files.meta.slug, token)
         if revision_changed and allow_revision_retry and self.backup_enabled:
             self._start(self._run_backup_retry, handle)
 
@@ -280,18 +293,4 @@ class RuntimeJobs:
         self,
         meeting_slug: str,
     ) -> BackupUploadCancellation | None:
-        with self._backup_lock:
-            if not self._backup_enabled or meeting_slug in self._backup_tokens:
-                return None
-            token = BackupUploadCancellation()
-            self._backup_tokens[meeting_slug] = token
-            return token
-
-    def _release_backup_token(
-        self,
-        meeting_slug: str,
-        token: BackupUploadCancellation,
-    ) -> None:
-        with self._backup_lock:
-            if self._backup_tokens.get(meeting_slug) is token:
-                del self._backup_tokens[meeting_slug]
+        return self._backup_gate.register(meeting_slug)

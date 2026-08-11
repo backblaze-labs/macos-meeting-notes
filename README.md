@@ -204,9 +204,10 @@ identity is unchanged. Composition performs no provider request and never
 writes `.env`, preferences, or Keychain. Phase 4C now provides the inactive
 service engine for explicit, identity/digest-bound, non-destructive `.env`
 preview and confirmed migration. It is not called by startup, the CLI, or the
-current UI. Phase 4D will add the native trigger, per-capability disclosure,
-consent, secret entry, background configuration events, and in-app Calendar
-auth. Until that UI ships, continue using the legacy configuration flow.
+current UI. Phase 4D's internal edit/CAS and runtime-pause foundation is now in
+place, but the dependent native slice still must add the trigger,
+per-capability disclosure, secure entry, background events, and Calendar auth.
+Until that UI ships, continue using the legacy configuration flow.
 
 `KNOWN_SPEAKERS` is intentionally empty by default. Use the tray's
 **Configuration › Known Speakers...** item to add local aliases for normalizing

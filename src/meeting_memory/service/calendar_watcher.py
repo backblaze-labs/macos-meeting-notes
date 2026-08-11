@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Protocol
 
+from meeting_memory.types.egress import EgressPaused
 from meeting_memory.types.events import MeetingDetected, NotifyEvent
 from meeting_memory.types.meeting import CalendarMeeting
 
@@ -37,11 +38,10 @@ class CalendarWatcher:
     event_sink: EventSink
     notify_minutes_before: int
     poll_interval_seconds: int
-    now: Callable[[], datetime] = field(
-        default_factory=lambda: lambda: datetime.now().astimezone()
-    )
+    now: Callable[[], datetime] = field(default_factory=lambda: lambda: datetime.now().astimezone())
     sleeper: Callable[[float], None] = time.sleep
     thread_factory: ThreadFactory = threading.Thread
+    enabled: Callable[[], bool] = lambda: True
 
     def __post_init__(self) -> None:
         self._seen_event_ids: set[str] = set()
@@ -59,11 +59,13 @@ class CalendarWatcher:
         self._stop.set()
 
     def run_forever(self) -> None:
-        while not self._stop.is_set():
+        while not self._stop.is_set() and self.enabled():
             self.poll_once()
             self.sleeper(self.poll_interval_seconds)
 
     def poll_once(self) -> None:
+        if not self.enabled():
+            return
         now = self.now()
         try:
             meetings = self.client.list_upcoming_meetings(
@@ -71,13 +73,15 @@ class CalendarWatcher:
                 lookahead_minutes=self.notify_minutes_before + 2,
                 lookbehind_minutes=self._lookbehind_minutes(),
             )
-        except Exception as exc:
-            logger.exception("Calendar watcher poll failed")
+        except EgressPaused:
+            return
+        except Exception:
+            logger.warning("Calendar watcher poll failed")
             if not self._poll_failed:
                 self.event_sink(
                     NotifyEvent(
                         title="Calendar watcher error",
-                        body=str(exc),
+                        body="Calendar polling failed. Check setup and try again.",
                     )
                 )
             self._poll_failed = True
@@ -87,6 +91,8 @@ class CalendarWatcher:
 
         schedule_until = now + timedelta(minutes=2)
         for meeting in meetings:
+            if not self.enabled():
+                break
             notify_at = meeting.starts_at - timedelta(minutes=self.notify_minutes_before)
             if meeting.event_id in self._seen_event_ids or notify_at > schedule_until:
                 continue
@@ -110,10 +116,12 @@ class CalendarWatcher:
         notify_at: datetime,
     ) -> None:
         self.sleeper(max(0, (notify_at - self.now()).total_seconds()))
-        if not self._stop.is_set():
+        if not self._stop.is_set() and self.enabled():
             self._emit_meeting_detected(meeting)
 
     def _emit_meeting_detected(self, meeting: CalendarMeeting) -> None:
+        if not self.enabled():
+            return
         self.event_sink(
             MeetingDetected(
                 event_id=meeting.event_id,

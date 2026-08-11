@@ -221,7 +221,7 @@ def test_explicit_retry_actions_combine_v2_and_isolated_legacy_scanners(
 ) -> None:
     settings = RuntimeSettings(meetings_dir=tmp_path / "meetings")
     calls: list[str] = []
-    jobs = object()
+    jobs = SimpleNamespace(transcription_enabled=True, backup_enabled=True)
     transcription = object()
     backup = object()
     monkeypatch.setattr(
@@ -232,7 +232,7 @@ def test_explicit_retry_actions_combine_v2_and_isolated_legacy_scanners(
     monkeypatch.setattr(
         runtime_app,
         "retry_failed_processing",
-        lambda meetings, client: calls.append("legacy-transcription"),
+        lambda meetings, client, **_kwargs: calls.append("legacy-transcription"),
     )
     monkeypatch.setattr(
         runtime_app,
@@ -242,7 +242,7 @@ def test_explicit_retry_actions_combine_v2_and_isolated_legacy_scanners(
     monkeypatch.setattr(
         runtime_app,
         "sync_pending_meetings",
-        lambda meetings, client: calls.append("legacy-backup"),
+        lambda meetings, client, **_kwargs: calls.append("legacy-backup"),
     )
 
     runtime_app._retry_transcriptions(settings, jobs, transcription)

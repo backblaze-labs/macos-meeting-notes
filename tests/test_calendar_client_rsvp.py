@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
+
+from calendar_client_fakes import authorized_token_json
 
 from meeting_memory.repo import calendar_client
 from meeting_memory.repo.calendar_client import GOOGLE_CALENDAR_SCOPE, GoogleCalendarClient
 
 
 def test_calendar_lists_skip_self_declined_video_meetings(monkeypatch, tmp_path: Path) -> None:
-    token_store = InMemoryTokenStore('{"token":"valid"}')
+    token_store = InMemoryTokenStore(authorized_token_json("valid"))
     fake_service = FakeCalendarService()
     monkeypatch.setattr(calendar_client, "_load_google_credentials", lambda: ValidCredentials)
     monkeypatch.setattr(calendar_client, "_load_google_build", lambda: fake_service.build)
@@ -45,7 +48,7 @@ class ValidCredentials:
 
     @classmethod
     def from_authorized_user_info(cls, info: dict[str, str], scopes: list[str]):
-        assert info == {"token": "valid"}
+        assert info == json.loads(authorized_token_json("valid"))
         assert scopes == [GOOGLE_CALENDAR_SCOPE]
         return cls()
 

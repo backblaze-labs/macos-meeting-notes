@@ -12,6 +12,7 @@ from meeting_memory.service.processing_retry import (
     should_retry_processing,
 )
 from meeting_memory.service.storage import write_meeting_dir
+from meeting_memory.types.egress import EgressPaused
 from meeting_memory.types.meeting import MeetingMeta, PostCommitPolicy
 from meeting_memory.types.summary import SummaryResult
 from meeting_memory.types.transcript import TranscriptResult, TranscriptSegment
@@ -80,6 +81,29 @@ def test_retry_failed_processing_processes_existing_meeting_dirs(tmp_path: Path)
     assert "Recovered" in body
 
 
+def test_paused_legacy_transcription_preserves_retryable_metadata(tmp_path: Path) -> None:
+    meetings = tmp_path / "meetings"
+    audio = tmp_path / "recording.m4a"
+    audio.write_bytes(b"audio")
+    failed = write_meeting_dir(
+        meetings,
+        MeetingMeta("paused", datetime(2026, 6, 11, 9, tzinfo=UTC)),
+        audio,
+        TranscriptResult("transcription-failed", (), error="offline"),
+        SummaryResult.failed(),
+    )
+    before = failed.transcript_path.read_bytes()
+
+    class Paused:
+        def transcribe(self, _audio):
+            raise EgressPaused("paused")
+
+    result = retry_failed_processing(meetings, Paused())
+
+    assert result.failed == result.completed == 0
+    assert failed.transcript_path.read_bytes() == before
+
+
 def test_legacy_transcription_path_swap_never_reads_or_mutates_v2(tmp_path: Path) -> None:
     meetings = tmp_path / "meetings"
     audio = tmp_path / "recording.m4a"
@@ -111,6 +135,37 @@ def test_legacy_transcription_path_swap_never_reads_or_mutates_v2(tmp_path: Path
 
     assert result == type(result)(attempted=1, completed=0, failed=1)
     assert v2.transcript_path.read_bytes() == v2_before
+
+
+def test_retry_stops_before_next_provider_call_after_disable(tmp_path: Path) -> None:
+    meetings = tmp_path / "meetings"
+    audio = tmp_path / "recording.m4a"
+    audio.write_bytes(b"audio")
+    for slug in ("first", "second"):
+        write_meeting_dir(
+            meetings,
+            MeetingMeta(slug, datetime(2026, 6, 11, 9, tzinfo=UTC)),
+            audio,
+            TranscriptResult("transcription-failed", (), error="offline"),
+            SummaryResult.failed(),
+        )
+    enabled = True
+    processor = FakeProcessor()
+
+    def capability_enabled() -> bool:
+        nonlocal enabled
+        if processor.audio:
+            enabled = False
+        return enabled
+
+    result = retry_failed_processing(
+        meetings,
+        processor,
+        enabled=capability_enabled,
+    )
+
+    assert result.attempted == 1
+    assert processor.audio == [b"audio"]
 
 
 class FakeProcessor:

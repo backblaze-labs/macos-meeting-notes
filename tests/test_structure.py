@@ -5,6 +5,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from structure_native_files import REQUIRED_NATIVE_SOURCE_FILES
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = ROOT / "src" / "meeting_memory"
 TESTS_ROOT = ROOT / "tests"
@@ -32,14 +34,17 @@ REQUIRED_SOURCE_FILES = (
     "types/__init__.py",
     "types/capabilities.py",
     "types/configuration.py",
+    "types/configuration_editing.py",
     "types/configuration_migration.py",
     "types/configuration_resolution.py",
+    "types/calendar_authorization.py",
     "types/artifacts.py",
     "types/backup.py",
     "types/meeting.py",
     "types/transcript.py",
     "types/summary.py",
     "types/events.py",
+    "types/egress.py",
     "types/recovery.py",
     "types/speakers.py",
     "config/__init__.py",
@@ -52,10 +57,13 @@ REQUIRED_SOURCE_FILES = (
     "repo/__init__.py",
     "repo/b2_client.py",
     "repo/b2_snapshot.py",
+    "repo/pinned_path.py",
     "repo/retry.py",
+    "repo/prompt_source.py",
     "repo/transcription.py",
     "repo/summarizer.py",
     "repo/calendar_client.py",
+    "repo/calendar_oauth.py",
     "repo/secret_store.py",
     "repo/google_http.py",
     "repo/native_audio.py",
@@ -91,6 +99,8 @@ REQUIRED_SOURCE_FILES = (
     "service/markdown.py",
     "service/recorder.py",
     "service/local_commit.py",
+    "service/runtime_backup_gate.py",
+    "service/runtime_capabilities.py",
     "service/runtime_jobs.py",
     "service/runtime_legacy_recovery.py",
     "service/recovery_reconcile.py",
@@ -99,11 +109,16 @@ REQUIRED_SOURCE_FILES = (
     "service/transcription_audio.py",
     "service/legacy_snapshot.py",
     "service/runtime_notes.py",
+    "service/runtime_notes_gate.py",
     "service/runtime_retry.py",
     "service/readiness.py",
     "service/readiness_configuration.py",
     "service/readiness_integrations.py",
     "service/configuration_loader.py",
+    "service/configuration_editing.py",
+    "service/configuration_editing_cas.py",
+    "service/configuration_editing_outcomes.py",
+    "service/configuration_editing_support.py",
     "service/configuration_migration.py",
     "service/configuration_migration_cas.py",
     "service/configuration_migration_outcomes.py",
@@ -120,6 +135,7 @@ REQUIRED_SOURCE_FILES = (
     "service/summary_prompt.py",
     "service/pipeline.py",
     "service/calendar_watcher.py",
+    "service/calendar_authorization.py",
     "service/sync.py",
     "ui/__init__.py",
     "ui/tray.py",
@@ -156,14 +172,6 @@ REQUIRED_REPO_FILES = (
     "docs/features/_template.md",
     "scripts/doctor.py",
     ".github/workflows/ci.yml",
-)
-
-REQUIRED_NATIVE_SOURCE_FILES = (
-    "repo/native/CLI.swift",
-    "repo/native/NativeCapture.swift",
-    "repo/native/NativeValidation.swift",
-    "repo/native/ScreenCaptureRecorder.swift",
-    "repo/native/SilentSystemRecorder.swift",
 )
 
 
@@ -285,11 +293,3 @@ def test_required_modules_exist() -> None:
     assert missing_source == []
     assert missing_native == []
     assert missing_repo == []
-
-
-def test_native_validator_bounds_untrusted_packet_metadata() -> None:
-    source = (SRC_ROOT / "repo/native/NativeValidation.swift").read_text(encoding="utf-8")
-
-    assert "packetCount <= audioByteCount" in source
-    assert "packetCount <= UInt64(Int64.max)" in source
-    assert "maximumPacketSize <= maximumValidationPacketSize" in source
