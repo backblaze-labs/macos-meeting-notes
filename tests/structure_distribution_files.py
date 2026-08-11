@@ -12,6 +12,7 @@ REQUIRED_DISTRIBUTION_SOURCE_FILES = (
 REQUIRED_DISTRIBUTION_REPO_FILES = (
     "docs/standalone-validation-evidence.md",
     "scripts/build_distribution.py",
+    "scripts/distribution_signature.py",
     "scripts/release_distribution.py",
     "scripts/validate_release_context.py",
     "scripts/verify_distribution.py",

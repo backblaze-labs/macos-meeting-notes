@@ -17,6 +17,11 @@ from meeting_memory.service.bundle_self_check import BUNDLE_SELF_CHECK_EXIT_CODE
 from meeting_memory.service.macos_app import BUNDLE_IDENTIFIER, macos_app_plist
 from meeting_memory.version import APP_VERSION, BUNDLE_BUILD
 
+if __package__:
+    from scripts.distribution_signature import verify_signature as _verify_signature
+else:
+    from distribution_signature import verify_signature as _verify_signature
+
 ROOT = Path(__file__).resolve().parents[1]
 APP_EXECUTABLE, HELPER_NAME = "Meeting Memory", "MeetingMemoryCapture"
 FORBIDDEN_BASENAMES = frozenset(
@@ -28,12 +33,6 @@ FORBIDDEN_PRIVATE_PATTERNS = (
     "credentials*.json",
     "token*.json",
 )
-FORBIDDEN_ENTITLEMENTS = {
-    "com.apple.security.cs.allow-jit",
-    "com.apple.security.cs.allow-unsigned-executable-memory",
-    "com.apple.security.cs.disable-library-validation",
-    "com.apple.security.get-task-allow",
-}
 
 
 class DistributionVerificationError(RuntimeError):
@@ -215,47 +214,6 @@ def _build_path_sentinels() -> tuple[tuple[str, bytes], ...]:
     if Path(sys.prefix) not in {Path(sys.base_prefix), ROOT}:
         values.append(("python-prefix", str(Path(sys.prefix))))
     return tuple((stage, value.encode()) for stage, value in values if value and value != "/")
-
-
-def _verify_signature(
-    app: Path,
-    macho_files: tuple[Path, ...],
-    signature: str,
-    team_id: str | None,
-    runner,
-) -> None:
-    runner(["/usr/bin/codesign", "--verify", "--deep", "--strict", str(app)], check=True)
-    if signature == "developer-id" and (not team_id or "\x00" in team_id):
-        raise RuntimeError("Developer ID verification requires the expected team")
-    for target in (app, *macho_files):
-        details = runner(
-            ["/usr/bin/codesign", "-d", "--verbose=4", str(target)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        output = details.stderr + details.stdout
-        if signature == "adhoc" and "Signature=adhoc" not in output:
-            raise RuntimeError("expected an ad-hoc signature")
-        if signature == "developer-id":
-            if "Authority=Developer ID Application:" not in output:
-                raise RuntimeError("expected a Developer ID Application signature")
-            if f"TeamIdentifier={team_id}" not in output:
-                raise RuntimeError("signed code has an unexpected team identifier")
-            if "(runtime)" not in output or "Timestamp=" not in output:
-                raise RuntimeError("signed code is missing hardened runtime or secure timestamp")
-            if target == app and "Identifier=com.meeting-memory.app" not in output:
-                raise RuntimeError("application designated identifier changed")
-        entitlements = runner(
-            ["/usr/bin/codesign", "-d", "--entitlements", ":-", str(target)],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if any(
-            item in entitlements.stdout + entitlements.stderr for item in FORBIDDEN_ENTITLEMENTS
-        ):
-            raise RuntimeError("bundle contains a forbidden hardened-runtime exception")
 
 
 def _verify_smoke(app: Path, runner) -> None:
