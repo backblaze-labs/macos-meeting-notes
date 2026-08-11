@@ -105,3 +105,22 @@ def test_build_path_scan_ignores_global_python_prefix_but_keeps_virtualenv(
         ("checkout-path", str(tmp_path / "checkout").encode()),
         ("python-prefix", str(tmp_path / ".venv").encode()),
     )
+
+
+def test_relocated_smoke_reports_value_free_self_check_stage(tmp_path: Path) -> None:
+    app = tmp_path / "Meeting Memory.app"
+    executable = app / "Contents/MacOS/Meeting Memory"
+    executable.parent.mkdir(parents=True)
+    executable.write_bytes(b"app")
+
+    def runner(command, **kwargs):
+        del kwargs
+        output = (
+            f"meeting-memory {verifier.APP_VERSION}\n" if "--version" in command else "not-json"
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=output)
+
+    with pytest.raises(verifier.DistributionVerificationError) as raised:
+        verifier._verify_smoke(app, runner)
+
+    assert raised.value.stage == "self-check-result"

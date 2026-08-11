@@ -242,13 +242,15 @@ def _verify_smoke(app: Path, runner) -> None:
     with tempfile.TemporaryDirectory(prefix="meeting-memory-smoke-") as temporary:
         root = Path(temporary)
         relocated = root / "Relocated Meeting Memory.app"
-        shutil.copytree(app, relocated, symlinks=True)
+        _run_stage("relocation-copy", shutil.copytree, app, relocated, symlinks=True)
         executable = relocated / "Contents/MacOS" / APP_EXECUTABLE
         home = root / "home"
         home.mkdir()
         environment = {"HOME": str(home), "PATH": "/usr/bin:/bin", "TMPDIR": str(home / "tmp")}
         (home / "tmp").mkdir()
-        version = runner(
+        version = _run_stage(
+            "version-launch",
+            runner,
             [str(executable), "--version"],
             cwd=home,
             env=environment,
@@ -258,8 +260,10 @@ def _verify_smoke(app: Path, runner) -> None:
             timeout=30,
         )
         if APP_VERSION not in version.stdout:
-            raise RuntimeError("frozen version smoke returned the wrong version")
-        smoke = runner(
+            raise DistributionVerificationError("version-result")
+        smoke = _run_stage(
+            "self-check-launch",
+            runner,
             [str(executable), "bundle-self-check"],
             cwd=home,
             env=environment,
@@ -268,12 +272,12 @@ def _verify_smoke(app: Path, runner) -> None:
             text=True,
             timeout=60,
         )
-        payload = json.loads(smoke.stdout)
+        payload = _run_stage("self-check-result", json.loads, smoke.stdout)
         if payload.get("event") != "bundle-self-check" or payload.get("ready") is not True:
-            raise RuntimeError("frozen bundle self-check did not report ready")
+            raise DistributionVerificationError("self-check-result")
         unexpected = [path for path in home.rglob("*") if path != home / "tmp"]
         if unexpected:
-            raise RuntimeError("frozen smoke wrote unexpected user state")
+            raise DistributionVerificationError("home-writes")
 
 
 if __name__ == "__main__":
