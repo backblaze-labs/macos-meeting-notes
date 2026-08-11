@@ -23,6 +23,12 @@ REQUIRED_IMPORTS = (
     "botocore",
     "certifi",
     "google.auth.external_account_authorized_user",
+    "google.auth.transport._mtls_helper",
+    "google.oauth2.service_account",
+    "requests",
+    "requests.adapters",
+    "requests.exceptions",
+    "requests.packages.urllib3.util.ssl_",
     "google.auth.transport.requests",
     "google.oauth2.credentials",
     "google_auth_oauthlib.helpers",
@@ -31,6 +37,7 @@ REQUIRED_IMPORTS = (
     "keyring.backends.macOS",
     "requests_oauthlib",
     "rumps",
+    "urllib3.util.ssl_",
 )
 RESOURCE_PATHS = (
     Path("MeetingMemory.icns"),

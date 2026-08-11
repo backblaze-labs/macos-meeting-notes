@@ -40,11 +40,16 @@ def test_spec_is_onedir_windowed_and_has_minimal_security_metadata() -> None:
     assert '"meeting_memory.ui.notes_prompt"' in text
     for oauth_import in (
         "google.auth.external_account_authorized_user",
+        "google.auth.transport._mtls_helper",
         "google.auth.transport.requests",
         "google.oauth2.credentials",
+        "google.oauth2.service_account",
         "google_auth_oauthlib.flow",
         "google_auth_oauthlib.helpers",
+        "requests.adapters",
+        "requests.exceptions",
         "requests_oauthlib",
+        "urllib3.util.ssl_",
     ):
         assert f'"{oauth_import}"' in text
     for forbidden in (

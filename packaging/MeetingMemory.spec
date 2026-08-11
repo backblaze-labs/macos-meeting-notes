@@ -33,13 +33,19 @@ hiddenimports = [
     "assemblyai",
     "boto3",
     "google.auth.external_account_authorized_user",
+    "google.auth.transport._mtls_helper",
     "google.auth.transport.requests",
     "google.oauth2.credentials",
+    "google.oauth2.service_account",
     "google_auth_oauthlib.flow",
     "google_auth_oauthlib.helpers",
     "googleapiclient.discovery",
+    "requests",
+    "requests.adapters",
+    "requests.exceptions",
     "requests_oauthlib",
     "rumps",
+    "urllib3.util.ssl_",
 ]
 
 a = Analysis(
