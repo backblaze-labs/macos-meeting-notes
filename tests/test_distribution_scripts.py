@@ -85,3 +85,23 @@ def test_verifier_reports_only_allowlisted_stage_on_failure(
     assert result == 2
     assert captured.err == "Distribution verification failed safely at relocated-smoke.\n"
     assert sentinel not in captured.err
+
+
+def test_build_path_scan_ignores_global_python_prefix_but_keeps_virtualenv(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    global_prefix = tmp_path / "managed-python"
+    monkeypatch.setattr(verifier, "ROOT", tmp_path / "checkout")
+    monkeypatch.setattr(verifier.sys, "prefix", str(global_prefix))
+    monkeypatch.setattr(verifier.sys, "base_prefix", str(global_prefix))
+
+    assert verifier._build_path_sentinels() == (
+        ("checkout-path", str(tmp_path / "checkout").encode()),
+    )
+
+    monkeypatch.setattr(verifier.sys, "prefix", str(tmp_path / ".venv"))
+    assert verifier._build_path_sentinels() == (
+        ("checkout-path", str(tmp_path / "checkout").encode()),
+        ("python-prefix", str(tmp_path / ".venv").encode()),
+    )

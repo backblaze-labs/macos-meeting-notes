@@ -189,12 +189,7 @@ def _verify_linkage(path: Path, app: Path, runner) -> None:
 
 
 def _verify_no_build_paths(app: Path) -> None:
-    values = (("checkout-path", str(ROOT)), ("python-prefix", str(Path(sys.prefix))))
-    sentinels = tuple(
-        (stage, value.encode())
-        for stage, value in values
-        if value and value != "/" and (stage == "checkout-path" or Path(value) != ROOT)
-    )
+    sentinels = _build_path_sentinels()
     for path in app.rglob("*"):
         if not path.is_file() or path.is_symlink():
             continue
@@ -207,6 +202,17 @@ def _verify_no_build_paths(app: Path) -> None:
                         raise DistributionVerificationError(stage)
                 overlap = max((len(sentinel) for _stage, sentinel in sentinels), default=1) - 1
                 tail = searchable[-overlap:] if overlap else b""
+
+
+def _build_path_sentinels() -> tuple[tuple[str, bytes], ...]:
+    values = [("checkout-path", str(ROOT))]
+    if Path(sys.prefix) != Path(sys.base_prefix):
+        values.append(("python-prefix", str(Path(sys.prefix))))
+    return tuple(
+        (stage, value.encode())
+        for stage, value in values
+        if value and value != "/" and (stage == "checkout-path" or Path(value) != ROOT)
+    )
 
 
 def _verify_signature(app: Path, signature: str, runner) -> None:
