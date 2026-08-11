@@ -12,6 +12,7 @@ from meeting_memory.types.configuration_resolution import SettingSource
 
 APP_SUPPORT_DIRECTORY = Path("Library/Application Support/meeting-memory")
 NATIVE_HELPER_NAME = "MeetingMemoryCapture"
+NATIVE_ENCODER_NAME = "MeetingMemoryFFmpegAudioEncoder"
 PATH_SETTING_KEYS = frozenset(
     {
         SettingKey.MEETINGS_DIR,
@@ -82,6 +83,13 @@ class RuntimeLayout:
             return self.bundle_root / "Contents" / "MacOS" / NATIVE_HELPER_NAME
         assert self.project_root is not None
         return self.project_root / ".build" / NATIVE_HELPER_NAME
+
+    @property
+    def native_encoder_path(self) -> Path:
+        if self.bundle_root is not None:
+            return self.bundle_root / "Contents" / "MacOS" / NATIVE_ENCODER_NAME
+        assert self.project_root is not None
+        return self.project_root / ".build" / NATIVE_ENCODER_NAME
 
     @property
     def default_prompt_path(self) -> Path:

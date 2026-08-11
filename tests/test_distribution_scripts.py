@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from meeting_memory.repo.native_audio_build import ENCODER_NAME, FFMPEG_LICENSE_NAME
+from meeting_memory.repo.native_audio_source import FFMPEG_SOURCE_ARCHIVE_NAME
 from scripts import build_distribution as builder
 from scripts import verify_distribution as verifier
 
@@ -30,6 +32,11 @@ def test_build_copies_helper_then_signs_helper_and_outer_app(
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(b"native")
         output.chmod(0o755)
+        encoder = output.with_name(ENCODER_NAME)
+        encoder.write_bytes(b"encoder")
+        encoder.chmod(0o755)
+        output.with_name(FFMPEG_LICENSE_NAME).write_text("LGPL", encoding="utf-8")
+        output.with_name(FFMPEG_SOURCE_ARCHIVE_NAME).write_bytes(b"source")
         return output
 
     def runner(command, **kwargs):
@@ -47,12 +54,18 @@ def test_build_copies_helper_then_signs_helper_and_outer_app(
     app = builder.build_distribution("arm64", "-", tmp_path, runner=runner)
 
     helper = app / "Contents/MacOS/MeetingMemoryCapture"
+    encoder = app / "Contents/MacOS" / ENCODER_NAME
+    license_file = app / "Contents/Resources" / FFMPEG_LICENSE_NAME
+    source_file = app / "Contents/Resources" / FFMPEG_SOURCE_ARCHIVE_NAME
     signing = [
         command for command, _kwargs in calls if command[:2] == ["/usr/bin/codesign", "--force"]
     ]
     pyinstaller = next((command, kwargs) for command, kwargs in calls if "PyInstaller" in command)
     assert helper.read_bytes() == b"native"
-    assert [Path(command[-1]) for command in signing] == [helper, app]
+    assert encoder.read_bytes() == b"encoder"
+    assert license_file.read_text(encoding="utf-8") == "LGPL"
+    assert source_file.read_bytes() == b"source"
+    assert [Path(command[-1]) for command in signing] == [helper, encoder, app]
     assert all("--deep" not in command for command in signing)
     assert pyinstaller[1]["env"]["MEETING_MEMORY_TARGET_ARCH"] == "arm64"
     assert pyinstaller[1]["env"]["MEETING_MEMORY_CODESIGN_IDENTITY"] == ""
@@ -124,6 +137,35 @@ def test_relocated_smoke_reports_value_free_self_check_stage(tmp_path: Path) -> 
         verifier._verify_smoke(app, runner)
 
     assert raised.value.stage == "self-check-result"
+
+
+def test_manifest_requires_the_bundled_encoder(tmp_path: Path) -> None:
+    app = tmp_path / "Meeting Memory.app"
+    macos = app / "Contents" / "MacOS"
+    macos.mkdir(parents=True)
+    for name in (verifier.APP_EXECUTABLE, verifier.HELPER_NAME):
+        path = macos / name
+        path.write_bytes(b"executable")
+        path.chmod(0o755)
+
+    with pytest.raises(RuntimeError, match="executable is missing"):
+        verifier._verify_manifest(app)
+
+
+def test_manifest_requires_the_exact_ffmpeg_source_archive(tmp_path: Path) -> None:
+    app = tmp_path / "Meeting Memory.app"
+    macos = app / "Contents" / "MacOS"
+    macos.mkdir(parents=True)
+    for name in (verifier.APP_EXECUTABLE, verifier.HELPER_NAME, ENCODER_NAME):
+        path = macos / name
+        path.write_bytes(b"executable")
+        path.chmod(0o755)
+    source = app / "Contents/Resources" / FFMPEG_SOURCE_ARCHIVE_NAME
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"wrong-source")
+
+    with pytest.raises(RuntimeError, match="does not match"):
+        verifier._verify_manifest(app)
 
 
 def test_relocated_smoke_extracts_only_allowlisted_child_stage(tmp_path: Path) -> None:

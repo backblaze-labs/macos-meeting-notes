@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from meeting_memory.repo import native_audio
+from meeting_memory.repo import native_audio, native_audio_build
 
 
 def test_build_native_capture_helper_compiles_packaged_swift_sources(
@@ -22,17 +22,22 @@ def test_build_native_capture_helper_compiles_packaged_swift_sources(
     (source_dir / "B.swift").write_text("let value = 1\n", encoding="utf-8")
     output = tmp_path / ".build" / native_audio.HELPER_NAME
     calls: list[list[str]] = []
-    monkeypatch.setattr(native_audio, "_compatible_sdk_path", lambda: Path("/sdk"))
+    monkeypatch.setattr(native_audio_build, "_compatible_sdk_path", lambda: Path("/sdk"))
 
-    def runner(command, check, capture_output, text):
-        assert check is True
-        assert capture_output is True
-        assert text is True
+    def runner(command, **kwargs):
+        assert kwargs["check"] is True
+        assert kwargs["capture_output"] is True
+        assert kwargs["text"] is True
         calls.append(command)
         output.write_bytes(b"binary")
         return subprocess.CompletedProcess(command, 0)
 
-    result = native_audio.build_native_capture_helper(tmp_path, output, runner=runner)
+    result = native_audio.build_native_capture_helper(
+        tmp_path,
+        output,
+        runner=runner,
+        build_encoder=False,
+    )
 
     assert result == output
     assert str(source_dir / "A.swift") in calls[0]
@@ -150,16 +155,13 @@ def test_convert_native_audio_uses_helper_and_validates_output(
     result = native_audio.convert_native_audio(wav_path, m4a_path)
 
     assert result == m4a_path
-    assert calls == [
-        [str(helper), "convert", str(wav_path), "--output", str(m4a_path)]
-    ]
+    assert calls == [[str(helper), "convert", str(wav_path), "--output", str(m4a_path)]]
 
 
 class FakeProcess:
     def __init__(self):
         self.stdout = io.StringIO(
-            '{"event":"ready","mode":"full-meeting","microphone":"AirPods"}\n'
-            '{"event":"stopped"}\n'
+            '{"event":"ready","mode":"full-meeting","microphone":"AirPods"}\n{"event":"stopped"}\n'
         )
         self.stderr = io.StringIO("")
         self.returncode: int | None = None

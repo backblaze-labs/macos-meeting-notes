@@ -5,6 +5,8 @@ REQUIRED_DISTRIBUTION_SOURCE_FILES = (
     "types/runtime_layout.py",
     "config/runtime_layout.py",
     "repo/native_layout.py",
+    "repo/native_audio_build.py",
+    "repo/native_audio_source.py",
     "service/bundle_self_check.py",
     "service/configuration_migration_paths.py",
 )
@@ -16,4 +18,5 @@ REQUIRED_DISTRIBUTION_REPO_FILES = (
     "scripts/release_distribution.py",
     "scripts/validate_release_context.py",
     "scripts/verify_distribution.py",
+    "packaging/FFMPEG_SOURCE_OFFER.md",
 )

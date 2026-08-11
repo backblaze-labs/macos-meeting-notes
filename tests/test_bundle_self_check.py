@@ -26,6 +26,9 @@ def _bundle(tmp_path: Path) -> tuple[RuntimeLayout, Path]:
     helper.parent.mkdir(parents=True)
     helper.write_bytes(b"helper")
     helper.chmod(0o755)
+    encoder = layout.native_encoder_path
+    encoder.write_bytes(b"encoder")
+    encoder.chmod(0o755)
     for relative in RESOURCE_PATHS:
         resource = layout.resources_path / relative
         resource.parent.mkdir(parents=True, exist_ok=True)
@@ -63,6 +66,31 @@ def test_bundle_self_check_rejects_missing_resource_before_imports(tmp_path: Pat
 
     assert raised.value.stage == "resource-0"
     assert imported == []
+
+
+def test_bundle_self_check_requires_the_sibling_encoder_before_imports(
+    tmp_path: Path,
+) -> None:
+    layout, _bundle_path = _bundle(tmp_path)
+    layout.native_encoder_path.unlink()
+    imported: list[str] = []
+
+    with pytest.raises(BundleSelfCheckError, match="AAC encoder") as raised:
+        inspect_bundle(layout, importer=lambda name: imported.append(name))
+
+    assert raised.value.stage == "native-encoder"
+    assert imported == []
+
+
+def test_bundle_self_check_rejects_an_internal_encoder_symlink(tmp_path: Path) -> None:
+    layout, _bundle_path = _bundle(tmp_path)
+    layout.native_encoder_path.unlink()
+    layout.native_encoder_path.symlink_to(layout.native_helper_path)
+
+    with pytest.raises(BundleSelfCheckError, match="AAC encoder") as raised:
+        inspect_bundle(layout, importer=lambda _name: None)
+
+    assert raised.value.stage == "native-encoder"
 
 
 def test_bundle_self_check_identifies_import_without_leaking_exception(tmp_path: Path) -> None:

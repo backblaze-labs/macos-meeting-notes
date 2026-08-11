@@ -6,6 +6,7 @@ import plistlib
 import subprocess
 from pathlib import Path
 
+from meeting_memory.repo.native_audio_build import ENCODER_NAME
 from meeting_memory.service.macos_app import (
     APP_ICON_FILE,
     APP_NAME,
@@ -21,6 +22,9 @@ def _fake_helper_builder(project_dir, output_path, *, runner):
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(b"native-helper")
     output_path.chmod(0o755)
+    encoder = output_path.with_name(ENCODER_NAME)
+    encoder.write_bytes(b"native-encoder")
+    encoder.chmod(0o755)
     return output_path
 
 
@@ -30,6 +34,9 @@ def test_install_macos_app_writes_bundle(tmp_path: Path) -> None:
     app_path = tmp_path / "Applications" / "Meeting Memory.app"
     project_dir.mkdir()
     (project_dir / "src").mkdir()
+    stale_encoder = app_path / "Contents/MacOS/MeetingMemoryAudioEncoder"
+    stale_encoder.parent.mkdir(parents=True)
+    stale_encoder.write_bytes(b"stale")
 
     def runner(args, check, **kwargs):
         calls.append((args, check))
@@ -47,6 +54,7 @@ def test_install_macos_app_writes_bundle(tmp_path: Path) -> None:
     executable = app_path / "Contents" / "MacOS" / APP_NAME
     icon = app_path / "Contents" / "Resources" / APP_ICON_FILE
     helper = app_path / "Contents" / "MacOS" / "MeetingMemoryCapture"
+    encoder = app_path / "Contents" / "MacOS" / ENCODER_NAME
 
     assert result == app_path
     assert plist["CFBundleName"] == APP_NAME
@@ -61,6 +69,9 @@ def test_install_macos_app_writes_bundle(tmp_path: Path) -> None:
     assert icon.read_bytes()[:4] == b"icns"
     assert helper.read_bytes() == b"native-helper"
     assert helper.stat().st_mode & 0o111
+    assert encoder.read_bytes() == b"native-encoder"
+    assert encoder.stat().st_mode & 0o111
+    assert not stale_encoder.exists()
     assert executable.stat().st_mode & 0o111
     assert f"cd {project_dir}" in executable.read_text(encoding="utf-8")
     if calls:

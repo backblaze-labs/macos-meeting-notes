@@ -26,6 +26,20 @@ performed only non-mutating actions:
 
 The official checkout app was restored after the isolated standalone smoke.
 
+The rebuilt ad-hoc `arm64` artifact also completed a local interrupted-recording
+recovery with providers absent and an isolated HOME:
+
+- the Debugging menu reported exactly one interrupted recording;
+- the explicit Recover action committed local artifacts and cleared staging;
+- Finder revealed `recording.m4a` and `transcript.md` in the recovered meeting;
+- `afinfo` identified one 16 kHz mono AAC track with a 47.346-second duration;
+- a bounded two-second `afplay` invocation decoded and played the M4A; and
+- the official checkout app was reopened after the isolated process exited.
+
+This developer-host result proves the bundled Swift-helper-to-FFmpeg fallback,
+recovery commit, Finder reveal, and local playback path. It does not replace the
+clean-user/TCC acceptance run below.
+
 ## Evidence still required
 
 These checks cannot be claimed from the developer-host smoke:
@@ -44,9 +58,9 @@ These checks cannot be claimed from the developer-host smoke:
   logs, and the single LaunchAgent target remain intact with zero provider work;
 - real Intel audio/TCC validation when Intel is a supported release artifact.
 
-A real recording captures private microphone and system audio. Do not execute
-that step without the user's explicit permission and a suitable non-sensitive
-test source.
+A real recording captures private microphone and system audio. Repeat that step
+only with the user's explicit permission and a suitable non-sensitive test
+source; record only sanitized duration and outcome evidence here.
 
 ## Release evidence still required
 

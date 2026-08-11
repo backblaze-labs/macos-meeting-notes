@@ -24,7 +24,9 @@ The verifier checks:
   developer-machine dependency;
 - no `.env`, OAuth credentials, token, Swift source, or external symlink is in
   the artifact;
-- the helper is executable and the app has a strict valid signature;
+- the capture helper and minimal AAC encoder are executable, thin for the same
+  architecture, and included in the app's strict valid signature;
+- the FFmpeg LGPL license and exact source/checksum/build offer are present;
 - `--version` and the secret-free `bundle-self-check` work after relocating the
   app to a temporary directory with a fresh HOME.
 
@@ -43,6 +45,9 @@ CI builds two separate validation artifacts:
 The same spec, version, bundle identifier, resources, and verifier are used for
 both. PyInstaller receives a native Python and native third-party extensions on
 each runner rather than attempting to manufacture missing universal slices.
+The build downloads the official FFmpeg 8.1.2 source release, verifies its
+pinned SHA-256 before extraction, compiles only the offline WAV-to-AAC/M4A
+allowlist, and never consumes a prebuilt or system encoder.
 The distribution lock deliberately holds `cryptography==48.0.1`: version 49
 [removed macOS x86_64 support](https://cryptography.io/en/stable/changelog/#v49-0-0).
 Do not raise that pin while Meeting Memory publishes an Intel artifact.

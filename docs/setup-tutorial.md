@@ -11,8 +11,9 @@ references, legacy `.env`, and defaults. Phase 4D's native Configuration submenu
 now owns app-managed capability forms, disclosure/consent, secure secret entry,
 explicit legacy import, and explicit in-app Calendar authorization. The native
 UI never writes `.env`.
-Native onboarding validation remains Phase 5 and standalone distribution
-remains Phase 6.
+The ad-hoc standalone build and native configuration surface are implemented.
+Dedicated clean-user audio/TCC evidence remains Phase 5, and an owner-approved
+Developer ID/notarized public release remains Phase 6.
 
 ## 1. Install System Requirements
 
@@ -52,8 +53,8 @@ which is ignored by git.
 ## 3. Configure Audio Capture
 
 There are no audio devices to configure. Meeting Memory builds and installs a
-native audio helper as part of `make setup` and supports two tray-selectable
-modes:
+native audio helper plus a source-pinned minimal offline AAC encoder as part of
+`make setup` and supports two tray-selectable modes:
 
 - `Full Meeting`: records system audio plus the current default microphone and
   lets you keep listening through the current output, including AirPods.
@@ -63,6 +64,7 @@ modes:
 The app never changes macOS input or output selection. BlackHole, Aggregate
 Devices, and Multi-Output Devices are not required. On first use, allow the
 Microphone and Screen & System Audio permissions requested by macOS.
+No system or Homebrew FFmpeg installation is used.
 
 ## 4. Optionally Create Service Credentials
 
@@ -211,8 +213,9 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
 
 ## Troubleshooting
 
-- Native helper build fails: run `xcode-select --install`, then rerun
-  `make setup`.
+- Native audio build fails: confirm Xcode Command Line Tools and network access
+  to the pinned FFmpeg source release, then rerun `make setup`. The checksum is
+  verified before any source is extracted or compiled.
 - No audio capture: open System Settings › Privacy & Security and allow Meeting
   Memory under Microphone and Screen & System Audio Recording, then restart the
   app.
