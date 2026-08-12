@@ -60,21 +60,13 @@ The fastest path is to hand this repository to Codex, Claude Code, or another
 coding agent. Paste this prompt:
 
 ```text
-Install Meeting Memory for me from:
-https://github.com/backblaze-labs/macos-meeting-notes
-
-Follow the repository README and AGENTS.md. Help me create the required
-Backblaze B2 account, dedicated private bucket, and bucket-scoped application
-key before declaring setup complete. Run the source-checkout installation,
-open Meeting Memory, and stop so I can enter the B2 key ID and application key
-myself in the app's secure Configuration > Backup form—never ask me to paste
-credentials into chat, source files, or shell history. Restart the app, run
-make doctor, and confirm both Recording Core and Backup are ready. Do not
-configure AssemblyAI, Google Calendar, or Anthropic unless I ask.
+Install Meeting Memory from https://github.com/backblaze-labs/macos-meeting-notes.
+Follow docs/agent-setup.md and guide me through the required B2 setup.
 ```
 
-The agent can install and verify the app, but the Backblaze account flow and
-secure credential entry stay under your control.
+The dedicated [agent setup guide](docs/agent-setup.md) gives the agent the full
+workflow and credential-safety rules. You keep control of the Backblaze account
+flow and enter credentials only in the app's secure form.
 
 ### Install manually
 
@@ -200,6 +192,7 @@ specific calendar ID to narrow the watcher.
 ## Setup Guides
 
 - [Full setup tutorial](docs/setup-tutorial.md)
+- [Setup guide for coding agents](docs/agent-setup.md)
 - [Removing legacy BlackHole setup](docs/blackhole-setup.md)
 - [Google Calendar auth](docs/google-calendar-auth.md)
 - [Manual validation checklist](docs/manual-validation.md)
