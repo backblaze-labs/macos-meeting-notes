@@ -395,6 +395,10 @@ transcripts.
 **REQ-F5-05** The summarize command MUST write `notes.md` and MUST NOT modify `transcript.md`.
 
 **REQ-F5-06** The summarization prompt MUST be configurable through `SUMMARY_PROMPT_FILE` and the tray's **Configuration › Notes Prompt...** editor. If the file contains `{transcript}`, the app MUST replace that placeholder with the clipped transcript; otherwise it MUST append the transcript below the prompt text. A saved UI change MUST apply to the next notes generation without an app restart.
+The app-managed default destination MUST be
+`~/Library/Application Support/meeting-memory/prompts/summary.md` in both
+checkout and bundled execution; the repository's `prompts/summary.md` is a
+read-only built-in template, not personal state.
 
 ### F6: Local Storage
 
@@ -1005,8 +1009,8 @@ explicitly. No reachable native UI action writes `.env`.
 | `ASSEMBLYAI_API_KEY` | Transcription | — | AssemblyAI key |
 | `ANTHROPIC_API_KEY` | Notes | — | Claude key for the `summarize` command |
 | `ANTHROPIC_MODEL` | Notes | `claude-haiku-4-5` | Summarization model override (OQ-5) |
-| `SUMMARY_PROMPT_FILE` | Notes | `prompts/summary.md` | Prompt template used for Summary, Decisions, and Action Items; editable from **Configuration › Notes Prompt...** |
-| `KNOWN_SPEAKERS` | Calendar | `{}` | Optional JSON object mapping speaker display names to Calendar attendee match hints |
+| `SUMMARY_PROMPT_FILE` | Notes | `~/Library/Application Support/meeting-memory/prompts/summary.md` | Personal prompt template used for Summary, Decisions, and Action Items; editable from **Configuration › Notes Prompt...**. An explicit process or legacy override may select another path. |
+| `KNOWN_SPEAKERS` | Calendar | `{}` | Optional JSON object mapping speaker display names to Calendar attendee match hints; app-managed values live in the private Application Support preference document. |
 | `GOOGLE_CALENDAR_CREDENTIALS_FILE` | Calendar | `credentials.json` | Path to OAuth client secrets |
 | `GOOGLE_CALENDAR_ID` | Calendar | `all` | Calendar scope to watch: `all`, `primary`, or a specific calendar ID |
 | `MEETINGS_DIR` | Recording Core | `~/Meetings` | Local directory for meeting files |

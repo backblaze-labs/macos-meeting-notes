@@ -224,6 +224,13 @@ API secrets and OAuth tokens; non-secret preferences belong in app-managed
 configuration. Secrets MUST NOT appear in logs, notifications, diagnostics,
 meeting metadata, or exported support text.
 
+App-managed personal state MUST stay outside the source checkout. Structured
+non-secret preferences, including `KNOWN_SPEAKERS`, live in the private
+Application Support preference document. A customized Notes prompt lives at
+`~/Library/Application Support/meeting-memory/prompts/summary.md`; the tracked
+repository prompt is only the built-in fallback. Explicit process and legacy
+path overrides remain development/compatibility inputs and are not rewritten.
+
 ## Compatible Migration from `.env`
 
 Existing checkouts and their files continue to work during migration.

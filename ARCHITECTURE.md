@@ -225,6 +225,11 @@ under Application Support. Component-wise no-follow directory pinning, strict
 unsafe paths and lost concurrent updates. Unconditional `save` is create-only
 bootstrap; every later Phase 4 writer must load a snapshot and use
 compare-and-swap.
+This includes the structured `KNOWN_SPEAKERS` value. The editable Notes prompt
+is a separate private file at
+`~/Library/Application Support/meeting-memory/prompts/summary.md`; the
+repository prompt is only the versioned built-in fallback and is never the
+destination of an app-managed edit.
 `repo/secret_store.py` writes provider payloads under immutable generated
 Keychain accounts in a service distinct from the compatible Google OAuth token
 service. Multi-field B2 credentials form one payload, so a single preference
@@ -283,7 +288,8 @@ and `config/runtime_layout.py` captures it once per process. Active configuratio
 migration, readiness, OAuth/prompt reads, native-helper lookup, and pinned local
 I/O no longer consult the ambient working directory. Checkout-relative process
 paths use the captured project root; selected legacy paths use the selected
-`.env` parent; app-owned relative paths use Application Support. Bundled mode
+`.env` parent; app-owned relative paths and the default editable Notes prompt
+use Application Support. Bundled mode
 does not scan for `.env`, rejects relative process paths, uses the exact bundled
 Swift helper, and requires an explicit file selection before legacy preview.
 Migration converts selected legacy path values to absolute app preferences before

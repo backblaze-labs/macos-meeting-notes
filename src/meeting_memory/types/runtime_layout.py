@@ -93,8 +93,7 @@ class RuntimeLayout:
 
     @property
     def default_prompt_path(self) -> Path:
-        base = self.project_root if self.project_root is not None else self.application_support
-        return base / "prompts" / "summary.md"
+        return self.application_support / "prompts" / "summary.md"
 
     @property
     def default_credentials_path(self) -> Path:

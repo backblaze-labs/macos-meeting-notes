@@ -81,6 +81,23 @@ def test_relative_app_preference_anchors_to_application_support(tmp_path: Path) 
     assert loaded.calendar.credentials_file == layout.application_support / "oauth/client.json"
 
 
+def test_checkout_default_prompt_is_personal_application_support_state(tmp_path: Path) -> None:
+    layout = RuntimeLayout.development(tmp_path / "checkout", home=tmp_path / "home")
+
+    loaded = load_configuration(
+        ConfigurationUse.RUNTIME,
+        env_file=None,
+        process_environment={"ANTHROPIC_API_KEY": "notes-secret"},
+        preference_reader=lambda: PreferenceSnapshot(AppPreferences(), None),
+        runtime_layout=layout,
+    )
+
+    assert loaded.notes is not None
+    assert loaded.notes.prompt_file == (
+        layout.application_support / "prompts" / "summary.md"
+    )
+
+
 def test_bundled_relative_process_path_blocks_only_optional_capability(tmp_path: Path) -> None:
     layout = RuntimeLayout.bundled(tmp_path / "Meeting Memory.app", home=tmp_path / "home")
 
