@@ -35,23 +35,25 @@ the pure artifact, job-owner, post-commit policy, and worker-to-UI boundaries.
 
 ```text
 Recording Core
+├── Backup (required configuration; provider failure remains isolated)
 ├── Transcription (optional)
-├── Backup (optional)
 ├── Calendar (optional)
 └── Notes (optional; consumes a reviewed transcript)
 ```
 
-Recording Core is the only first-value gate. Optional adapters are constructed,
-checked, and failed independently. All optional processing starts from a
+Recording Core plus complete Backup configuration gate the normal recording
+UI. Provider adapters are constructed, checked, and failed independently; live
+B2 reachability is not a recording gate. All provider processing starts from a
 durably committed local recording and must preserve it on failure. Recording
 Core assembles `recording.m4a` and the schema-v2 metadata stub in app-owned
 staging on the `MEETINGS_DIR` filesystem, then publishes the complete meeting
 directory with one atomic rename.
 
-`config/runtime.py` loads Recording Core independently and treats each complete
-legacy `.env` provider group as an explicit opt-in. `ui/runtime_app.py` is the
-composition root: it builds only configured adapters, starts Calendar only when
-configured, and captures Transcription/Backup policy at local commit time.
+`config/runtime.py` loads Recording Core independently and treats complete
+legacy `.env` provider groups as configured inputs. `ui/runtime_app.py` is the
+composition root: it routes missing/disabled Backup to the setup tray, builds
+only configured adapters, starts Calendar only when configured, and captures
+Transcription/Backup policy at local commit time.
 
 The local-first runtime substrate is split by filesystem responsibility:
 `service/atomic_io.py` owns fsync and macOS no-clobber rename primitives,
@@ -128,12 +130,13 @@ and compare-before-write boundary without routing legacy files through a v2
 state writer.
 
 `service/readiness.py` builds the complete typed `ReadinessReport` and owns
-Recording Core checks. `service/readiness_integrations.py` evaluates optional
-legacy configuration groups independently and short-circuits Calendar before
+Recording Core checks. `service/readiness_integrations.py` evaluates provider
+configuration groups independently and short-circuits Calendar before
 any Keychain read when its local opt-in or credentials file is absent. The CLI
-doctor and `ui/setup_readiness.py` consume that same report. Explicit in-app
+doctor and `ui/setup_readiness.py` consume that same report; doctor succeeds
+only when Recording Core and Backup configuration are usable. Explicit in-app
 checks run on a worker and return `ReadinessChecked` to the main thread; normal
-startup performs no readiness, native-helper, Keychain, or provider probe.
+startup performs no readiness, native-helper, or provider network probe.
 
 Before publication, a private app-owned journal binds source provenance and
 commit-time policy to an opaque token. MeetingStore puts that token inside the

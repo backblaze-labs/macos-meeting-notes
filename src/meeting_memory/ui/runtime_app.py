@@ -50,6 +50,8 @@ def run_runtime_app() -> int:
         configuration = load_configuration(ConfigurationUse.RUNTIME)
     except ConfigurationLoadError:
         return _run_setup_app()
+    if configuration.backup is None:
+        return _run_setup_app()
 
     settings = configuration.settings
     configure_logging()

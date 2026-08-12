@@ -49,6 +49,33 @@ git log --all -- .env credentials.json token.json
 If a real secret was committed in the past, assume it is compromised. Rotate the
 secret and rewrite history before publishing.
 
+Run a dedicated secret scanner against both the current snapshot and every
+reachable Git ref:
+
+```bash
+gitleaks dir . --redact
+gitleaks git --redact --log-opts='--all'
+```
+
+Review identity metadata and remote-only refs before making a formerly private
+repository public:
+
+```bash
+git log --all --format='%an <%ae>' | sort -u
+git ls-remote --refs origin
+```
+
+Git commit authors, pull-request refs, Actions artifacts, issues, comments,
+releases, and deployment records may expose information even when the current
+working tree is clean. Audit those GitHub surfaces separately. Rewriting only
+the default branch is not sufficient when old refs or hosted artifacts remain
+reachable.
+
+When preserving private history matters, the safest publication pattern is a
+new public repository created from one reviewed root commit. Keep the original
+repository private as the history archive and do not copy its pull-request refs,
+Actions artifacts, issues, or releases into the public repository.
+
 ## Publish to GitHub
 
 Create an empty repository named `macos-meeting-notes` on GitHub, then connect

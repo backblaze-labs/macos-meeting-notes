@@ -4,10 +4,15 @@
 **Status:** Draft  
 **Author:** Meeting Memory contributors
 **Date:** 2026-08-07
-**Version:** 0.5
+**Version:** 0.6
 **Methodology:** RFC-inspired SRS (requirement language per RFC 2119: MUST / SHOULD / MAY / MUST NOT)
 
-**Revision note (v0.2):** Added a second, first-class design goal — **the repository must be easy for AI coding agents to read and modify** — and the conventions that deliver it, ported from the *portable* (non-web-specific) patterns of the team's `agent-friendly reference project`: an `AGENTS.md` control surface, import-enforced module layering, mechanical structural tests, a doctor preflight, and fail-fast config. §7 was restructured into enforced layers (§7.1, §7.5, §7.6) and all v0.1 Open Questions were resolved (§11). This app is deliberately **not** built on the reference project web template (Next.js + FastAPI) — see §1.2 and §2.1.
+**Revision note (v0.2):** Added a second, first-class design goal — **the
+repository must be easy for AI coding agents to read and modify** — using an
+`AGENTS.md` control surface, import-enforced module layering, mechanical
+structural tests, a doctor preflight, and fail-fast config. §7 was restructured
+into enforced layers (§7.1, §7.5, §7.6) and all v0.1 Open Questions were
+resolved (§11).
 
 **Revision note (v0.3):** Aligned the spec with the implemented macOS app wrapper, LaunchAgent workflow, all-calendar default (`GOOGLE_CALENDAR_ID=all`), notification actions (`Record`, `Open`, `Stop`), status-bar recording timer, calendar-context recording titles, configurable summary prompt, recording auto-stop, temp-recording recovery, retry/backoff, failed-processing retry, local search, separate `transcript.md` / `notes.md` artifacts, Calendar-derived speaker candidates, and manual speaker aliases. Remaining product limitations are called out in §10.
 
@@ -15,12 +20,17 @@
 Recording Core is the only first-value gate; Transcription, Backup, Calendar,
 and Notes are independent optional capabilities. The current fail-fast runtime
 is explicitly legacy until the implementation phases replace it. See §2.5 and
-`docs/local-first-contract.md`.
+`docs/local-first-contract.md`. The v0.6 onboarding policy supersedes the
+Backup-optional portion of this historical note.
 
 **Revision note (v0.5):** Made the durable WAV-to-M4A boundary independent of
 the host's optional AudioToolbox AAC encoder. Conversion prefers AVFoundation
 and falls back offline to a separately bundled, minimal LGPL FFmpeg executable
 compiled from pinned source with networking and unrelated codecs disabled.
+
+**Revision note (v0.6):** Made a complete Backblaze B2 configuration a required
+onboarding gate. Recording remains locally durable and provider failures remain
+isolated after setup; Transcription, Calendar, and Notes remain optional.
 
 ---
 
@@ -44,7 +54,11 @@ compiled from pinned source with networking and unrelated codecs disabled.
 
 ### 1.1 Purpose
 
-This document specifies the requirements for **Meeting Memory**, a macOS menu bar application whose repository is named **macos-meeting-notes**. The app records meetings locally and can optionally transcribe them with speaker diarization, generate AI summaries, and back up portable artifacts to Backblaze B2.
+This document specifies the requirements for **Meeting Memory**, a macOS menu
+bar application whose repository is named **macos-meeting-notes**. The app
+records meetings locally, backs up portable artifacts to required Backblaze B2
+storage, and can optionally transcribe them with speaker diarization and
+generate AI summaries.
 
 ### 1.2 Scope
 
@@ -52,9 +66,16 @@ This document specifies the requirements for **Meeting Memory**, a macOS menu ba
 
 Naming is intentionally split during the low-risk external rename: the visible app remains **Meeting Memory**, the Python import package remains `meeting_memory`, and the CLI remains `meeting-memory`. The macOS bundle ID, Keychain service, LaunchAgent label, and log paths keep their current `meeting-memory` identifiers until a deliberate migration is planned.
 
-It is the **native, local-first counterpart** to the B2 sample fleet's web meeting app (`web meeting sample`): rather than a browser upload flow, it captures real system + microphone audio on the desktop and saves it locally. Users may opt into calendar context, remote transcription, derived notes, and B2 as a durable archive. It is deliberately **not** built on the team's `agent-friendly reference project` (reference project) web template, which is a Next.js + FastAPI stack whose scaffolder only emits web apps and cannot host a macOS menu-bar process.
+It is a native, local-first B2 sample: rather than a browser upload flow, it
+captures real system + microphone audio on the desktop and saves it locally.
+B2 is the required durable archive; users may opt into calendar context,
+remote transcription, and derived notes.
 
-A **second, explicit design goal** sits alongside the user-facing app: the repository itself must be **easy for AI coding agents to read and modify**. This is achieved not by inheriting reference project's web stack but by porting its *portable* repo conventions — an authoritative `AGENTS.md`, import-enforced layering, mechanical structural tests, a doctor preflight, and fail-fast configuration (see §7.5 and §7.6).
+A **second, explicit design goal** sits alongside the user-facing app: the
+repository itself must be **easy for AI coding agents to read and modify**.
+The repo uses an authoritative `AGENTS.md`, import-enforced layering,
+mechanical structural tests, a doctor preflight, and fail-fast configuration
+(see §7.5 and §7.6).
 
 ### 1.3 Definitions
 
@@ -77,7 +98,6 @@ A **second, explicit design goal** sits alongside the user-facing app: the repos
 - Apple ScreenCaptureKit and Core Audio frameworks
 - RFC 2119 key words for requirement levels
 - Backblaze B2 S3-compatible API
-- `agent-friendly reference project` — source of the *portable* agent-repo conventions adopted here (`AGENTS.md` control surface, structural tests, doctor preflight, layered modules)
 
 ---
 
@@ -85,7 +105,11 @@ A **second, explicit design goal** sits alongside the user-facing app: the repos
 
 ### 2.1 Product Perspective
 
-**Meeting Memory** is a standalone macOS application with no server-side component, maintained in the `macos-meeting-notes` repository. It runs as a menu bar process, interfaces with external services (Google Calendar, AssemblyAI, Anthropic, B2) via HTTPS, and reads/writes to the local filesystem. There is no web UI, no application database, and no always-on server. It is **not** built on the team's `agent-friendly reference project` web template (Next.js + FastAPI); it is a Python desktop app that ports only that template's *portable* repo conventions (§7.6), not its stack.
+**Meeting Memory** is a standalone macOS application with no server-side
+component, maintained in the `macos-meeting-notes` repository. It runs as a
+menu bar process, interfaces with external services (Google Calendar,
+AssemblyAI, Anthropic, B2) via HTTPS, and reads/writes to the local filesystem.
+There is no web UI, no application database, and no always-on server.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -115,14 +139,14 @@ A **second, explicit design goal** sits alongside the user-facing app: the repos
 
 ### 2.2 Product Functions (Summary)
 
-- F0: Local-first capability readiness — keep Recording Core independent from optional integrations
+- F0: Local-first capability readiness — require B2 configuration for onboarding while preserving local artifacts through provider failures
 - F1: Optional calendar watching — detect upcoming meetings with video conferencing links
 - F2: Pre-meeting notification — remind the user to start recording
 - F3: Audio recording — natively capture system audio with optional microphone and playback by mode
 - F4: Optional transcription — diarized speech-to-text via AssemblyAI
 - F5: Optional summarization — extract summary, decisions, and action items via Claude
 - F6: Local storage — save structured markdown + audio to `~/Meetings/`
-- F7: Optional B2 backup — upload meeting artifacts to Backblaze B2 after local write
+- F7: Required B2 backup — upload meeting artifacts to Backblaze B2 after local write
 - F8: Tray menu — control recording, browse recent meetings, trigger sync
 - F9: Completion notification — alert user when transcript is ready
 - F10: Local macOS app wrapper — install, reload, launch, quit, and optionally start at login
@@ -143,9 +167,11 @@ the CLI.
   Line Tools; the Phase 6 distributed target MUST bundle its runtime/helper and
   MUST NOT require developer tools
 - Recording requires the user to explicitly trigger start/stop (no fully automatic recording)
-- Recording Core works without internet access
-- Transcription, summarization, Calendar, and B2 require internet access only
-  when the user enables them
+- Recording Core preserves captures without internet access after onboarding
+- B2 credentials are required for onboarding; uploads require internet access,
+  while a temporary provider or network failure does not remove local artifacts
+- Transcription, summarization, and Calendar require internet access only when
+  the user enables them
 - Google Calendar OAuth credentials are required only for the optional Calendar capability
 - The current checkout-installed `.app` is a local wrapper around this repo and
   Python environment; the Phase 6 distributed target is signed, notarized, and
@@ -156,16 +182,18 @@ the CLI.
 `docs/local-first-contract.md` is canonical for composition, readiness,
 durable-audio lifecycle, privacy/data egress, secret ownership, compatible
 migration, and phase acceptance. If a pre-v0.4 statement implies that an
-optional provider blocks recording, the local-first contract takes precedence.
+provider reachability blocks local commit, the local-first contract takes
+precedence.
 
-**REQ-LF-01** A new user MUST be able to launch the distributed app, grant the
-mode-specific macOS permissions, record about 30 seconds of real audio, stop,
-play the saved result, and reveal its meeting directory in Finder in under five
-minutes without Terminal, an account, an API key, or network.
+**REQ-LF-01** A new user MUST configure a Backblaze B2 account, dedicated
+private bucket, and bucket-scoped application key before the normal recording
+UI becomes available. After setup, a temporary network or provider failure MUST
+NOT prevent local commit, playback, or reveal-in-Finder behavior.
 
 **REQ-LF-02** The application MUST model Recording Core, Transcription, Backup,
-Calendar, and Notes as separate capabilities. Only Recording Core MAY gate
-Start Recording.
+Calendar, and Notes as separate capabilities. Recording Core and complete
+Backup configuration MAY gate access to Start Recording. Live B2 reachability
+MUST NOT gate local commit after onboarding.
 
 **REQ-LF-03** Each capability MUST report exactly one of `unconfigured`,
 `checking`, `ready`, `degraded`, or `failed`, with a plain-language summary and
@@ -173,8 +201,9 @@ an actionable recovery step. `unconfigured`, `degraded`, and `failed` MUST have
 a non-empty action; only `checking` and `ready` MAY omit it.
 
 **REQ-LF-04** The default doctor and in-app setup check MUST share one typed
-readiness report. Default doctor success MUST depend only on usable Recording
-Core; optional capability failures MUST remain visible and non-blocking.
+readiness report. Default doctor success MUST require usable Recording Core and
+Backup configuration; Transcription, Calendar, and Notes failures MUST remain
+visible and non-blocking.
 
 **REQ-LF-05** The application MUST commit durable local audio plus its schema-v2
 metadata stub before invoking an optional remote adapter. Optional failures
@@ -396,11 +425,11 @@ committed final directory.
 
 ### F7: B2 Backup
 
-**REQ-F7-01** When Backup is configured, the schema-v2 automatic policy MUST
+**REQ-F7-01** With required Backup configured, the schema-v2 automatic policy MUST
 upload exactly `recording.m4a` and `transcript.md` for eligible Meeting
 Memory-owned meetings. `notes.md` is excluded unless a future separate opt-in
-expands the disclosed scope. Unconfigured or failed Backup MUST NOT block local
-completion.
+expands the disclosed scope. A failed upload MUST NOT block local completion;
+missing or disabled Backup routes the app to setup before recording.
 
 **REQ-F7-02** The B2 object key MUST follow the pattern: `meetings/<slug>/<filename>`.
 
@@ -902,7 +931,9 @@ These rules make the codebase predictable for AI coding agents. They are not sty
 
 ### 7.6 Repository Conventions for AI Agents
 
-A first-class design goal (alongside the user-facing app) is that **the repository is easy for AI coding agents to read and modify**. These conventions are ported from the *portable* (non-web-specific) patterns of the team's `agent-friendly reference project`; they are independent of the desktop stack.
+A first-class design goal (alongside the user-facing app) is that **the
+repository is easy for AI coding agents to read and modify**. These conventions
+are independent of the desktop stack.
 
 **Control surface & docs (progressive disclosure):**
 

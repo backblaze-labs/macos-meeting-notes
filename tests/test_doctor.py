@@ -29,20 +29,28 @@ def test_doctor_renders_all_capabilities_and_actions() -> None:
 
 
 @pytest.mark.parametrize(
-    ("state", "expected"),
+    ("core_state", "backup_state", "expected"),
     [
-        (CapabilityState.READY, 0),
-        (CapabilityState.DEGRADED, 0),
-        (CapabilityState.FAILED, 1),
-        (CapabilityState.CHECKING, 1),
+        (CapabilityState.READY, CapabilityState.READY, 0),
+        (CapabilityState.DEGRADED, CapabilityState.READY, 0),
+        (CapabilityState.READY, CapabilityState.DEGRADED, 0),
+        (CapabilityState.READY, CapabilityState.UNCONFIGURED, 1),
+        (CapabilityState.READY, CapabilityState.FAILED, 1),
+        (CapabilityState.FAILED, CapabilityState.READY, 1),
+        (CapabilityState.CHECKING, CapabilityState.READY, 1),
     ],
 )
-def test_default_doctor_exit_depends_only_on_recording_core(
-    state: CapabilityState,
+def test_default_doctor_exit_requires_recording_core_and_backup(
+    core_state: CapabilityState,
+    backup_state: CapabilityState,
     expected: int,
     monkeypatch,
 ) -> None:
-    report = _report(state, optional_state=CapabilityState.FAILED)
+    report = _report(
+        core_state,
+        optional_state=CapabilityState.FAILED,
+        backup_state=backup_state,
+    )
     monkeypatch.setattr(doctor, "run_checks", lambda: report)
 
     assert doctor.main(()) == expected
@@ -52,6 +60,7 @@ def _report(
     core_state: CapabilityState,
     *,
     optional_state: CapabilityState = CapabilityState.UNCONFIGURED,
+    backup_state: CapabilityState | None = None,
 ) -> ReadinessReport:
     def status(capability: Capability, state: CapabilityState) -> CapabilityStatus:
         action = None
@@ -67,7 +76,13 @@ def _report(
         tuple(
             status(
                 capability,
-                core_state if capability is Capability.RECORDING_CORE else optional_state,
+                (
+                    core_state
+                    if capability is Capability.RECORDING_CORE
+                    else backup_state
+                    if capability is Capability.BACKUP and backup_state is not None
+                    else optional_state
+                ),
             )
             for capability in Capability
         )

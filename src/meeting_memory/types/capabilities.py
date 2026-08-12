@@ -79,7 +79,7 @@ class CapabilityStatus:
 
 @dataclass(frozen=True)
 class ReadinessReport:
-    """Capability-indexed readiness with Recording Core as the only gate."""
+    """Capability-indexed readiness for local capture and required B2 backup."""
 
     statuses: tuple[CapabilityStatus, ...]
 
@@ -110,8 +110,14 @@ class ReadinessReport:
         return self.status_for(Capability.RECORDING_CORE).usable
 
     @property
+    def setup_ready(self) -> bool:
+        """Return whether required Recording Core and B2 setup are usable."""
+
+        return self.recording_ready and self.status_for(Capability.BACKUP).usable
+
+    @property
     def optional_attention(self) -> tuple[CapabilityStatus, ...]:
-        """Return configured optional capabilities that need attention."""
+        """Return provider capabilities that need attention."""
 
         return tuple(
             status

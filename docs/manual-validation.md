@@ -1,9 +1,9 @@
 # Manual Validation Checklist
 
 This checklist is the real-world validation path. Recording Core requires real
-macOS audio setup; validate only the optional services you configured. Use the
-standalone app for Phase 5 acceptance. The checkout commands remain useful for
-developer diagnostics.
+macOS audio setup and Backup requires a private B2 destination; validate only
+the other services you configured. Use the standalone app for Phase 5
+acceptance. The checkout commands remain useful for developer diagnostics.
 
 ## Preconditions
 
@@ -15,7 +15,7 @@ developer diagnostics.
 - Optional Calendar: OAuth credentials JSON plus successful
   `.venv/bin/meeting-memory auth`
 - Optional Transcription: AssemblyAI account with available credit
-- Optional Backup: B2 bucket and S3-compatible write credentials
+- Required Backup: private B2 bucket and bucket-scoped S3-compatible credentials
 - Optional Notes: Anthropic key
 
 ## 1. Doctor
@@ -29,15 +29,18 @@ make doctor
 Pass criteria:
 
 - Recording Core, Transcription, Backup, Calendar, and Notes each appear once.
-- Recording Core is `ready` or `degraded`, and the command exits `0`.
+- Recording Core and Backup are `ready` or `degraded`, and the command exits
+  `0`.
 - The local meetings folder passes the temporary write and durability check.
 - The native audio helper and offline AAC encoder are installed, and the helper
   reports local hardware support.
 - The doctor explains that mode-specific macOS capture permissions are checked
   when a recording starts; it does not claim to pre-authorize them.
-- Missing optional groups appear as `unconfigured`, not as app failures.
+- Missing optional Transcription, Calendar, or Notes groups appear as
+  `unconfigured`, not as app failures.
 - Invalid configured integrations show their own action without changing the
-  Recording Core state or doctor exit code.
+  Recording Core state. Backup configuration failure makes doctor exit
+  non-zero; optional integration failures do not.
 
 ## 2. Auth
 

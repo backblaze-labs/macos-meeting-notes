@@ -13,7 +13,7 @@ from meeting_memory.types.capabilities import (
 )
 
 
-def test_recording_core_is_the_only_first_value_gate() -> None:
+def test_setup_requires_recording_core_and_backup() -> None:
     report = _report(
         CapabilityStatus(
             Capability.RECORDING_CORE,
@@ -27,10 +27,21 @@ def test_recording_core_is_the_only_first_value_gate() -> None:
     )
 
     assert report.recording_ready is True
+    assert report.setup_ready is False
     assert [status.capability for status in report.optional_attention] == [
         Capability.BACKUP,
         Capability.NOTES,
     ]
+
+    ready = _report(
+        CapabilityStatus(
+            Capability.RECORDING_CORE,
+            CapabilityState.READY,
+            "Local recording is ready.",
+        ),
+        backup=CapabilityState.READY,
+    )
+    assert ready.setup_ready is True
 
 
 @pytest.mark.parametrize(

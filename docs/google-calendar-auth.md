@@ -84,9 +84,10 @@ Common fixes:
 - Ensure the Google Calendar API is enabled for the same project.
 - Ensure the account you authorize has Calendar enabled.
 
-The auth command only requires the Google credentials settings. B2 and
-AssemblyAI can still be pending while you complete Calendar authorization, but
-`make doctor` will continue reporting them until they are configured.
+The auth command only requires the Google credentials settings. You can finish
+Calendar authorization while B2 or AssemblyAI is pending, but `make doctor`
+does not pass until required B2 Backup is configured. AssemblyAI remains
+optional.
 
 ## Calendar Detection
 

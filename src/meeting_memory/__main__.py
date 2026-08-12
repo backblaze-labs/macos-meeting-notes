@@ -120,6 +120,7 @@ def run_setup() -> int:
     from meeting_memory.doctor import render_results, run_checks
     from meeting_memory.service.macos_app import install_macos_app as install
     from meeting_memory.service.setup import setup_actions
+    from meeting_memory.types.capabilities import Capability
 
     project_dir = _project_dir()
     for action in setup_actions(project_dir):
@@ -132,15 +133,20 @@ def run_setup() -> int:
     report = run_checks()
     sys.stdout.write(render_results(report))
     if not report.recording_ready:
-        from meeting_memory.types.capabilities import Capability
-
         core = report.status_for(Capability.RECORDING_CORE)
         sys.stdout.write(f"\nRecording Core needs attention: {core.action}\n")
         return 1
 
-    sys.stdout.write(
-        "\nRecording Core is usable. Optional capabilities can be configured independently.\n"
-    )
+    backup = report.status_for(Capability.BACKUP)
+    if backup.usable:
+        sys.stdout.write(
+            "\nRecording Core and required Backblaze B2 backup are configured.\n"
+        )
+    else:
+        sys.stdout.write(
+            "\nRecording Core is usable. Configure required Backblaze B2 backup "
+            "from the app, then rerun make doctor.\n"
+        )
     return 0
 
 

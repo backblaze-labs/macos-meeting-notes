@@ -32,7 +32,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     del argv
     report = run_checks()
     sys.stdout.write(render_results(report))
-    return 0 if report.recording_ready else 1
+    return 0 if report.setup_ready else 1
 
 
 if __name__ == "__main__":

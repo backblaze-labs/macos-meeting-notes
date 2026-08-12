@@ -1,4 +1,4 @@
-PYTHON ?= python
+PYTHON ?= .venv/bin/python
 
 ARCH ?= $(shell uname -m)
 SIGN_IDENTITY ?= -

@@ -40,15 +40,22 @@ def _loaded(settings: RuntimeSettings) -> SimpleNamespace:
     )
 
 
-def test_fresh_profile_starts_normal_core_without_optional_adapters(
+def test_fresh_profile_routes_to_setup_until_required_backup_is_configured(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    settings = RuntimeSettings(meetings_dir=tmp_path / "meetings")
-    Tray.controller = None
-    Tray.ran = False
+    settings = RuntimeSettings(_env_file=None, meetings_dir=tmp_path / "meetings")
+    setup = SimpleNamespace(ran=False)
+
+    class SetupApp:
+        def __init__(self, *, readiness_report) -> None:
+            assert readiness_report is None
+
+        def run(self) -> None:
+            setup.ran = True
+
     monkeypatch.setattr(runtime_app, "load_configuration", lambda _use: _loaded(settings))
-    monkeypatch.setattr(runtime_app, "RumpsTrayApp", Tray)
+    monkeypatch.setattr(runtime_app, "RumpsSetupApp", SetupApp)
     assert not hasattr(runtime_app, "load_readiness_report")
     monkeypatch.setattr(
         runtime_app,
@@ -73,13 +80,7 @@ def test_fresh_profile_starts_normal_core_without_optional_adapters(
 
     assert runtime_app.run_runtime_app() == 0
 
-    assert Tray.ran is True
-    assert Tray.controller is not None
-    assert Tray.controller.pipeline is None
-    assert Tray.controller.committer is not None
-    assert Tray.controller.recorder.temp_dir == (
-        settings.meetings_dir_path / ".meeting-memory-staging" / "recordings"
-    )
+    assert setup.ran is True
 
 
 def test_optional_constructor_failures_do_not_block_core(
@@ -151,6 +152,11 @@ def test_invalid_optional_settings_never_route_core_to_setup(
 ) -> None:
     settings = RuntimeSettings(
         meetings_dir=tmp_path / "meetings",
+        b2_application_key_id="id",
+        b2_application_key="key",
+        b2_endpoint="https://s3.example.invalid",
+        b2_region="region",
+        b2_bucket_name="bucket",
         google_calendar_credentials_file=tmp_path / "calendar.json",
         calendar_poll_interval=0,
         anthropic_api_key="notes-key",
@@ -181,7 +187,7 @@ def test_invalid_optional_settings_never_route_core_to_setup(
 
 
 @pytest.mark.parametrize("preference_state", ["disabled", "corrupt"])
-def test_real_composed_fail_closed_configuration_never_constructs_providers(
+def test_unavailable_required_backup_routes_composed_configuration_to_setup(
     tmp_path: Path,
     monkeypatch,
     preference_state: str,
@@ -229,18 +235,25 @@ def test_real_composed_fail_closed_configuration_never_constructs_providers(
         calls.append("provider")
         raise AssertionError("provider constructed")
 
-    Tray.ran = False
+    setup = SimpleNamespace(ran=False)
+
+    class SetupApp:
+        def __init__(self, *, readiness_report) -> None:
+            assert readiness_report is None
+
+        def run(self) -> None:
+            setup.ran = True
+
     monkeypatch.setattr(runtime_app, "load_configuration", lambda _use: loaded)
     monkeypatch.setattr(runtime_app, "configure_logging", lambda: None)
-    monkeypatch.setattr(runtime_app, "RumpsTrayApp", Tray)
+    monkeypatch.setattr(runtime_app, "RumpsSetupApp", SetupApp)
     monkeypatch.setattr(runtime_app, "AssemblyAITranscriptionClient", fail_provider)
     monkeypatch.setattr(runtime_app, "B2S3Client", fail_provider)
     monkeypatch.setattr(runtime_app, "GoogleCalendarClient", fail_provider)
     monkeypatch.setattr(runtime_app, "ClaudeSummarizer", fail_provider)
 
     assert runtime_app.run_runtime_app() == 0
-    assert Tray.ran is True
-    assert Tray.controller.committer is not None
+    assert setup.ran is True
     assert calls == []
 
 

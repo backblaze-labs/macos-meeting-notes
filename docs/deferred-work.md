@@ -11,6 +11,23 @@ When ending a work session with deferred behavior, append a dated note with:
 - why the original request was deferred,
 - the first thing to check if the user raises it again.
 
+## 2026-08-12 Required B2 Onboarding
+
+Request: require Backblaze B2 credentials, direct new users to sign up, and do
+not expose the normal recording UI until Backup is configured.
+
+Outcome: B2 account/bucket/key setup is now part of the supported onboarding
+contract. Doctor success requires usable Recording Core and Backup
+configuration, and missing or disabled Backup routes startup to the setup tray.
+The earlier offline-first onboarding notes below remain as historical context,
+but their Backup-optional product policy is superseded. Local commit still
+precedes upload, and provider/network failure after setup preserves the local
+recording and retry path.
+
+First thing to check: inspect `ui/runtime_app.py`, `types/capabilities.py`, and
+the Quick Start before changing the setup gate. Do not add a provider network
+probe to startup or make upload success a prerequisite for local commit.
+
 ## 2026-08-07 Local-First Contract Transition
 
 Request: make a fresh user's first recording possible in under five minutes

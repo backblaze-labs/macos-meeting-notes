@@ -5,10 +5,10 @@
 > behavior may change without notice. Use at your own risk.
 
 `macos-meeting-notes` is the repository for **Meeting Memory**, a local-first
-macOS menu-bar app that records meetings, optionally transcribes them with
-speaker diarization (AssemblyAI), optionally summarizes them (Anthropic
-Claude), saves portable artifacts locally, and optionally backs up each
-meeting's audio and transcript to Backblaze B2 over the S3-compatible API.
+macOS menu-bar app that records meetings, saves portable artifacts locally,
+and backs up each meeting's audio and transcript to Backblaze B2 over the
+S3-compatible API. It can also add speaker-diarized transcription (AssemblyAI),
+Calendar context, and summaries (Anthropic Claude).
 
 The repository/distribution name is `macos-meeting-notes`; the app visible to
 users remains **Meeting Memory**, the Python import package remains
@@ -21,30 +21,29 @@ The app is local-first: each completed recording creates a directory under
 - `transcript.md`
 - `notes.md` after you confirm speaker aliases and generate derived notes
 
-B2 is the durable backup layer. The local files remain the user's readable
-meeting archive.
+B2 is the required durable backup layer. The local files remain the user's
+readable meeting archive and are committed before any upload begins.
 
-The local-first runtime makes **Recording Core** usable without a
-Terminal, account, key, or network, with Transcription, Backup, Calendar, and
-Notes enabled progressively. See
-[the capability contract](docs/local-first-contract.md). The tray's native
-**Configuration** submenu is the primary setup path. Complete legacy `.env`
-groups remain compatible and opt in to AssemblyAI, B2, Calendar, or Notes
-independently; a missing or broken optional integration does not prevent local
-recording.
+Completing setup requires a Backblaze B2 account, a dedicated private bucket,
+and a bucket-scoped application key. The app keeps local recording durable when
+the network or B2 is temporarily unavailable, while Transcription, Calendar,
+and Notes remain optional. The tray's native **Configuration** submenu stores
+credentials in macOS Keychain; complete legacy `.env` groups remain compatible.
+See [the capability contract](docs/local-first-contract.md).
 
-The first-value acceptance test is concrete: record about 30 seconds of real
-audio, stop, play the saved result, and reveal its meeting directory in Finder
-within five minutes of first launch.
+After required B2 setup, the first-value acceptance test is concrete: record
+about 30 seconds of real audio, stop, play the saved result, reveal its meeting
+directory in Finder, and confirm its private B2 objects.
 
 ## Checkout Requirements
 
 - macOS 15 Sequoia or later
 - Python 3.11 or later
 - Xcode Command Line Tools (`xcode-select --install`)
+- A Backblaze B2 account, dedicated private bucket, and bucket-scoped
+  S3-compatible application key
 - Optional Google Calendar OAuth desktop credentials
 - Optional AssemblyAI API key
-- Optional dedicated Backblaze B2 bucket and S3-compatible application key
 - Optional Anthropic API key for summaries
 
 The standalone `.app` validation artifact bundles Python, the Swift capture
@@ -55,46 +54,103 @@ be described as a public release.
 
 ## Quick Start
 
-For a full fresh-clone walkthrough, follow
-[docs/setup-tutorial.md](docs/setup-tutorial.md).
+### Ask an agent to install it
 
-```bash
-make setup
+The fastest path is to hand this repository to Codex, Claude Code, or another
+coding agent. Paste this prompt:
+
+```text
+Install Meeting Memory for me from:
+https://github.com/backblaze-labs/macos-meeting-notes
+
+Follow the repository README and AGENTS.md. Help me create the required
+Backblaze B2 account, dedicated private bucket, and bucket-scoped application
+key before declaring setup complete. Run the source-checkout installation,
+open Meeting Memory, and stop so I can enter the B2 key ID and application key
+myself in the app's secure Configuration > Backup form—never ask me to paste
+credentials into chat, source files, or shell history. Restart the app, run
+make doctor, and confirm both Recording Core and Backup are ready. Do not
+configure AssemblyAI, Google Calendar, or Anthropic unless I ask.
 ```
 
-`make setup` creates `.venv`, installs dependencies, creates `.env` if needed,
-installs the local app wrapper, and prints a setup checklist. You can open the
-core app immediately:
+The agent can install and verify the app, but the Backblaze account flow and
+secure credential entry stay under your control.
 
-```bash
-make PYTHON=.venv/bin/python open-macos-app
-```
+### Install manually
 
-`make doctor` renders one status for Recording Core, Transcription, Backup,
-Calendar, and Notes. It exits successfully whenever Recording Core is usable;
-missing optional integrations are `unconfigured`, not app failures. The tray's
-**Debugging › Check Setup & Dependencies** action renders the same report on a
-background worker. Neither path contacts a provider; configured Calendar may
-read its existing OAuth token from Keychain during the explicit check. The
-local check does not request macOS capture permissions, so Recording Core may
-remain `degraded` until the selected mode validates permissions at recording
-start.
+1. [Create a Backblaze B2 account](https://www.backblaze.com/sign-up/cloud-storage).
+   Create a bucket dedicated to Meeting Memory, keep it **private**, and create
+   a Read and Write application key restricted to that bucket. Save the key ID
+   and application key when they are shown; the application key is displayed
+   only once. Also copy the bucket's S3 endpoint, region, and name.
 
-The clickable app is installed at `~/Applications/Meeting Memory.app` so it can
-be launched from Finder or found with Cmd+Space by searching for
-`Meeting Memory`.
+2. Clone and install the source checkout:
 
-After changing app code, reload the official local app bundle:
+   ```bash
+   git clone https://github.com/backblaze-labs/macos-meeting-notes.git
+   cd macos-meeting-notes
+   make setup
+   ```
+
+   `make setup` creates `.venv`, installs dependencies, installs
+   `~/Applications/Meeting Memory.app`, and prints local diagnostics. It is
+   normal for Backup to be `unconfigured` until the next step.
+
+3. Open the app:
+
+   ```bash
+   make PYTHON=.venv/bin/python open-macos-app
+   ```
+
+4. From the menu bar, open **Configuration › Backup...**, select
+   **Enabled (app-managed)**, and enter the B2 endpoint, region, bucket name,
+   application key ID, and application key. Review the upload disclosure,
+   save, then quit and reopen Meeting Memory. Secret fields are native secure
+   controls, are stored in macOS Keychain, and reopen blank.
+
+5. Verify the required setup:
+
+   ```bash
+   make doctor
+   ```
+
+   Both `Recording Core` and `Backup` must report `READY` (or a usable
+   `DEGRADED` state) for the command to succeed. The check validates local
+   configuration without contacting B2; the first completed recording verifies
+   the real upload path.
+
+6. Choose an audio mode from the tray, start a short recording, stop it, and
+   confirm the local meeting folder is created. If an upload fails, use
+   **Debugging › Retry Pending B2 Backups**.
+
+For the full walkthrough, provider setup, permissions, and troubleshooting,
+read [docs/setup-tutorial.md](docs/setup-tutorial.md).
+
+### Local development commands
 
 ```bash
 make PYTHON=.venv/bin/python reload-macos-app
 ```
 
-To start Meeting Memory automatically at login as a background menu-bar app:
+This updates and restarts the official local app after code changes. To start
+Meeting Memory automatically at login:
 
 ```bash
 make PYTHON=.venv/bin/python install-launch-agent
 ```
+
+`make doctor` renders one status for Recording Core, Transcription, Backup,
+Calendar, and Notes. Its exit status requires usable Recording Core and Backup;
+missing optional integrations remain `unconfigured`. The tray's **Debugging ›
+Check Setup & Dependencies** action renders the same report on a background
+worker. Neither path contacts a provider; configured Calendar may read its
+existing OAuth token from Keychain during the explicit check. The local check
+does not request macOS capture permissions, so Recording Core may remain
+`degraded` until the selected mode validates permissions at recording start.
+
+The clickable app is installed at `~/Applications/Meeting Memory.app` so it can
+be launched from Finder or found with Cmd+Space by searching for
+`Meeting Memory`.
 
 To remove the login item:
 
@@ -169,7 +225,7 @@ Optional Transcription:
 
 - `ASSEMBLYAI_API_KEY`
 
-Optional Backup (the complete group enables it):
+Required Backup (the complete group unlocks the normal recording UI):
 
 - `B2_APPLICATION_KEY_ID`
 - `B2_APPLICATION_KEY`
@@ -177,8 +233,8 @@ Optional Backup (the complete group enables it):
 - `B2_REGION`
 - `B2_BUCKET_NAME`
 
-Use a bucket dedicated to Meeting Memory and an application key that can read
-and write only that bucket. Do not reuse sample-app buckets.
+Use a private bucket dedicated to Meeting Memory and an application key that
+can read and write only that bucket. Do not reuse sample-app buckets.
 
 Optional Calendar:
 
@@ -236,7 +292,7 @@ As of 2026-06-11, AssemblyAI lists Universal-2 pre-recorded transcription at
 transcription path is roughly `$0.17/hr` before any optional features. See
 [AssemblyAI pricing](https://www.assemblyai.com/pricing).
 
-As of 2026-06-11, Backblaze lists B2 pay-as-you-go storage starting at
+As of 2026-08-12, Backblaze lists B2 pay-as-you-go storage starting at
 `$6.95/TB/month`, with free transactions and free egress up to 3x average
 monthly storage. See [Backblaze B2 pricing](https://www.backblaze.com/cloud-storage/pricing).
 

@@ -81,14 +81,14 @@ def test_update_env_file_replaces_and_appends_preferences(tmp_path: Path) -> Non
 def test_known_speakers_text_uses_one_speaker_per_line() -> None:
     settings = _settings(
         known_speakers=(
-            KnownSpeaker("Alex", ("alex", "eduardo@example.com")),
+            KnownSpeaker("Alex", ("alex", "alex@example.com")),
             KnownSpeaker("Blair", ("blair",)),
             KnownSpeaker("Casey"),
         )
     )
 
     assert known_speakers_text(settings).splitlines() == [
-        "Alex | alex, eduardo@example.com",
+        "Alex | alex, alex@example.com",
         "Blair | blair",
         "Casey |",
     ]
@@ -97,7 +97,7 @@ def test_known_speakers_text_uses_one_speaker_per_line() -> None:
 def test_parse_known_speakers_text_accepts_friendly_lines() -> None:
     speakers = parse_known_speakers_text(
         """
-        Alex | alex, eduardo@example.com
+        Alex | alex, alex@example.com
         Blair | blair
         Casey |
         # comments are ignored
@@ -105,7 +105,7 @@ def test_parse_known_speakers_text_accepts_friendly_lines() -> None:
     )
 
     assert speakers == (
-        KnownSpeaker("Alex", ("alex", "eduardo@example.com")),
+        KnownSpeaker("Alex", ("alex", "alex@example.com")),
         KnownSpeaker("Blair", ("blair",)),
         KnownSpeaker("Casey"),
     )
@@ -136,13 +136,13 @@ def test_known_speakers_env_value_writes_compact_json() -> None:
 def test_known_speakers_form_rows_use_separate_alias_and_source_fields() -> None:
     assert speakers_from_form_rows(
         [
-            ("Alex", "alex, eduardo@example.com"),
+            ("Alex", "alex, alex@example.com"),
             ("Blair", "blair"),
             ("", "ignored@example.com"),
             ("Alex", "duplicate@example.com"),
         ]
     ) == (
-        KnownSpeaker("Alex", ("alex", "eduardo@example.com")),
+        KnownSpeaker("Alex", ("alex", "alex@example.com")),
         KnownSpeaker("Blair", ("blair",)),
     )
 

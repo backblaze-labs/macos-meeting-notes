@@ -3,7 +3,9 @@
 ## Purpose
 
 Upload local meeting artifacts to Backblaze B2 through the S3-compatible API.
-Backup is opt-in and never gates Recording Core; see
+Complete Backup configuration is required before the normal recording UI opens.
+Once configured, recording remains local-first: the app commits local artifacts
+before upload and an upload failure never removes them. See
 [`../local-first-contract.md`](../local-first-contract.md).
 
 ## Inputs
@@ -56,7 +58,8 @@ B2 upload runs after the local files and completion event are written. The tray
   directories and recordings split across `recording-part-*.m4a` files.
 - Failed transcription is retried through `Retry Failed Transcriptions`, not
   `Retry Pending B2 Backups`.
-- Missing B2 configuration is unconfigured and never gates recording.
+- Missing or explicitly disabled B2 configuration routes the app to its setup
+  tray until Backup is configured and the app restarts.
 - The snapshot-upload seam verifies the captured directory
   identity, owned schema-v2 transcript slug, regular files, and canonical
   revision before constructing a B2 client. Capture accepts one owned meeting

@@ -201,10 +201,10 @@ def test_calendar_known_speaker_sources_do_not_match_display_alias_initials():
         {
             "attendees": [
                 {"email": "john.doe@example.com"},
-                {"email": "jdeleon@example.com"},
+                {"email": "drew@example.com"},
             ],
         },
-        (KnownSpeaker("Drew", ("jdeleon@example.com",)),),
+        (KnownSpeaker("Drew", ("drew@example.com",)),),
     )
 
     assert candidates == ("John Doe", "Drew")

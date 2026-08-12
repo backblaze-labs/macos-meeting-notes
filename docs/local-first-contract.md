@@ -3,24 +3,21 @@
 **Status:** Accepted product contract; implemented through the Phase 4D native
 configuration surface
 **Canonical for:** onboarding, capability readiness, data lifecycle, migration,
-and optional-service behavior
+and provider-service behavior
 
 This document defines the target behavior for Meeting Memory's local-first
 transition. `SPEC.md` owns detailed feature requirements; this document owns
-how those features compose. When an older requirement implies that a remote
-service blocks recording, this contract takes precedence.
+how those features compose. Complete B2 configuration is an onboarding gate;
+provider reachability is not a local-commit gate after onboarding.
 
 ## Product Promise
 
-A new user can launch Meeting Memory, grant the macOS permissions needed by the
+A new user configures a Backblaze B2 account, dedicated private bucket, and
+bucket-scoped application key before the normal recording UI becomes available.
+After that setup, the user can grant the macOS permissions needed by the
 selected audio mode, record about 30 seconds of real audio, stop it, play the
-saved result, and reveal its meeting directory in Finder in under five minutes.
-This first-value path requires:
-
-- no Terminal use;
-- no cloud account or API key;
-- no Google authorization; and
-- no network connection.
+saved local result, and reveal its meeting directory in Finder. A temporary
+network or B2 failure does not discard or hide the local recording.
 
 The app MUST explain why a macOS permission is needed immediately before it
 requests that permission. Declining an optional permission or integration MUST
@@ -33,14 +30,15 @@ work.
 | --- | --- | --- | --- |
 | **Recording Core** | Capture, recover, convert, store, browse, and search local audio | Supported macOS, writable local folder, native helper, mode-specific macOS permission | **Yes** |
 | **Transcription** | Produce a diarized `transcript.md` | Recording Core, network, AssemblyAI credential | No |
-| **Backup** | Copy owned meeting artifacts to B2 | Local artifact, network, B2 destination credentials | No |
+| **Backup** | Copy owned meeting artifacts to B2 | Local artifact, network, B2 destination credentials | **Configuration only** |
 | **Calendar** | Detect meeting context and reminders | Network, Google credentials and OAuth grant | No |
 | **Notes** | Produce derived `notes.md` after speaker review | Completed transcript, network, Anthropic credential | No |
 
-Recording Core is always present. The other four capabilities are opt-in and
-MUST be independently configurable, disableable, and retryable. Enabling one
-MUST NOT implicitly enable another. In particular, Transcription does not
-require Backup or Calendar, and local audio does not require Transcription.
+Recording Core is always present. Backup credentials and destination settings
+are required to leave setup; Transcription, Calendar, and Notes are opt-in.
+Capabilities remain independently configurable and retryable. Enabling one
+MUST NOT implicitly enable another, and local audio does not require
+Transcription or live B2 reachability.
 
 ## Capability State Model
 
@@ -67,20 +65,21 @@ recovery context. The action is required for `unconfigured`, `degraded`, and
 `ready` or `degraded`; it is not usable in `unconfigured`, `checking`, or
 `failed`.
 
-The app MUST allow Start Recording when Recording Core is usable. Optional
-capability states MUST NOT gate that action. Before a recording starts, the app
-MUST validate only the requirements for the selected audio mode.
+The app MUST allow Start Recording when Recording Core is usable and Backup has
+complete enabled configuration. Transcription, Calendar, and Notes states MUST
+NOT gate that action. Before a recording starts, the app MUST validate only the
+requirements for the selected audio mode; it MUST NOT make a B2 network probe.
 
 `meeting-memory doctor` and the in-app setup check share the same report:
 
-- exit `0` when Recording Core is usable, even if optional capabilities are
-  `unconfigured`, `degraded`, or `failed`;
-- exit non-zero when Recording Core cannot produce durable local audio;
+- exit `0` when Recording Core and Backup configuration are usable;
+- exit non-zero when Recording Core cannot produce durable local audio or
+  Backup configuration is absent, disabled, or invalid;
 - render every capability, not a flat list of undifferentiated failures; and
 - never make a network request on the UI thread.
 
-A future explicit strict/integration verification mode MAY exit non-zero for a
-selected optional capability. The default doctor MUST remain core-oriented.
+A future explicit provider verification mode MAY contact B2. The default doctor
+MUST remain local-only and validate configuration without provider requests.
 
 The active runtime and readiness report keep these capabilities independent.
 Characterization tests retain only the isolated legacy APIs that remain for
@@ -103,10 +102,10 @@ failure.
    offline, source-pinned minimal LGPL encoder. Either route MUST produce the
    same validated 16 kHz mono AAC-bearing M4A. A partially assembled final
    meeting directory is never visible.
-4. **Queuing optional work:** record independent local state for transcription
-   and backup. Missing configuration leaves the meeting job `not_requested`,
-   not lost or failed.
-5. **Processing:** optional adapters read the committed local artifact. Their
+4. **Queuing provider work:** record independent local state for transcription
+   and backup. A disabled optional integration leaves its meeting job
+   `not_requested`, not lost or failed.
+5. **Processing:** provider adapters read the committed local artifact. Their
    errors update only their own state and retain the audio.
 6. **Recovery:** interrupted app-owned staging WAVs remain discoverable until
    conversion and local commit succeed. Recovery MUST use the same post-commit
@@ -217,8 +216,8 @@ recordings; the UI MUST still describe automatic triggers such as post-stop
 transcription or backup. Historical artifacts require a separate explicit
 backfill action.
 
-B2 objects remain private and least-privilege, bucket-scoped credentials are
-recommended.
+B2 objects remain private. A dedicated private bucket and least-privilege,
+bucket-scoped credentials are required for supported setup.
 
 The installed app owns runtime secrets. The target store is macOS Keychain for
 API secrets and OAuth tokens; non-secret preferences belong in app-managed
@@ -263,9 +262,10 @@ confirmed import; it performs no automatic import and never mutates `.env`.
 - macOS CI runs lint/tests/structure and builds the Swift helper.
 - No runtime behavior, secret, `.env`, or user data is migrated.
 
-### Phase 2 — Local core and optional adapters (complete)
+### Phase 2 — Local core and isolated adapters (complete)
 
-- The app starts and records without cloud credentials or Google auth.
+- The local recording substrate remains operable without provider reachability;
+  the product-level B2 configuration gate is applied by the setup/runtime UI.
 - Local audio is committed before optional work.
 - The committed artifact is `recording.m4a` plus the schema-v2 metadata stub;
   ownership no longer depends on `assemblyai_id`.
@@ -280,8 +280,9 @@ confirmed import; it performs no automatic import and never mutates `.env`.
 ### Phase 3 — Coherent setup and doctor (complete)
 
 - In-app setup and doctor render the same capability report.
-- Default doctor success depends only on Recording Core.
-- Optional failures have capability-specific actions and never hide recording.
+- Default doctor success depends on Recording Core and Backup configuration.
+- Provider failures have capability-specific actions and never remove a local
+  recording.
 
 ### Phase 4 — Secure progressive configuration
 
@@ -328,9 +329,9 @@ computer-use validation of the installed app.
 
 ### Phase 5 — Native onboarding validation
 
-- A clean macOS user records about 30 seconds of real audio, stops, plays the
-  saved result, and reveals its directory in Finder in under five minutes
-  without Terminal or an account.
+- A clean macOS user configures required B2 backup, records about 30 seconds of
+  real audio, stops, plays the saved result, reveals its directory in Finder,
+  and confirms the private bucket objects.
 - Keyboard, VoiceOver labels, denial/retry paths, relaunch, and permission
   prompts pass computer-use validation.
 

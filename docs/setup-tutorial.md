@@ -3,9 +3,11 @@
 This tutorial gets Meeting Memory running as a local macOS menu-bar app from a
 fresh clone of the `macos-meeting-notes` repository.
 
-This is the current source-checkout setup. Recording Core requires no cloud
-integration for a first recording; see
-[`local-first-contract.md`](local-first-contract.md). Phase 4B now composes
+This is the current source-checkout setup. A Backblaze B2 account and complete
+Backup configuration are required before the normal recording UI opens; see
+[`local-first-contract.md`](local-first-contract.md). Recording still commits
+locally before attempting an upload and remains recoverable through temporary
+network or provider failures. Phase 4B composes
 exact process-environment overrides, active app preferences/immutable Keychain
 references, legacy `.env`, and defaults. Phase 4D's native Configuration submenu
 now owns app-managed capability forms, disclosure/consent, secure secret entry,
@@ -23,11 +25,16 @@ You need:
 - Python 3.11 or later
 - Xcode Command Line Tools
 
-Only configure the optional services you want:
+Required for setup:
+
+- Backblaze B2 account
+- Dedicated private B2 bucket
+- S3-compatible application key restricted to that bucket
+
+Optional services:
 
 - Google account with Calendar access for context and reminders
 - AssemblyAI API key for diarized transcription
-- Backblaze B2 bucket and S3-compatible application key for private backup
 - Anthropic API key for generated notes after speaker review
 
 Install the system build tools once if they are not already present:
@@ -40,8 +47,8 @@ brew install python@3.11
 ## 2. Clone and Install the Python App
 
 ```bash
-git clone <repository-url> meeting-memory
-cd meeting-memory
+git clone https://github.com/backblaze-labs/macos-meeting-notes.git
+cd macos-meeting-notes
 make setup
 ```
 
@@ -66,16 +73,20 @@ Devices, and Multi-Output Devices are not required. On first use, allow the
 Microphone and Screen & System Audio permissions requested by macOS.
 No system or Homebrew FFmpeg installation is used.
 
-## 4. Optionally Create Service Credentials
+## 4. Create the Required Backblaze B2 Credentials
 
-Skip this section if you only want local recording. Create credentials only for
-the capabilities you want to enable in the native Configuration submenu.
+1. [Create a Backblaze B2 account](https://www.backblaze.com/sign-up/cloud-storage).
+2. In the B2 web console, create a bucket dedicated to Meeting Memory and keep
+   it private.
+3. Create a Read and Write application key restricted to that bucket. Save the
+   application key immediately; Backblaze displays it only once.
+4. Keep the bucket's S3-compatible endpoint, region, key ID, application key,
+   and bucket name ready for the native Configuration form.
 
-Backblaze B2:
+Do not paste either credential into chat, commit it, or leave it in shell
+history. Meeting Memory stores the pair in macOS Keychain.
 
-1. Create a bucket dedicated to Meeting Memory.
-2. Create an application key restricted to that bucket.
-3. Use the S3-compatible endpoint, region, key ID, key, and bucket name.
+## 5. Optionally Create Other Service Credentials
 
 AssemblyAI:
 
@@ -101,15 +112,19 @@ Google Calendar:
 `credentials.json` is ignored by git. OAuth tokens are stored in macOS Keychain,
 not in the repository.
 
-## 5. Optionally Enable Integrations
+## 6. Configure Required Backup and Optional Integrations
 
-Open **Configuration** from the tray, then configure only the capabilities you
-want: **Transcription...**, **Backup...**, **Calendar...**, or **Notes...**.
-Each form names the provider, data sent, and trigger before it can be enabled.
-Credential fields use native secure controls, are stored in Keychain, and are
-blank every time the form reopens. Saved enablement or credential/destination
-changes require quitting and reopening Meeting Memory; Disable pauses new work
-in the current session before reporting success.
+Open **Configuration › Backup...** from the tray, select **Enabled
+(app-managed)**, and enter all five required B2 values. Each form names the
+provider, data sent, and trigger before it can be enabled. Credential fields use
+native secure controls, are stored in Keychain, and are blank every time the
+form reopens. Save, quit, and reopen Meeting Memory to unlock the normal
+recording UI.
+
+Then configure only the optional capabilities you want:
+**Transcription...**, **Calendar...**, or **Notes...**. Saved enablement or
+credential/destination changes require quitting and reopening Meeting Memory;
+Disable pauses new work in the current session before reporting success.
 
 Use **Configuration › Calendar...** for the native Known Speakers row editor.
 Use **Authorize Google Calendar...** only after saving Calendar settings. OAuth
@@ -122,24 +137,24 @@ selected by default; process values are never imported and `.env` remains
 byte-identical. Manual `.env` editing is a legacy/development fallback only;
 do not commit it.
 
-## 6. Run Preflight Checks
+## 7. Run Preflight Checks
 
 ```bash
 make doctor
 ```
 
 `make doctor` renders Recording Core, Transcription, Backup, Calendar, and Notes
-independently. Its exit status depends only on whether Recording Core has a
-compatible runtime/helper and passes its durable storage probe. Missing
-optional configuration is `unconfigured`; invalid
-local configuration or Calendar authorization affects only that capability.
+independently. Its exit status requires both a usable Recording Core and a
+usable Backup configuration. Missing Transcription, Calendar, or Notes settings
+remain `unconfigured`; invalid local configuration or Calendar authorization
+affects only that capability.
 The check makes no provider network request. You can rerun the same report from
 **Debugging › Check Setup & Dependencies** without blocking the tray UI.
 The check verifies the helper and durable local storage but does not request
 macOS capture permissions; those remain mode-specific and are validated when a
 recording starts.
 
-## 7. Authorize Google Calendar, Optional
+## 8. Authorize Google Calendar, Optional
 
 Prefer **Configuration › Authorize Google Calendar...**. The compatible CLI
 action remains available for development:
@@ -151,7 +166,7 @@ action remains available for development:
 A browser opens for Google OAuth. When the flow succeeds, the token is saved to
 Keychain and the command prints a success message.
 
-## 8. Install and Open the macOS App
+## 9. Install and Open the macOS App
 
 ```bash
 make PYTHON=.venv/bin/python open-macos-app
@@ -172,7 +187,7 @@ After changing app code, reload the local app bundle:
 make PYTHON=.venv/bin/python reload-macos-app
 ```
 
-## 9. Validate a Recording
+## 10. Validate a Recording and B2 Backup
 
 1. Start Meeting Memory.
 2. Choose `Debugging › Test macOS Notifications` from the tray to confirm notification
@@ -184,7 +199,10 @@ make PYTHON=.venv/bin/python reload-macos-app
    is not recorded and playback is muted during capture.
 6. Open the created meeting folders under `MEETINGS_DIR` and play
    `recording.m4a`.
-7. If Transcription is configured, wait for `transcript.md` to update.
+7. Confirm that `recording.m4a` and `transcript.md` were uploaded under the
+   matching `meetings/<slug>/` prefix in the private B2 bucket. If the upload
+   failed, use **Debugging › Retry Pending B2 Backups**.
+8. If Transcription is configured, wait for `transcript.md` to update.
 
 Expected files:
 
@@ -199,7 +217,7 @@ after transcription, speaker review, and optional Anthropic Notes generation.
 
 For a fuller checklist, use [manual-validation.md](manual-validation.md).
 
-## 10. Start at Login, Optional
+## 11. Start at Login, Optional
 
 ```bash
 make PYTHON=.venv/bin/python install-launch-agent

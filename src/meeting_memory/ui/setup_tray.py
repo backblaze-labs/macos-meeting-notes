@@ -28,7 +28,7 @@ from meeting_memory.ui.submenus import configuration_submenu, configuration_surf
 
 LOGGER = logging.getLogger(__name__)
 SETUP_HEADER = "Setup Required"
-SETUP_HINT = "Fix Recording Core locally; cloud integrations are optional"
+SETUP_HINT = "Configure Recording Core and required Backblaze B2 backup"
 
 
 class RumpsSetupApp:
