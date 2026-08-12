@@ -178,8 +178,13 @@ class TrayController:
     def load_speaker_review(self, path: Path) -> SpeakerReviewState:
         return load_speaker_review(path)
 
-    def confirm_speaker_aliases(self, path: Path, aliases: dict[str, str]) -> Path:
-        return confirm_speaker_aliases(path, aliases)
+    def confirm_speaker_aliases(
+        self, path: Path, aliases: dict[str, str], *, keep_labels: bool = False
+    ) -> Path:
+        return confirm_speaker_aliases(path, aliases, keep_labels=keep_labels)
+
+    def keep_speaker_labels(self, path: Path) -> Path:
+        return confirm_speaker_aliases(path, {}, keep_labels=True)
 
     def generate_notes(self, path: Path) -> None:
         self._notes_runtime.start(path)

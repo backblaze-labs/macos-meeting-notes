@@ -59,11 +59,13 @@ generation runs in a background thread from the tray, or through the local
   by Calendar full name, except aliases explicitly configured in
   `KNOWN_SPEAKERS` through the tray's **Configuration › Known Speakers...**
   editor. This is a local hint, not automatic identification.
-- The user confirms speaker aliases in the tray UI. Relabeling is deterministic
-  code, not an LLM step.
-- Confirmed speaker review starts notes generation automatically. If notes are
-  missing, skipped, or failed, the tray shows a **Debugging › Pending Meeting
-  Tasks** action.
+- The user can confirm speaker aliases in the tray UI, or choose **Keep Speaker
+  Labels** when the names are unknown. The latter preserves labels such as
+  `Speaker A`, leaves `speaker_aliases` empty, and still records the review as
+  confirmed. Relabeling is deterministic code, not an LLM step.
+- Either confirmed speaker-review choice starts notes generation
+  automatically. If notes are missing, skipped, or failed, the tray shows a
+  **Debugging › Pending Meeting Tasks** action.
 - Anthropic receives the fixed output-schema instructions, the configured
   editable prompt, and only a speaker-confirmed transcript excerpt clipped to
   at most 60,000 characters. It never receives an unreviewed metadata stub.

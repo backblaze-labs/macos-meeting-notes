@@ -15,20 +15,22 @@ from meeting_memory.ui.transcript_view import (
 )
 
 MANUAL_OPTION = "Manual..."
-OK_RESPONSES = {1, 1000}
-OPEN_MARKDOWN_RESPONSE = 1002
-FULL_TRANSCRIPT_RESPONSE = 1003
+KEEP_LABELS_RESPONSE = 1001
+OPEN_MARKDOWN_RESPONSE = 1003
+FULL_TRANSCRIPT_RESPONSE = 1004
 SPEAKER_REVIEW_MAX_HEIGHT = 430
+KEEP_SPEAKER_LABELS = object()
 
-PromptAliases = Callable[[SpeakerReviewState], dict[str, str] | None]
-OpenConversation = Callable[[Path], None]
-ShowTranscript = Callable[[Path], None]
+PromptResult = dict[str, str] | object | None
+PromptAliases = Callable[[SpeakerReviewState], PromptResult]
+OpenConversation = ShowTranscript = Callable[[Path], None]
 
 
 @dataclass(frozen=True)
 class SpeakerReviewActions:
     load_review: Callable[[Path], SpeakerReviewState]
     confirm_aliases: Callable[[Path, dict[str, str]], Path]
+    keep_labels: Callable[[Path], Path]
     generate_notes: Callable[[Path], None]
 
 
@@ -61,7 +63,10 @@ def open_speaker_review_window(
         return False
 
     try:
-        actions.confirm_aliases(meeting_path, aliases)
+        if aliases is KEEP_SPEAKER_LABELS:
+            actions.keep_labels(meeting_path)
+        else:
+            actions.confirm_aliases(meeting_path, aliases)
     except Exception as exc:
         _alert(rumps, "Review Speakers", _format_exception(exc))
         return False
@@ -89,7 +94,7 @@ def _prompt_aliases_appkit(
     state: SpeakerReviewState,
     open_conversation: OpenConversation,
     show_transcript: ShowTranscript,
-) -> dict[str, str] | None:
+) -> PromptResult:
     from AppKit import (
         NSAlert,
         NSMakePoint,
@@ -143,13 +148,14 @@ def _prompt_aliases_appkit(
         alert = NSAlert.alloc().init()
         alert.setMessageText_("Review Speakers")
         alert.setInformativeText_(_review_message(state))
-        alert.addButtonWithTitle_("Confirm")
+        alert.addButtonWithTitle_("Confirm Names")
+        alert.addButtonWithTitle_("Keep Speaker Labels")
         alert.addButtonWithTitle_("Cancel")
         alert.addButtonWithTitle_("Open in VS Code")
         alert.addButtonWithTitle_("Full Transcript")
         alert.setAccessoryView_(scroll_view)
         response = alert.runModal()
-        if _is_ok_response(response):
+        if int(response) in {1, 1000}:
             return _aliases_from_rows(rows)
         if int(response) == OPEN_MARKDOWN_RESPONSE:
             state = replace(state, speaker_aliases=_aliases_from_rows(rows))
@@ -159,12 +165,15 @@ def _prompt_aliases_appkit(
             state = replace(state, speaker_aliases=_aliases_from_rows(rows))
             show_transcript(state.transcript_path)
             continue
+        if int(response) == KEEP_LABELS_RESPONSE:
+            return KEEP_SPEAKER_LABELS
         return None
 
 
-def _prompt_aliases_text(state: SpeakerReviewState, rumps: Any) -> dict[str, str] | None:
+def _prompt_aliases_text(state: SpeakerReviewState, rumps: Any) -> PromptResult:
     window = rumps.Window(
-        message=_review_message(state) + "\nUse one label=name mapping per line.",
+        message=_review_message(state)
+        + "\nUse label=name mappings, or leave every name blank to keep the labels.",
         title="Review Speakers",
         default_text=_alias_text(state),
         ok="Confirm",
@@ -174,7 +183,8 @@ def _prompt_aliases_text(state: SpeakerReviewState, rumps: Any) -> dict[str, str
     response = window.run()
     if not getattr(response, "clicked", False):
         return None
-    return _parse_alias_text(str(response.text))
+    aliases = _parse_alias_text(str(response.text))
+    return aliases if any(aliases.values()) else KEEP_SPEAKER_LABELS
 
 
 def _alert(
@@ -278,13 +288,6 @@ def _parse_alias_text(text: str) -> dict[str, str]:
         label, alias = line.split("=", 1)
         aliases[label.strip()] = alias.strip()
     return aliases
-
-
-def _is_ok_response(response: object) -> bool:
-    try:
-        return int(response) in OK_RESPONSES
-    except (TypeError, ValueError):
-        return bool(response)
 
 
 def _format_exception(exc: Exception) -> str:

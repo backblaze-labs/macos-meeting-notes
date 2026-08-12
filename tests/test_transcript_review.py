@@ -81,6 +81,22 @@ def test_confirm_speaker_aliases_writes_frontmatter_and_relabels(tmp_path: Path)
     assert "**Casey** (0:00:08): Hi." in relabeled
 
 
+def test_keep_labels_confirms_legacy_review_and_allows_notes(tmp_path: Path) -> None:
+    files = _write_meeting(tmp_path)
+
+    confirm_speaker_aliases(files.directory, {}, keep_labels=True)
+
+    transcript = files.transcript_path.read_text(encoding="utf-8")
+    frontmatter = read_frontmatter(files.transcript_path)
+    assert frontmatter["speaker_aliases"] == {}
+    assert frontmatter["speaker_status"] == "confirmed"
+    assert frontmatter["participants"] == ["Speaker A", "Speaker B"]
+    assert "**Speaker A** (0:00:05): Hello." in transcript
+    assert generate_notes_from_transcript(
+        files.directory, FakeSummarizer(_summary())
+    ).exists()
+
+
 def test_confirm_speaker_aliases_requires_every_detected_label(tmp_path: Path) -> None:
     files = _write_meeting(tmp_path)
 
@@ -107,7 +123,7 @@ def test_list_speaker_review_meetings_skips_confirmed_transcripts(tmp_path: Path
 def test_generate_notes_requires_confirmed_speakers(tmp_path: Path) -> None:
     files = _write_meeting(tmp_path)
 
-    with pytest.raises(ValueError, match="speaker aliases must be confirmed"):
+    with pytest.raises(ValueError, match="speaker review must be confirmed"):
         generate_notes_from_transcript(files.directory, FakeSummarizer(_summary()))
 
 

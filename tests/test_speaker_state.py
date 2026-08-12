@@ -49,6 +49,20 @@ def test_confirmation_requires_every_actual_label_and_preserves_bytes(tmp_path: 
     assert (meeting / "transcript.md").read_bytes() == before
 
 
+def test_v2_review_can_keep_detected_labels_without_aliases(tmp_path: Path) -> None:
+    meeting, _state = _reviewable_meeting(tmp_path)
+
+    confirm_speaker_aliases(meeting, {}, keep_labels=True)
+
+    text = (meeting / "transcript.md").read_text(encoding="utf-8")
+    frontmatter = read_frontmatter(meeting / "transcript.md")
+    assert frontmatter["speaker_aliases"] == {}
+    assert frontmatter["speaker_status"] == "confirmed"
+    assert frontmatter["participants"] == ["Speaker A", "Speaker B"]
+    assert "**Speaker A** (0:00:01): One" in text
+    assert "**Speaker B** (0:00:02): Two" in text
+
+
 def test_confirmed_relabel_is_idempotent_but_alias_change_is_rejected(tmp_path: Path) -> None:
     meeting, _state = _reviewable_meeting(tmp_path)
     aliases = {"Speaker A": "Alex", "Speaker B": "Blair"}

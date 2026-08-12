@@ -165,6 +165,7 @@ class RumpsTrayApp:
             SpeakerReviewActions(
                 load_review=self.controller.load_speaker_review,
                 confirm_aliases=self.controller.confirm_speaker_aliases,
+                keep_labels=self.controller.keep_speaker_labels,
                 generate_notes=self.controller.generate_notes,
             ),
             rumps_module=self.rumps,
@@ -177,7 +178,6 @@ class RumpsTrayApp:
             self.rebuild_menu()
 
     def send_test_notification(self, _sender=None) -> None:
-        LOGGER.info("Test macOS Notifications selected")
         self._send_notification("Meeting Memory test", "", "Notifications are working.")
 
     def drain_events(self, _timer=None) -> None:

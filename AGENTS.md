@@ -92,14 +92,19 @@ repo, or service modules as needed.
 ## Change Workflow
 
 1. Read the relevant spec and plan sections.
-2. Inspect existing code before editing.
-3. Make the smallest coherent change.
-4. Run the strongest available check, usually `make check`.
-5. After app behavior changes, run `make reload-macos-app` with the project
+2. Fetch `origin/main`, create a dedicated `codex/` branch in a separate git
+   worktree, and keep the primary checkout unchanged while developing.
+3. Inspect existing code before editing.
+4. Make the smallest coherent change.
+5. Run the strongest available check, usually `make check`.
+6. After app behavior changes, run `make reload-macos-app` with the project
    virtualenv Python so the official clickable app is updated and restarted.
-6. If requested behavior is not implemented or is only partially implemented,
+7. If requested behavior is not implemented or is only partially implemented,
    append the reason and future first-check guidance to `docs/deferred-work.md`.
-7. Commit a passing, reviewable slice.
+8. Commit and push a passing slice, open and merge its PR, then remove the
+   feature worktree and local feature branch.
+9. Update the primary checkout from `origin/main` without discarding or
+   overwriting any pre-existing local changes.
 
 ## Official macOS App
 
