@@ -19,7 +19,7 @@ The app is local-first: each completed recording creates a directory under
 
 - `recording.m4a`
 - `transcript.md`
-- `notes.md` after you confirm speaker aliases and generate derived notes
+- `notes.md` after you confirm the speaker review and generate derived notes
 
 B2 is the required durable backup layer. The local files remain the user's
 readable meeting archive and are committed before any upload begins.
@@ -321,9 +321,12 @@ speaker_aliases: {"Speaker A": "Alex", "Speaker B": "Ada Lovelace"}
 speaker_status: "needs_review"
 ```
 
-After reviewing speakers from the tray UI, the app applies aliases locally and
-starts notes generation automatically. For CLI backfill or repair, edit
-`speaker_aliases` and apply the deterministic relabel step:
+After reviewing speakers from the tray UI, choose **Confirm Names** to apply
+names or **Keep Speaker Labels** when you do not know them. Both choices mark
+the review as confirmed and start notes generation automatically; keeping
+labels leaves `speaker_aliases` empty and preserves names such as `Speaker A`.
+For CLI backfill or repair, edit `speaker_aliases` and apply the deterministic
+relabel step:
 
 ```bash
 meeting-memory relabel ~/Meetings/<meeting-folder>

@@ -129,15 +129,20 @@ Pass criteria after stopping recording:
 
 ## 6. Speaker Review
 
-1. Edit `speaker_aliases` in `transcript.md`, for example
-   `{"Speaker A": "Alex"}`.
-2. Run `meeting-memory relabel <meeting-folder>`.
+1. Open the tray speaker-review flow.
+2. Assign every detected speaker a name and choose **Confirm Names**, or choose
+   **Keep Speaker Labels** when the names are unknown.
 
 Pass criteria:
 
 - `speaker_status: confirmed` appears in `transcript.md`.
-- The participants line uses confirmed names.
-- Transcript lines use confirmed names, for example `**Alex**`.
+- With assigned names, the participants and transcript lines use those names.
+- With **Keep Speaker Labels**, `speaker_aliases` remains empty and labels such
+  as `Speaker A` remain unchanged.
+- Both choices start Notes generation and do not show a missing-alias error.
+
+For CLI backfill, edit `speaker_aliases` in `transcript.md` and run
+`meeting-memory relabel <meeting-folder>`.
 
 ## 7. Summarization
 

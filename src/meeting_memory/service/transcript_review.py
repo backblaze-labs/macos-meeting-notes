@@ -13,6 +13,7 @@ from meeting_memory.service.frontmatter import dump_frontmatter, split_frontmatt
 from meeting_memory.service.markdown import render_notes_markdown
 from meeting_memory.service.meeting_state import MeetingStateStore
 from meeting_memory.service.ownership import classify_ownership
+from meeting_memory.service.speaker_state import confirm_v2_speakers, reviewed_speaker_names
 from meeting_memory.service.storage import (
     NOTES_MARKDOWN,
     TRANSCRIPT_MARKDOWN,
@@ -61,37 +62,55 @@ def load_speaker_review(path: Path) -> SpeakerReviewState:
     )
 
 
-def confirm_speaker_aliases(path: Path, aliases: Mapping[str, str]) -> Path:
+def confirm_speaker_aliases(
+    path: Path,
+    aliases: Mapping[str, str],
+    *,
+    keep_labels: bool = False,
+) -> Path:
     transcript_path = resolve_transcript_path(path)
     markdown = read_regular_text_snapshot(transcript_path)
     frontmatter, _ = split_frontmatter(markdown)
     if classify_ownership(frontmatter, transcript_path.name) is ArtifactOwnership.V2:
-        return MeetingStateStore(transcript_path.parent.parent).confirm_speakers(
+        return confirm_v2_speakers(
+            transcript_path.parent.parent,
             transcript_path.parent,
             aliases,
             expected_status=str(frontmatter.get("speaker_status") or "not_available"),
+            keep_labels=keep_labels,
         )
-    return _confirm_speaker_aliases_legacy(transcript_path, aliases)
+    return _confirm_speaker_aliases_legacy(
+        transcript_path,
+        aliases,
+        keep_labels=keep_labels,
+    )
 
 
 def _confirm_speaker_aliases_legacy(
     transcript_path: Path,
     aliases: Mapping[str, str],
+    *,
+    keep_labels: bool,
 ) -> Path:
     state = load_speaker_review(transcript_path)
-    cleaned = _clean_aliases(aliases)
-    missing = [label for label in state.speaker_labels if label not in cleaned]
-    if missing:
-        raise ValueError(f"missing aliases for: {', '.join(missing)}")
+    selected, stored_aliases = reviewed_speaker_names(state.speaker_labels, aliases, keep_labels)
 
     markdown = read_regular_text_snapshot(state.transcript_path)
     frontmatter, body = split_frontmatter(markdown)
-    frontmatter["speaker_aliases"] = {label: cleaned[label] for label in state.speaker_labels}
+    participants = [selected.get(label, label) for label in state.speaker_labels]
+    relabeled = SPEAKER_LABEL_RE.sub(lambda match: _replace_label(match, selected), body)
+    relabeled = PARTICIPANTS_RE.sub(
+        f"**Participants:** {', '.join(participants)}",
+        relabeled,
+    )
+    frontmatter["participants"] = list(dict.fromkeys(participants))
+    frontmatter["speaker_aliases"] = stored_aliases
+    frontmatter["speaker_status"] = "confirmed"
     state.transcript_path.write_text(
-        f"{dump_frontmatter(frontmatter)}\n{body}",
+        f"{dump_frontmatter(frontmatter)}\n{relabeled}",
         encoding="utf-8",
     )
-    return _relabel_transcript_legacy(state.transcript_path)
+    return state.transcript_path
 
 
 def relabel_transcript(path: Path) -> Path:
@@ -162,7 +181,7 @@ def generate_notes_from_transcript(path: Path, summarizer: SummarizerClient) -> 
     markdown = read_regular_text_snapshot(transcript_path)
     frontmatter, body = split_frontmatter(markdown)
     if frontmatter.get("speaker_status") != "confirmed":
-        raise ValueError("speaker aliases must be confirmed before generating notes")
+        raise ValueError("speaker review must be confirmed before generating notes")
 
     summary = _summarize(summarizer, body)
     notes_path = transcript_path.parent / NOTES_MARKDOWN
@@ -196,13 +215,9 @@ def _speaker_aliases(frontmatter: dict[str, object]) -> dict[str, str]:
 def _optional_aliases(raw_aliases: object) -> dict[str, str]:
     if not isinstance(raw_aliases, dict):
         return {}
-    return _clean_aliases(raw_aliases)
-
-
-def _clean_aliases(aliases: Mapping[str, str]) -> dict[str, str]:
     return {
         str(label).strip(): str(alias).strip()
-        for label, alias in aliases.items()
+        for label, alias in raw_aliases.items()
         if str(label).strip() and str(alias).strip()
     }
 

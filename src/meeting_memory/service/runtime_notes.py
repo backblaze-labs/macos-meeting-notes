@@ -74,7 +74,7 @@ def _generate_legacy_notes(
 ) -> Path:
     with capture_legacy_document_snapshot(meeting_dir) as snapshot:
         if snapshot.frontmatter.get("speaker_status") != "confirmed":
-            raise ValueError("speaker aliases must be confirmed before generating notes")
+            raise ValueError("speaker review must be confirmed before generating notes")
         _, body = split_frontmatter(snapshot.metadata_text)
         summary = summarizer.summarize(body)
         rendered = render_notes_markdown(
@@ -92,7 +92,7 @@ def _confirmed_snapshot(
 ) -> tuple[str, str, MeetingMeta, tuple[int, int]]:
     with open_meeting_document(meetings_dir, meeting_dir) as document:
         if document.frontmatter.get("speaker_status") != "confirmed":
-            raise ValueError("speaker aliases must be confirmed before generating notes")
+            raise ValueError("speaker review must be confirmed before generating notes")
         _, body = split_frontmatter(document.text)
         info = os.fstat(document.directory_fd)
         return (

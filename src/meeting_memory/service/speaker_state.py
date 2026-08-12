@@ -30,6 +30,7 @@ def confirm_v2_speakers(
     aliases: Mapping[str, str],
     *,
     expected_status: str | None = None,
+    keep_labels: bool = False,
 ) -> Path:
     """Relabel body and owned fields with one locked atomic replacement."""
 
@@ -37,7 +38,14 @@ def confirm_v2_speakers(
     with meeting_lock(meetings_dir, meeting_dir.name):
         with open_meeting_document(meetings_dir, meeting_dir) as document:
             frontmatter, body = split_frontmatter(document.text)
-            return _confirm_locked(document, frontmatter, body, aliases, expected_status)
+            return _confirm_locked(
+                document,
+                frontmatter,
+                body,
+                aliases,
+                expected_status,
+                keep_labels,
+            )
 
 
 def _confirm_locked(
@@ -46,6 +54,7 @@ def _confirm_locked(
     body: str,
     aliases: Mapping[str, str],
     expected_status: str | None,
+    keep_labels: bool,
 ) -> Path:
     current_status = str(frontmatter.get("speaker_status") or "not_available")
     if expected_status is not None and current_status != expected_status:
@@ -63,11 +72,8 @@ def _confirm_locked(
     labels = _transcript_labels(body)
     if not labels:
         raise ValueError("speaker confirmation requires transcript speaker labels")
-    missing = [label for label in labels if label not in cleaned]
-    if missing:
-        raise ValueError(f"missing aliases for: {', '.join(missing)}")
+    selected, stored_aliases = reviewed_speaker_names(labels, cleaned, keep_labels)
 
-    selected = {label: cleaned[label] for label in labels}
     participants = list(dict.fromkeys(selected.values()))
     relabeled = SPEAKER_LABEL_RE.sub(lambda match: _replace_label(match, selected), body)
     relabeled = PARTICIPANTS_RE.sub(
@@ -79,7 +85,7 @@ def _confirm_locked(
             document.text,
             {
                 "participants": participants,
-                "speaker_aliases": selected,
+                "speaker_aliases": stored_aliases,
                 "speaker_status": "confirmed",
             },
         ),
@@ -105,6 +111,24 @@ def _transcript_labels(body: str) -> tuple[str, ...]:
 def _stored_aliases(frontmatter: dict[str, object]) -> dict[str, str]:
     raw = frontmatter.get("speaker_aliases")
     return _clean_aliases(raw) if isinstance(raw, dict) else {}
+
+
+def reviewed_speaker_names(
+    labels: tuple[str, ...],
+    aliases: Mapping[str, str],
+    keep_labels: bool,
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Resolve displayed names separately from persisted user aliases."""
+    cleaned = _clean_aliases(aliases)
+    if keep_labels:
+        if cleaned:
+            raise ValueError("keeping speaker labels does not accept aliases")
+        return {label: label for label in labels}, {}
+    missing = [label for label in labels if label not in cleaned]
+    if missing:
+        raise ValueError(f"missing aliases for: {', '.join(missing)}")
+    selected = {label: cleaned[label] for label in labels}
+    return selected, selected
 
 
 def _clean_aliases(aliases: Mapping[str, str]) -> dict[str, str]:

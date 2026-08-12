@@ -185,8 +185,14 @@ class FakeController:
     def load_speaker_review(self, path: Path):
         raise AssertionError(f"unexpected speaker review load: {path}")
 
-    def confirm_speaker_aliases(self, path: Path, aliases: dict[str, str]) -> Path:
+    def confirm_speaker_aliases(
+        self, path: Path, aliases: dict[str, str], *, keep_labels: bool = False
+    ) -> Path:
         del aliases
+        del keep_labels
+        return path / "transcript.md"
+
+    def keep_speaker_labels(self, path: Path) -> Path:
         return path / "transcript.md"
 
     def generate_notes(self, path: Path) -> None:

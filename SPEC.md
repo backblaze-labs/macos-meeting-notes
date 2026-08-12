@@ -369,7 +369,7 @@ completion.
 
 **REQ-F4-03** Transcript segments MUST be formatted as `**<Speaker Label>** (<HH:MM:SS>): <text>` in `transcript.md`.
 
-**REQ-F4-04** Speaker labels returned by AssemblyAI (e.g. "Speaker A", "Speaker B") MUST be preserved until the user confirms local `speaker_aliases`. The application MUST NOT infer real attendee names automatically.
+**REQ-F4-04** Speaker labels returned by AssemblyAI (e.g. "Speaker A", "Speaker B") MUST be preserved until the user either confirms local `speaker_aliases` or explicitly confirms that the detected labels should be kept. Keeping labels MUST leave `speaker_aliases` empty, set `speaker_status` to `confirmed`, and MUST NOT prevent Notes generation. The application MUST NOT infer real attendee names automatically.
 
 **REQ-F4-05** After AssemblyAI creates a transcript job, the application MUST record its ID in the meeting's YAML frontmatter (`assemblyai_id` field) for future retrieval. Before then the field MUST remain `null`, never a failure sentinel.
 
@@ -380,7 +380,8 @@ completion.
 ### F5: Summarization
 
 **REQ-F5-01** When Notes is `ready`, summarization MUST start automatically
-after UI speaker review confirms `speaker_status`. When Notes is unavailable,
+after UI speaker review confirms `speaker_status`, whether the user assigns
+names or explicitly keeps the detected labels. When Notes is unavailable,
 the reviewed transcript MUST remain complete and the Notes state MUST offer
 setup/retry without blocking it. `meeting-memory summarize <meeting-folder>`
 MUST remain available as a manual backfill/retry command for confirmed
@@ -798,7 +799,7 @@ Tray main thread → notify("Recording saved")      ← first value is complete
         └── Backup ready? enqueue pending job
               └── capture revision R/snapshot → upload → compare current R
 
-[User confirms speaker_aliases]
+[User confirms speaker aliases or explicitly keeps detected labels]
         │
         ▼
 Tray speaker review relabels transcript.md       ← local deterministic rewrite

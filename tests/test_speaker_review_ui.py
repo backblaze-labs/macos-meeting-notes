@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import sys
-import types
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+
+from speaker_review_fakes import FakeAppKit
 
 from meeting_memory.types.transcript import SpeakerReviewState
 from meeting_memory.ui.speaker_review import (
     FULL_TRANSCRIPT_RESPONSE,
+    KEEP_LABELS_RESPONSE,
+    KEEP_SPEAKER_LABELS,
     OPEN_MARKDOWN_RESPONSE,
     SPEAKER_REVIEW_MAX_HEIGHT,
     SpeakerReviewActions,
@@ -28,6 +31,7 @@ def test_speaker_review_window_confirms_aliases_and_offers_notes(tmp_path: Path)
         SpeakerReviewActions(
             load_review=actions.load_review,
             confirm_aliases=actions.confirm_aliases,
+            keep_labels=lambda path: path / "transcript.md",
             generate_notes=actions.generate_notes,
         ),
         rumps_module=rumps,
@@ -49,6 +53,7 @@ def test_speaker_review_window_generates_notes_without_second_prompt(tmp_path: P
         SpeakerReviewActions(
             load_review=actions.load_review,
             confirm_aliases=actions.confirm_aliases,
+            keep_labels=lambda path: path / "transcript.md",
             generate_notes=actions.generate_notes,
         ),
         rumps_module=FakeRumps(),
@@ -67,6 +72,7 @@ def test_speaker_review_window_stops_when_cancelled(tmp_path: Path) -> None:
         SpeakerReviewActions(
             load_review=actions.load_review,
             confirm_aliases=actions.confirm_aliases,
+            keep_labels=lambda path: path / "transcript.md",
             generate_notes=actions.generate_notes,
         ),
         rumps_module=FakeRumps(),
@@ -130,6 +136,21 @@ def test_appkit_review_scrolls_many_speakers(monkeypatch, tmp_path: Path) -> Non
     assert scroll_view.scrolled_to == (0, content_height - SPEAKER_REVIEW_MAX_HEIGHT)
 
 
+def test_appkit_review_offers_keep_labels_button(monkeypatch, tmp_path: Path) -> None:
+    fake_appkit = FakeAppKit(responses=[KEEP_LABELS_RESPONSE])
+    monkeypatch.setitem(sys.modules, "AppKit", fake_appkit)
+
+    result = _prompt_aliases_appkit(
+        _state(tmp_path), lambda _path: None, lambda _path: None
+    )
+
+    assert result is KEEP_SPEAKER_LABELS
+    assert fake_appkit.alerts[0].buttons[:2] == [
+        "Confirm Names",
+        "Keep Speaker Labels",
+    ]
+
+
 def _state(tmp_path: Path) -> SpeakerReviewState:
     return SpeakerReviewState(
         meeting_directory=tmp_path,
@@ -174,121 +195,3 @@ class FakeRumps:
         if self.alert_responses:
             return self.alert_responses.pop(0)
         return 0
-
-
-class FakeAppKit(types.SimpleNamespace):
-    def __init__(self, responses: list[int]) -> None:
-        self.alerts: list[FakeAlert] = []
-        super().__init__(
-            NSAlert=_FakeAlertFactory(responses, self.alerts),
-            NSFont=types.SimpleNamespace(systemFontOfSize_=lambda _size: object()),
-            NSMakePoint=lambda *args: args,
-            NSMakeRect=lambda *args: args,
-            NSPopUpButton=FakePopUpButton,
-            NSScrollView=FakeScrollView,
-            NSTextField=FakeTextField,
-            NSView=FakeView,
-        )
-
-
-class _FakeAlloc:
-    @classmethod
-    def alloc(cls):
-        return cls()
-
-
-class _FakeAlertFactory:
-    def __init__(self, responses: list[int], alerts: list[FakeAlert]) -> None:
-        self.responses = responses
-        self.alerts = alerts
-
-    def alloc(self):
-        alert = FakeAlert(self.responses)
-        self.alerts.append(alert)
-        return alert
-
-
-class FakeAlert:
-    def __init__(self, responses: list[int]) -> None:
-        self.responses = responses
-        self.accessory = None
-
-    def init(self):
-        return self
-
-    def setMessageText_(self, _text) -> None:
-        pass
-
-    def setInformativeText_(self, _text) -> None:
-        pass
-
-    def addButtonWithTitle_(self, _title) -> None:
-        pass
-
-    def setAccessoryView_(self, view) -> None:
-        self.accessory = view
-
-    def runModal(self) -> int:
-        return self.responses.pop(0)
-
-
-class FakeView(_FakeAlloc):
-    def initWithFrame_(self, frame):
-        self.frame = frame
-        return self
-    def addSubview_(self, _view) -> None:
-        pass
-
-
-class FakeScrollView(_FakeAlloc):
-    def initWithFrame_(self, frame):
-        self.frame = frame
-        return self
-    def setDocumentView_(self, view) -> None:
-        self.document_view = view
-    def setHasVerticalScroller_(self, value) -> None:
-        self.vertical_scroller = value
-    def setHasHorizontalScroller_(self, value) -> None:
-        self.horizontal_scroller = value
-    def setAutohidesScrollers_(self, value) -> None:
-        pass
-    def contentView(self):
-        return self
-    def scrollToPoint_(self, point) -> None:
-        self.scrolled_to = point
-    def reflectScrolledClipView_(self, _view) -> None:
-        pass
-
-
-class FakePopUpButton(_FakeAlloc):
-    def initWithFrame_pullsDown_(self, _frame, _pulls_down):
-        self.selected = ""
-        return self
-    def addItemsWithTitles_(self, options) -> None:
-        self.selected = options[0]
-    def selectItemWithTitle_(self, option) -> None:
-        self.selected = option
-    def titleOfSelectedItem(self) -> str:
-        return self.selected
-
-
-class FakeTextField(_FakeAlloc):
-    def initWithFrame_(self, _frame):
-        self.value = ""
-        return self
-    def setStringValue_(self, value) -> None:
-        self.value = value
-    def stringValue(self) -> str:
-        return self.value
-    def setPlaceholderString_(self, _value) -> None:
-        pass
-    def setBezeled_(self, _value) -> None:
-        pass
-    def setDrawsBackground_(self, _value) -> None:
-        pass
-    def setEditable_(self, _value) -> None:
-        pass
-    def setSelectable_(self, _value) -> None:
-        pass
-    def setFont_(self, _value) -> None:
-        pass
