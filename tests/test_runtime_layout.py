@@ -27,6 +27,10 @@ def test_development_layout_anchors_paths_without_consulting_cwd(tmp_path: Path)
     assert layout.native_helper_path == project / ".build" / "MeetingMemoryCapture"
     assert layout.native_encoder_path == project / ".build" / "MeetingMemoryFFmpegAudioEncoder"
     assert (
+        layout.default_prompt_path
+        == home / "Library/Application Support/meeting-memory/prompts/summary.md"
+    )
+    assert (
         layout.resolve_setting_path(
             SettingKey.GOOGLE_CALENDAR_CREDENTIALS_FILE,
             Path("oauth/client.json"),
@@ -50,6 +54,14 @@ def test_development_layout_anchors_paths_without_consulting_cwd(tmp_path: Path)
             SettingSource.APP_PREFERENCE,
         )
         == home / "Library/Application Support/meeting-memory/prompts/managed.md"
+    )
+    assert (
+        layout.resolve_setting_path(
+            SettingKey.SUMMARY_PROMPT_FILE,
+            Path("prompts/summary.md"),
+            SettingSource.DEFAULT,
+        )
+        == layout.default_prompt_path
     )
 
 

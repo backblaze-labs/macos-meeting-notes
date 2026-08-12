@@ -71,7 +71,9 @@ generation runs in a background thread from the tray, or through the local
   `SUMMARY_PROMPT_FILE` in a native multiline editor. Saved changes apply to
   the next notes generation without restarting the app. Editable text is
   treated as additional instructions; the JSON output contract is fixed in the
-  adapter.
+  adapter. Without an explicit path override, the editable copy is personal
+  state at `~/Library/Application Support/meeting-memory/prompts/summary.md`;
+  the repository prompt remains an unchanged built-in fallback.
 - `meeting-memory summarize <meeting-folder>` requires
   `speaker_status: confirmed` and remains available as a backfill/retry command
   for `notes.md`.

@@ -15,6 +15,7 @@ from meeting_memory.service.preference_store import (
     PreferencesDurabilityUncertain,
     PreferencesStoreError,
     PreferenceStore,
+    default_preferences_path,
 )
 from meeting_memory.types.capabilities import Capability
 from meeting_memory.types.configuration import (
@@ -34,6 +35,17 @@ def test_missing_store_is_empty_without_creating_app_data(tmp_path: Path) -> Non
     assert not path.parent.exists()
 
 
+def test_default_store_is_personal_application_support_state(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+    assert default_preferences_path() == (
+        tmp_path / "Library/Application Support/meeting-memory/preferences.json"
+    )
+
+
 def test_round_trip_is_private_atomic_and_contains_no_secret_values(tmp_path: Path) -> None:
     path = tmp_path / "app" / "preferences.json"
     ref = SecretRef(SecretId.BACKUP, "a" * 32)
@@ -41,6 +53,10 @@ def test_round_trip_is_private_atomic_and_contains_no_secret_values(tmp_path: Pa
         values=(
             PreferenceValue(PreferenceKey.MEETINGS_DIR, "~/Meetings"),
             PreferenceValue(PreferenceKey.B2_BUCKET_NAME, "private-backup"),
+            PreferenceValue(
+                PreferenceKey.KNOWN_SPEAKERS,
+                '[{"name":"Alex","matches":["alex@example.com"]}]',
+            ),
         ),
         capabilities=(CapabilityPreference(Capability.BACKUP, True),),
         secret_refs=(ref,),

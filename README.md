@@ -273,7 +273,9 @@ runs readiness automatically.
 `KNOWN_SPEAKERS` is intentionally empty by default. Use the tray's
 **Configuration › Calendar...** structured speaker editor to add local aliases
 for normalizing Calendar speaker candidates. The app stores them in app-owned
-preferences in the canonical structured speaker list. Each row has one display
+preferences at
+`~/Library/Application Support/meeting-memory/preferences.json`, outside the
+repository and with private filesystem permissions. Each row has one display
 name and zero or more attendee names, emails, or email local-parts to match.
 
 ## Costs
@@ -296,17 +298,22 @@ transcript excerpt capped at 60,000 characters.
 
 ## Summary Prompt
 
-The default summary prompt lives at [prompts/summary.md](prompts/summary.md).
-Set `SUMMARY_PROMPT_FILE` to point at another prompt file. If the file contains
-`{transcript}`, the app replaces that placeholder with the clipped transcript;
-otherwise it appends the transcript below the prompt.
+The versioned built-in template lives at
+[prompts/summary.md](prompts/summary.md), but the app never writes personal
+changes there. Until you customize it, the app uses that built-in text as a
+fallback. Saving from the tray creates the private personal copy at
+`~/Library/Application Support/meeting-memory/prompts/summary.md`, in checkout
+and bundled execution alike. Set `SUMMARY_PROMPT_FILE` explicitly only when a
+development or legacy workflow needs another path. If the selected file
+contains `{transcript}`, the app replaces that placeholder with the clipped
+transcript; otherwise it appends the transcript below the prompt.
 
 Choose **Configuration › Notes Prompt...** in the tray to edit the effective
 additional instructions in a native multiline editor. The required JSON output
 contract stays fixed so custom text cannot change the parser-facing schema.
-Saving updates `SUMMARY_PROMPT_FILE`, and the next notes generation uses the new
-text without restarting the app. The editor can also restore the built-in
-default.
+Saving updates the effective personal prompt file, and the next notes
+generation uses the new text without restarting the app. The editor can also
+restore the built-in default into that personal copy.
 
 ## Speaker Review
 
