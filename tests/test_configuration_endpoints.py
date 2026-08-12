@@ -113,7 +113,12 @@ def _readiness_status(loaded):
     report = readiness.build_readiness_report(
         loaded.settings,
         configuration=loaded,
-        native_probe=lambda: {"event": "supported", "microphone": "Built-in"},
+        native_probe=lambda: {
+            "event": "supported",
+            "microphone": "Built-in",
+            "microphone_permission": "authorized",
+            "system_audio_permission": "authorized",
+        },
         durable_probe=lambda _path: None,
         system_name="Darwin",
         kernel_release="24.0.0",

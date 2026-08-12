@@ -141,14 +141,14 @@ def test_readiness_uses_the_exact_composed_snapshot(monkeypatch) -> None:
         lambda use, **_kwargs: loaded if use is ConfigurationUse.READINESS else None,
     )
 
-    def build(actual, *, configuration):
-        captured.extend((actual, configuration))
+    def build(actual, *, configuration, capture_mode):
+        captured.extend((actual, configuration, capture_mode))
         return report
 
     monkeypatch.setattr(readiness, "build_readiness_report", build)
 
     assert readiness.load_readiness_report() is report
-    assert captured == [settings, loaded]
+    assert captured == [settings, loaded, "full-meeting"]
 
 
 def test_composed_readiness_fails_app_errors_closed_but_degrades_override(
@@ -277,7 +277,12 @@ def _report(loaded, **kwargs):
     return readiness.build_readiness_report(
         loaded.settings,
         configuration=loaded,
-        native_probe=lambda: {"event": "supported", "microphone": "Built-in"},
+        native_probe=lambda: {
+            "event": "supported",
+            "microphone": "Built-in",
+            "microphone_permission": "authorized",
+            "system_audio_permission": "authorized",
+        },
         durable_probe=lambda _path: None,
         system_name="Darwin",
         kernel_release="24.0.0",

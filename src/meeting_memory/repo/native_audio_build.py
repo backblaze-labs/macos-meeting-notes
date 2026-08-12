@@ -63,7 +63,13 @@ def build_native_capture_helper(
         "-target",
         f"{architecture}-apple-macosx15.0",
     ]
-    for framework in ("AVFoundation", "CoreAudio", "CoreMedia", "ScreenCaptureKit"):
+    for framework in (
+        "AVFoundation",
+        "CoreAudio",
+        "CoreGraphics",
+        "CoreMedia",
+        "ScreenCaptureKit",
+    ):
         command.extend(["-framework", framework])
     command.extend(str(path) for path in sources)
     command.extend(["-o", str(output_path)])

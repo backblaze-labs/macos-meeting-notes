@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from meeting_memory.config.runtime import RuntimeSettings
-from meeting_memory.service import readiness
+from meeting_memory.service import readiness, recording_readiness
 from meeting_memory.types.capabilities import Capability, CapabilityState
 from meeting_memory.types.configuration import AppPreferences, PreferenceSnapshot
 
@@ -35,6 +35,12 @@ def test_fresh_profile_has_usable_local_core_and_unconfigured_optionals_without_
     report = _build(
         RuntimeSettings(_env_file=None, meetings_dir=tmp_path / "meetings"),
         token_reader=unexpected_token_read,
+        native_probe=lambda: {
+            "event": "supported",
+            "microphone": "Built-in",
+            "microphone_permission": "not-determined",
+            "system_audio_permission": "not-authorized",
+        },
     )
 
     assert report.recording_ready is True
@@ -53,15 +59,46 @@ def test_fresh_profile_has_usable_local_core_and_unconfigured_optionals_without_
 def test_missing_microphone_degrades_but_keeps_recording_usable(tmp_path: Path) -> None:
     report = _build(
         RuntimeSettings(_env_file=None, meetings_dir=tmp_path / "meetings"),
-        native_probe=lambda: {"event": "supported", "microphone": "none"},
+        native_probe=lambda: {
+            "event": "supported",
+            "microphone": "none",
+            "microphone_permission": "authorized",
+            "system_audio_permission": "authorized",
+        },
     )
 
     core = report.status_for(Capability.RECORDING_CORE)
     assert core.state is CapabilityState.DEGRADED
     assert core.usable is True
-    assert "permissions are unchecked" in core.summary
-    assert "no microphone" in core.summary
-    assert "short recording" in core.action
+    assert "a default microphone" in core.summary
+    assert "Select a macOS input device" in core.action
+
+
+def test_authorized_full_meeting_is_ready(tmp_path: Path) -> None:
+    core = _build(RuntimeSettings(_env_file=None, meetings_dir=tmp_path / "meetings")).status_for(
+        Capability.RECORDING_CORE
+    )
+
+    assert core.state is CapabilityState.READY
+    assert "Full Meeting permissions are ready" in core.summary
+    assert core.action is None
+
+
+def test_silent_mode_ignores_microphone_permission_and_device(tmp_path: Path) -> None:
+    report = _build(
+        RuntimeSettings(_env_file=None, meetings_dir=tmp_path / "meetings"),
+        capture_mode="silent-system-only",
+        native_probe=lambda: {
+            "event": "supported",
+            "microphone": "none",
+            "microphone_permission": "denied",
+            "system_audio_permission": "authorized",
+        },
+    )
+
+    core = report.status_for(Capability.RECORDING_CORE)
+    assert core.state is CapabilityState.READY
+    assert "Silent System Only permissions are ready" in core.summary
 
 
 def test_non_directory_meetings_root_fails_only_recording_core(tmp_path: Path) -> None:
@@ -194,12 +231,12 @@ def test_legacy_env_is_unchanged_and_process_environment_keeps_precedence(
     original = b"MEETINGS_DIR=./meetings\nASSEMBLYAI_API_KEY=replace-me\nB2_ENDPOINT=not-valid\n"
     env_file.write_bytes(original)
     monkeypatch.setenv("ASSEMBLYAI_API_KEY", "process-secret")
-    monkeypatch.setattr(readiness.platform, "system", lambda: "Darwin")
-    monkeypatch.setattr(readiness.platform, "release", lambda: "24.0.0")
+    monkeypatch.setattr(recording_readiness.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(recording_readiness.platform, "release", lambda: "24.0.0")
     monkeypatch.setattr(
-        readiness,
+        recording_readiness,
         "check_native_capture",
-        lambda: {"event": "supported", "microphone": "Built-in"},
+        _ready_native_event,
     )
 
     report = readiness.load_readiness_report(
@@ -215,11 +252,20 @@ def test_legacy_env_is_unchanged_and_process_environment_keeps_precedence(
 
 
 def _build(settings: RuntimeSettings, **kwargs):
-    kwargs.setdefault("native_probe", lambda: {"event": "supported", "microphone": "Built-in"})
+    kwargs.setdefault("native_probe", _ready_native_event)
     kwargs.setdefault("system_name", "Darwin")
     kwargs.setdefault("kernel_release", "24.0.0")
     kwargs.setdefault("python_version", (3, 11))
     return readiness.build_readiness_report(settings, **kwargs)
+
+
+def _ready_native_event() -> dict[str, str]:
+    return {
+        "event": "supported",
+        "microphone": "Built-in",
+        "microphone_permission": "authorized",
+        "system_audio_permission": "authorized",
+    }
 
 
 def _write_desktop_credentials(path: Path) -> None:

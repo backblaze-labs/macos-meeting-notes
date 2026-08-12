@@ -116,6 +116,7 @@ REQUIRED_SOURCE_FILES = (
     "service/runtime_notes_gate.py",
     "service/runtime_retry.py",
     "service/readiness.py",
+    "service/recording_readiness.py",
     "service/readiness_configuration.py",
     "service/readiness_integrations.py",
     "service/configuration_loader.py",
@@ -284,7 +285,6 @@ def test_file_size_limits() -> None:
         for path in source_files()
         if len(path.read_text(encoding="utf-8").splitlines()) > 300
     ]
-
     assert oversized == []
 
 

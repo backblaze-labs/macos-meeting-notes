@@ -42,6 +42,7 @@ def test_build_native_capture_helper_compiles_packaged_swift_sources(
     assert result == output
     assert str(source_dir / "A.swift") in calls[0]
     assert str(source_dir / "B.swift") in calls[0]
+    assert "CoreGraphics" in calls[0]
     assert calls[0][-2:] == ["-o", str(output)]
     assert output.stat().st_mode & 0o111
 
@@ -125,6 +126,32 @@ def test_native_check_rejects_fatal_event_with_zero_exit(monkeypatch, tmp_path: 
 
     with pytest.raises(native_audio.NativeAudioCaptureError, match="late failure"):
         native_audio.check_native_capture()
+
+
+def test_native_check_returns_permission_statuses(monkeypatch, tmp_path: Path) -> None:
+    helper = tmp_path / native_audio.HELPER_NAME
+    helper.write_bytes(b"binary")
+    helper.chmod(0o755)
+    monkeypatch.setattr(native_audio, "native_capture_helper_path", lambda: helper)
+    monkeypatch.setattr(
+        native_audio.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0],
+            0,
+            stdout=(
+                '{"event":"supported","microphone":"Built-in",'
+                '"microphone_permission":"authorized",'
+                '"system_audio_permission":"authorized"}\n'
+            ),
+            stderr="",
+        ),
+    )
+
+    event = native_audio.check_native_capture()
+
+    assert event["microphone_permission"] == "authorized"
+    assert event["system_audio_permission"] == "authorized"
 
 
 def test_convert_native_audio_uses_helper_and_validates_output(

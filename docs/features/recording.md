@@ -52,6 +52,10 @@ workers and emit typed events for the tray main thread to render.
 - Neither mode changes the system's selected input or output device.
 - macOS prompts for Microphone and Screen & System Audio permissions when the
   relevant mode first needs them.
+- Readiness checks inspect the current permission status without prompting and
+  evaluate only the selected mode. Silent System Only therefore does not need a
+  microphone; Full Meeting becomes ready when both permissions and a default
+  input device are available.
 - Audio mode changes are rejected while a recording is active.
 - Manual starts use a nearby calendar event title when one is available within
   the recording-context window.

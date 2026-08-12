@@ -137,8 +137,9 @@ missing optional integrations remain `unconfigured`. The tray's **Debugging ›
 Check Setup & Dependencies** action renders the same report on a background
 worker. Neither path contacts a provider; configured Calendar may read its
 existing OAuth token from Keychain during the explicit check. The local check
-does not request macOS capture permissions, so Recording Core may remain
-`degraded` until the selected mode validates permissions at recording start.
+does not request macOS capture permissions, but it reads their current status.
+Recording Core reports `ready` when the selected mode's permissions and devices
+are available, and `degraded` with a recovery action while any are missing.
 
 The clickable app is installed at `~/Applications/Meeting Memory.app` so it can
 be launched from Finder or found with Cmd+Space by searching for

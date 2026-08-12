@@ -19,6 +19,21 @@ ReportLoader = Callable[[], ReadinessReport]
 ThreadFactory = Callable[..., threading.Thread]
 
 
+def readiness_loader_for(recorder: object) -> ReportLoader:
+    """Bind a readiness check to the recorder's currently selected mode."""
+
+    return lambda: load_readiness_report(capture_mode=getattr(recorder, "capture_mode"))
+
+
+def readiness_check_for(controller: object) -> ReadinessCheck:
+    """Create a mode-aware check for a tray controller."""
+
+    return ReadinessCheck(
+        getattr(controller, "event_queue").put,
+        readiness_loader_for(getattr(controller, "recorder")),
+    )
+
+
 @dataclass
 class ReadinessCheck:
     """Run explicit setup diagnostics away from the UI thread."""

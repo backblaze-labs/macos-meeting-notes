@@ -34,7 +34,7 @@ from meeting_memory.ui.notifications import (
 )
 from meeting_memory.ui.recording_health import RecordingHealthMonitor
 from meeting_memory.ui.runtime_events import runtime_notification
-from meeting_memory.ui.setup_readiness import ReadinessCheck, readiness_notification_body
+from meeting_memory.ui.setup_readiness import readiness_check_for, readiness_notification_body
 from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
 from meeting_memory.ui.submenus import (
     DebuggingActions,
@@ -59,7 +59,7 @@ class RumpsTrayApp:
         self.rumps = rumps_module or load_rumps()
         self.controller = controller
         self.readiness_report = readiness_report
-        self.readiness_check = ReadinessCheck(controller.event_queue.put)
+        self.readiness_check = readiness_check_for(controller)
         if rumps_module is None:
             configure_background_app_identity(LOGGER)
             allow_foreground_notifications(LOGGER)

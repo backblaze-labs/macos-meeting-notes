@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreGraphics
 import Foundation
 
 @main
@@ -61,7 +62,20 @@ struct MeetingMemoryNativeCapture {
         emitJSON([
             "event": "supported",
             "microphone": AVCaptureDevice.default(for: .audio)?.localizedName ?? "none",
+            "microphone_permission": microphoneAuthorization(),
+            "system_audio_permission": CGPreflightScreenCaptureAccess()
+                ? "authorized" : "not-authorized",
         ])
+    }
+
+    private static func microphoneAuthorization() -> String {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: return "authorized"
+        case .denied: return "denied"
+        case .restricted: return "restricted"
+        case .notDetermined: return "not-determined"
+        @unknown default: return "unknown"
+        }
     }
 
     private static func convertWAV(inputPath: String, outputPath: String) async throws {

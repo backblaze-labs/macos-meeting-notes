@@ -15,9 +15,26 @@ from meeting_memory.types.capabilities import (
     ReadinessReport,
 )
 from meeting_memory.types.events import ReadinessChecked
-from meeting_memory.ui import menu
+from meeting_memory.ui import menu, setup_readiness
 from meeting_memory.ui.setup_readiness import ReadinessCheck
 from meeting_memory.ui.tray import RumpsTrayApp
+
+
+def test_mode_readiness_loader_reads_the_current_mode(monkeypatch) -> None:
+    recorder = SimpleNamespace(capture_mode="full-meeting")
+    modes: list[str] = []
+    report = _report()
+    monkeypatch.setattr(
+        setup_readiness,
+        "load_readiness_report",
+        lambda *, capture_mode: modes.append(capture_mode) or report,
+    )
+    loader = setup_readiness.readiness_loader_for(recorder)
+
+    assert loader() is report
+    recorder.capture_mode = "silent-system-only"
+    assert loader() is report
+    assert modes == ["full-meeting", "silent-system-only"]
 
 
 def test_exact_report_is_loaded_off_thread_and_emitted_as_typed_event() -> None:

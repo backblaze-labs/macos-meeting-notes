@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from meeting_memory.config.runtime import RuntimeSettings
-from meeting_memory.service import readiness, readiness_integrations
+from meeting_memory.service import readiness, readiness_integrations, recording_readiness
 from meeting_memory.types.capabilities import Capability, CapabilityState
 
 
@@ -34,9 +34,9 @@ def test_durable_storage_probe_failures_keep_core_unusable_and_clean_up(
 
     def durable_probe(path: Path) -> None:
         if operation == "write":
-            readiness._probe_durable_write(path, writer=fail)
+            recording_readiness._probe_durable_write(path, writer=fail)
         else:
-            readiness._probe_durable_write(path, sync=fail)
+            recording_readiness._probe_durable_write(path, sync=fail)
 
     report = _build(
         RuntimeSettings(_env_file=None, meetings_dir=meetings_dir),
@@ -250,7 +250,15 @@ def test_calendar_readiness_rejects_tokens_explicit_auth_would_not_persist(
 
 
 def _build(settings: RuntimeSettings, **kwargs):
-    kwargs.setdefault("native_probe", lambda: {"event": "supported", "microphone": "Built-in"})
+    kwargs.setdefault(
+        "native_probe",
+        lambda: {
+            "event": "supported",
+            "microphone": "Built-in",
+            "microphone_permission": "authorized",
+            "system_audio_permission": "authorized",
+        },
+    )
     kwargs.setdefault("system_name", "Darwin")
     kwargs.setdefault("kernel_release", "24.0.0")
     kwargs.setdefault("python_version", (3, 11))

@@ -47,7 +47,12 @@ def test_masked_unreadable_legacy_env_never_overrides_explicit_consent_state(
     report = readiness.build_readiness_report(
         loaded.settings,
         configuration=loaded,
-        native_probe=lambda: {"event": "supported", "microphone": "Built-in"},
+        native_probe=lambda: {
+            "event": "supported",
+            "microphone": "Built-in",
+            "microphone_permission": "authorized",
+            "system_audio_permission": "authorized",
+        },
         durable_probe=lambda _path: None,
         system_name="Darwin",
         kernel_release="24.0.0",
@@ -187,7 +192,12 @@ def _report(loaded, *, token_reader=None):
         loaded.settings,
         configuration=loaded,
         token_reader=token_reader,
-        native_probe=lambda: {"event": "supported", "microphone": "Built-in"},
+        native_probe=lambda: {
+            "event": "supported",
+            "microphone": "Built-in",
+            "microphone_permission": "authorized",
+            "system_audio_permission": "authorized",
+        },
         durable_probe=lambda _path: None,
         system_name="Darwin",
         kernel_release="24.0.0",
