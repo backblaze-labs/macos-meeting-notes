@@ -309,6 +309,11 @@ development or legacy workflow needs another path. If the selected file
 contains `{transcript}`, the app replaces that placeholder with the clipped
 transcript; otherwise it appends the transcript below the prompt.
 
+Older `.env` files created from the repository scaffold may contain
+`SUMMARY_PROMPT_FILE=prompts/summary.md`. That exact former scaffold default is
+treated as the app-owned default during upgrade, so it no longer keeps personal
+edits in the checkout. Other explicit legacy and process paths remain honored.
+
 Choose **Configuration › Notes Prompt...** in the tray to edit the effective
 additional instructions in a native multiline editor. The required JSON output
 contract stays fixed so custom text cannot change the parser-facing schema.

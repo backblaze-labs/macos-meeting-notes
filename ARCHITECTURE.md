@@ -294,6 +294,10 @@ does not scan for `.env`, rejects relative process paths, uses the exact bundled
 Swift helper, and requires an explicit file selection before legacy preview.
 Migration converts selected legacy path values to absolute app preferences before
 the final CAS while leaving the source file byte-identical.
+For upgrade compatibility, the exact former scaffold value
+`SUMMARY_PROMPT_FILE=prompts/summary.md` resolves through the current default
+path instead of pinning personal edits to the checkout. Other legacy and
+process path overrides keep their normal provenance rules.
 
 The standalone artifact is a PyInstaller `onedir + windowed` bundle built once
 per native architecture. A frozen, value-free self-check imports collected SDK

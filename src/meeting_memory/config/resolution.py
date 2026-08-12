@@ -103,11 +103,20 @@ def _resolve_setting(definition, process, preferences, secrets, legacy) -> Resol
         and preferences.enabled_for(definition.capability) is True
     ):
         value, source = None, SettingSource.APP_PREFERENCE
-    elif key in legacy:
+    elif key in legacy and not _is_shipped_legacy_prompt_default(definition, legacy[key]):
         value, source = legacy[key], SettingSource.LEGACY_ENV
     else:
         value, source = definition.default, SettingSource.DEFAULT
     return ResolvedSetting(SettingProvenance(key, source), value)
+
+
+def _is_shipped_legacy_prompt_default(definition, value: object) -> bool:
+    """Let old scaffold values follow the current app-owned default location."""
+
+    return (
+        definition.key is SettingKey.SUMMARY_PROMPT_FILE
+        and str(value).strip() == str(definition.default)
+    )
 
 
 def _resolve_capability(

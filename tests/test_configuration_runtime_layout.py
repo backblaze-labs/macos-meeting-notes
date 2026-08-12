@@ -98,6 +98,31 @@ def test_checkout_default_prompt_is_personal_application_support_state(tmp_path:
     )
 
 
+def test_checkout_legacy_scaffold_prompt_upgrades_to_personal_state(tmp_path: Path) -> None:
+    checkout = tmp_path / "checkout"
+    checkout.mkdir()
+    source = checkout / ".env"
+    source.write_text(
+        "ANTHROPIC_API_KEY=notes-secret\n"
+        "SUMMARY_PROMPT_FILE=prompts/summary.md\n",
+        encoding="utf-8",
+    )
+    layout = RuntimeLayout.development(checkout, home=tmp_path / "home")
+
+    loaded = load_configuration(
+        ConfigurationUse.RUNTIME,
+        env_file=source,
+        process_environment={},
+        preference_reader=lambda: PreferenceSnapshot(AppPreferences(), None),
+        runtime_layout=layout,
+    )
+
+    assert loaded.notes is not None
+    assert loaded.notes.prompt_file == (
+        layout.application_support / "prompts" / "summary.md"
+    )
+
+
 def test_bundled_relative_process_path_blocks_only_optional_capability(tmp_path: Path) -> None:
     layout = RuntimeLayout.bundled(tmp_path / "Meeting Memory.app", home=tmp_path / "home")
 
