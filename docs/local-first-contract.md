@@ -230,6 +230,9 @@ Application Support preference document. A customized Notes prompt lives at
 `~/Library/Application Support/meeting-memory/prompts/summary.md`; the tracked
 repository prompt is only the built-in fallback. Explicit process and legacy
 path overrides remain development/compatibility inputs and are not rewritten.
+The exact former scaffold value `SUMMARY_PROMPT_FILE=prompts/summary.md` is
+interpreted as the built-in default during upgrade, not as an intentional
+custom path; other explicit legacy values retain their original path semantics.
 
 ## Compatible Migration from `.env`
 
