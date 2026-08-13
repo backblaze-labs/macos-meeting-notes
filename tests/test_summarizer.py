@@ -10,6 +10,7 @@ import pytest
 from meeting_memory.config.settings import Settings
 from meeting_memory.repo import summarizer
 from meeting_memory.repo.summarizer import (
+    MAX_SUMMARY_OUTPUT_TOKENS,
     MAX_TRANSCRIPT_CHARS,
     SUMMARY_OUTPUT_CONTRACT,
     ClaudeSummarizer,
@@ -32,6 +33,7 @@ def test_claude_summarizer_requests_json_and_truncates_transcript(monkeypatch) -
     assert fake_client.api_key == "anthropic-key"
     assert fake_client.timeout_seconds == 60.0
     assert fake_client.kwargs["model"] == "claude-test"
+    assert fake_client.kwargs["max_tokens"] == MAX_SUMMARY_OUTPUT_TOKENS
     assert fake_client.kwargs["system"] == SUMMARY_OUTPUT_CONTRACT
     prompt = fake_client.kwargs["messages"][0]["content"]
     assert "strict JSON" not in prompt
@@ -70,6 +72,17 @@ def test_claude_summarizer_retries_transient_errors(monkeypatch) -> None:
     assert result.summary == "Recovered."
     assert sleeps == [0.5]
     assert fake_client.messages.attempts == 2
+
+
+def test_claude_summarizer_rejects_truncated_json_before_parsing(monkeypatch) -> None:
+    fake_client = FakeAnthropicClient(
+        response_text='{"summary":"Cut off',
+        stop_reason="max_tokens",
+    )
+    monkeypatch.setattr(summarizer, "_anthropic_client", fake_client.with_api_key)
+
+    with pytest.raises(ValueError, match="exceeded the output token limit"):
+        ClaudeSummarizer(api_key="anthropic-key").summarize("hello")
 
 
 def test_claude_summarizer_from_settings() -> None:
@@ -181,9 +194,10 @@ def test_summary_parser_accepts_fenced_json() -> None:
 
 
 class FakeMessages:
-    def __init__(self, response_text: str, failures=()):
+    def __init__(self, response_text: str, failures=(), stop_reason="end_turn"):
         self.response_text = response_text
         self.failures = list(failures)
+        self.stop_reason = stop_reason
         self.kwargs = {}
         self.attempts = 0
 
@@ -192,14 +206,17 @@ class FakeMessages:
         self.attempts += 1
         if self.failures:
             raise self.failures.pop(0)
-        return SimpleNamespace(content=(SimpleNamespace(text=self.response_text),))
+        return SimpleNamespace(
+            content=(SimpleNamespace(text=self.response_text),),
+            stop_reason=self.stop_reason,
+        )
 
 
 class FakeAnthropicClient:
-    def __init__(self, response_text: str, failures=()):
+    def __init__(self, response_text: str, failures=(), stop_reason="end_turn"):
         self.api_key: str | None = None
         self.timeout_seconds: float | None = None
-        self.messages = FakeMessages(response_text, failures)
+        self.messages = FakeMessages(response_text, failures, stop_reason)
 
     @property
     def kwargs(self):

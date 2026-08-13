@@ -68,7 +68,10 @@ generation runs in a background thread from the tray, or through the local
   **Debugging › Pending Meeting Tasks** action.
 - Anthropic receives the fixed output-schema instructions, the configured
   editable prompt, and only a speaker-confirmed transcript excerpt clipped to
-  at most 60,000 characters. It never receives an unreviewed metadata stub.
+  at most 60,000 characters. Notes reserve up to 4,096 output tokens so longer
+  meetings can complete the structured response; a response that still stops
+  at the output limit is rejected rather than parsed or published. Anthropic
+  never receives an unreviewed metadata stub.
 - The tray's **Configuration › Notes Prompt...** item opens the effective
   `SUMMARY_PROMPT_FILE` in a native multiline editor. Saved changes apply to
   the next notes generation without restarting the app. Editable text is
