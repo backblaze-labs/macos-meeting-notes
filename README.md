@@ -295,7 +295,9 @@ monthly storage. See [Backblaze B2 pricing](https://www.backblaze.com/cloud-stor
 Anthropic summary cost depends on the selected model, transcript length, and
 current Anthropic pricing. Each request sends the fixed output-schema
 instructions, your configured editable prompt, and only a speaker-confirmed
-transcript excerpt capped at 60,000 characters.
+transcript excerpt capped at 60,000 characters. Notes allow up to 4,096 output
+tokens so longer meetings can finish the structured response; an answer that
+still reaches that limit is rejected rather than saved as partial notes.
 
 ## Summary Prompt
 

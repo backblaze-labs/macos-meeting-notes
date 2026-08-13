@@ -24,6 +24,7 @@ from meeting_memory.types.egress import EgressPaused
 from meeting_memory.types.summary import ActionItem, SummaryResult
 
 MAX_TRANSCRIPT_CHARS = 60_000
+MAX_SUMMARY_OUTPUT_TOKENS = 4_096
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 60.0
 DEFAULT_PROMPT_TEMPLATE = DEFAULT_SUMMARY_PROMPT_TEMPLATE
 SUMMARY_OUTPUT_CONTRACT = """Output contract (required and not editable):
@@ -103,7 +104,7 @@ class ClaudeSummarizer:
         response = RetryPolicy(delays=self.retry_delays, sleeper=self.sleeper).call(
             lambda: client.messages.create(
                 model=self.model,
-                max_tokens=1200,
+                max_tokens=MAX_SUMMARY_OUTPUT_TOKENS,
                 temperature=0,
                 system=SUMMARY_OUTPUT_CONTRACT,
                 messages=[{"role": "user", "content": prompt}],
@@ -111,6 +112,7 @@ class ClaudeSummarizer:
             is_retryable=_is_retryable_anthropic_error,
             enabled=self._admit_request,
         )
+        _reject_truncated_response(response)
         return summary_result_from_json(_response_text(response))
 
     def _prompt(self, transcript_text: str) -> str:
@@ -176,6 +178,11 @@ def _optional_str(value: Any) -> str | None:
 def _response_text(response) -> str:
     blocks = getattr(response, "content", ())
     return "\n".join(str(getattr(block, "text", "")) for block in blocks).strip()
+
+
+def _reject_truncated_response(response) -> None:
+    if getattr(response, "stop_reason", None) == "max_tokens":
+        raise ValueError("Claude notes response exceeded the output token limit")
 
 
 def _is_retryable_anthropic_error(exc: BaseException) -> bool:
