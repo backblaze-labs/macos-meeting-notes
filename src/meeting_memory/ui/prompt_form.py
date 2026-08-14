@@ -1,4 +1,4 @@
-"""Main-thread-only native editor for a privately loaded Notes prompt."""
+"""Main-thread-only native editor for private Notes instructions and layout."""
 
 from meeting_memory.config.defaults import DEFAULT_SUMMARY_PROMPT_TEMPLATE
 from meeting_memory.types.configuration_surface import PromptDraft
@@ -26,11 +26,12 @@ def edit_prompt(draft: PromptDraft) -> PromptDraft | None:
         scroll.setHasVerticalScroller_(True)
         scroll.setHasHorizontalScroller_(False)
         alert = NSAlert.alloc().init()
-        alert.setMessageText_("Notes Prompt")
+        alert.setMessageText_("Notes Instructions & Layout")
         alert.setInformativeText_(
-            "This prompt is sent to Anthropic with a speaker-confirmed transcript excerpt. "
-            "The fixed JSON output contract is always enforced and the excerpt is capped at "
-            "60,000 characters. Changes apply to the next Notes generation without restarting."
+            "Text above the layout marker is sent to Anthropic with a speaker-confirmed "
+            "transcript excerpt. Markdown below it stays local and controls notes.md. Keep "
+            "{summary}, {decisions}, and {action_items}; headings and order are editable. "
+            "Changes apply to the next Notes generation without restarting."
         )
         alert.addButtonWithTitle_("Save")
         alert.addButtonWithTitle_("Cancel")
@@ -65,7 +66,7 @@ def _show_empty_prompt() -> None:
     from AppKit import NSAlert
 
     alert = NSAlert.alloc().init()
-    alert.setMessageText_("Notes Prompt")
-    alert.setInformativeText_("The notes prompt cannot be empty.")
+    alert.setMessageText_("Notes Instructions & Layout")
+    alert.setInformativeText_("The Notes instructions and layout cannot be empty.")
     alert.addButtonWithTitle_("OK")
     alert.runModal()

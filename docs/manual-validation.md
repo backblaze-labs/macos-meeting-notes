@@ -151,7 +151,11 @@ With `ANTHROPIC_API_KEY` set:
 - Confirm speakers from the tray review flow.
 - `notes.md` is written.
 - `summary_status: ok`
-- `## Summary`, `## Decisions`, and `## Action Items` are present.
+- With the built-in layout, `## Summary`, `## Decisions`, and `## Action Items`
+  are present.
+- After changing **Configuration › Notes Instructions & Layout...**, the next
+  generated `notes.md` uses the custom headings/order and still contains all
+  three required placeholder values.
 - If notes are missing or failed after speakers were confirmed, use the tray's
   **Debugging › Pending Meeting Tasks** item or run
   `meeting-memory summarize <meeting-folder>`.
@@ -161,7 +165,8 @@ Without `ANTHROPIC_API_KEY`:
 - confirmed speaker review or `meeting-memory summarize <meeting-folder>` still
   writes `notes.md`.
 - `summary_status: skipped`
-- `## Summary` contains `_Summarization skipped._`
+- The `{summary}` position contains `_Summarization skipped._` (under
+  `## Summary` in the built-in layout).
 
 If Claude fails:
 
@@ -234,17 +239,22 @@ Pass criteria:
   success, stale preview, and failure.
 - Imported path values preserve the selected source's meaning after restart.
 
-Prompt editor:
+Notes instructions and layout editor:
 
-1. Open `Configuration › Notes Prompt...`.
-2. Add a recognizable instruction while preserving `{transcript}`, then save.
-3. Generate notes for a confirmed transcript.
-4. Reopen the editor and choose `Restore Default`, then save again.
+1. Open `Configuration › Notes Instructions & Layout...`.
+2. Add a recognizable instruction while preserving `{transcript}`.
+3. Rename and reorder the Markdown headings below the layout marker while
+   preserving `{summary}`, `{decisions}`, and `{action_items}`, then save.
+4. Generate notes for a confirmed transcript.
+5. Reopen the editor and choose `Restore Default`, then save again.
 
 Pass criteria:
 
 - The editor shows the path from `SUMMARY_PROMPT_FILE`.
-- The next notes generation uses the edited prompt without restarting the app.
+- The next notes generation uses both the edited instructions and local layout
+  without restarting the app.
+- The custom headings appear in `notes.md`; layout text does not appear in the
+  Anthropic request.
 - Restoring the default replaces the editor contents with the built-in prompt.
 
 ## 11. Auto-Stop, Recovery, Diagnostics, and Search

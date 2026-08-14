@@ -208,7 +208,7 @@ egress before an integration is enabled:
 | AssemblyAI | Completed meeting audio | Diarized transcription |
 | Backblaze B2 | `recording.m4a` and `transcript.md` for eligible schema-v2 meetings | Durable private backup |
 | Google Calendar | OAuth/API requests; event metadata is received locally | Context and reminders |
-| Anthropic | The fixed output-schema instructions, the configured editable prompt, and only a speaker-confirmed transcript excerpt capped at 60,000 characters | Derived notes |
+| Anthropic | The fixed output-schema instructions, the editable instruction block, and only a speaker-confirmed transcript excerpt capped at 60,000 characters; the Markdown layout remains local | Derived notes |
 
 No provider receives data merely because the app launched or Recording Core
 ran. Configuration is consent to make the integration available for new
@@ -329,10 +329,10 @@ Phase 4 is intentionally split into independently reviewable slices:
 - **Phase 4D (complete implementation):** native per-capability forms share one
   worker coordinator in runtime and setup trays. Exact egress disclosure,
   secure blank-on-redisplay entry, app/process/legacy provenance, explicit
-  migration, explicit Calendar authorization, prompt editing, operation-ID
+  migration, explicit Calendar authorization, Notes instructions/layout editing, operation-ID
   stale suppression, and pause-before-terminal ordering are active. Setup keeps
-  Notes Prompt visibly unavailable until Recording Core is repaired and the app
-  restarts, avoiding ambient or incorrect prompt-path capture.
+  Notes Instructions & Layout visibly unavailable until Recording Core is
+  repaired and the app restarts, avoiding ambient or incorrect path capture.
 
 The Phase 4 implementation criteria above are complete; Phase 5 owns official
 computer-use validation of the installed app.

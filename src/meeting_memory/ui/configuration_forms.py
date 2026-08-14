@@ -54,7 +54,7 @@ FIELD_LABELS = {
     SettingKey.CALENDAR_POLL_INTERVAL: "Polling interval (seconds)",
     SettingKey.ANTHROPIC_API_KEY: "Anthropic API key",
     SettingKey.ANTHROPIC_MODEL: "Anthropic model",
-    SettingKey.SUMMARY_PROMPT_FILE: "Notes prompt file",
+    SettingKey.SUMMARY_PROMPT_FILE: "Notes instructions and layout file",
 }
 DISCLOSURES = {
     Capability.TRANSCRIPTION: (
@@ -71,9 +71,10 @@ DISCLOSURES = {
         "automatically while enabled; event metadata and attendees are received locally."
     ),
     Capability.NOTES: (
-        "Anthropic receives the fixed output-schema instructions, the configured prompt, "
+        "Anthropic receives the fixed output-schema instructions, the instruction block, "
         "and only a speaker-confirmed transcript excerpt capped at 60,000 characters. "
-        "Notes generation starts after explicit speaker confirmation."
+        "The editable Markdown layout stays local. Notes generation starts after explicit "
+        "speaker confirmation."
     ),
 }
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
 from meeting_memory.service.markdown import (
     render_notes_markdown,
     render_transcript_markdown,
@@ -72,6 +74,45 @@ def test_render_notes_markdown_uses_placeholders_for_empty_sections() -> None:
     assert "_Summarization skipped._" in markdown
     assert markdown.count("_None identified._") == 2
     assert 'summary_status: "skipped"' in markdown
+
+
+def test_render_notes_markdown_uses_custom_local_layout() -> None:
+    summary = SummaryResult(
+        summary="Launch is on track.",
+        decisions=("Ship Friday",),
+        action_items=(ActionItem(owner="Alex", task="Publish release notes"),),
+    )
+    report_template = """# {calendar_title}
+
+## Próximos pasos
+{action_items}
+
+## En pocas palabras
+{summary}
+
+## Acuerdos
+{decisions}
+
+_Meeting {meeting_id} · {date} · {duration_minutes} min · {source_transcript}_
+"""
+
+    markdown = render_notes_markdown(_meta(), summary, report_template=report_template)
+
+    assert "# Product Sync" in markdown
+    assert "## Próximos pasos" in markdown
+    assert "## Summary" not in markdown
+    assert markdown.index("Próximos pasos") < markdown.index("En pocas palabras")
+    assert "- [ ] Alex: Publish release notes" in markdown
+    assert "2026-06-10_09-00_product-sync · 2026-06-10 09:00 · 42 min" in markdown
+
+
+def test_render_notes_markdown_rejects_layout_that_drops_a_required_section() -> None:
+    with pytest.raises(ValueError, match="missing required placeholders"):
+        render_notes_markdown(
+            _meta(),
+            SummaryResult(summary="Summary"),
+            report_template="# Brief\n{summary}\n{decisions}",
+        )
 
 
 def test_render_transcript_stub_is_exact_schema_v2_and_sanitized() -> None:

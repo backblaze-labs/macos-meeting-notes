@@ -95,6 +95,33 @@ def test_v2_notes_publishes_after_stable_confirmed_snapshot(tmp_path: Path) -> N
     assert "Reviewed" in notes.read_text(encoding="utf-8")
 
 
+def test_v2_notes_publishes_with_custom_report_layout(tmp_path: Path) -> None:
+    meetings, files, _state = _confirmed_meeting(tmp_path)
+    report_template = """# Custom Brief
+
+## Tasks
+{action_items}
+
+## Recap
+{summary}
+
+## Calls
+{decisions}
+"""
+
+    notes = generate_v2_notes(
+        meetings,
+        files.directory,
+        Summarizer(),
+        report_template,
+    )
+
+    rendered = notes.read_text(encoding="utf-8")
+    assert "# Custom Brief" in rendered
+    assert "## Recap\nReviewed" in rendered
+    assert "## Summary" not in rendered
+
+
 def test_owned_notes_preserves_legacy_meeting_compatibility(tmp_path: Path) -> None:
     source = tmp_path / "legacy.m4a"
     source.write_bytes(b"audio")

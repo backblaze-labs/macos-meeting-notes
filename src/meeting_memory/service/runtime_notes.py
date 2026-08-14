@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol
 
+from meeting_memory.config.defaults import DEFAULT_NOTES_REPORT_TEMPLATE
 from meeting_memory.service.atomic_io import atomic_replace_text_at
 from meeting_memory.service.frontmatter import split_frontmatter
 from meeting_memory.service.legacy_snapshot import (
@@ -32,6 +33,7 @@ def generate_owned_notes(
     meetings_dir: Path,
     meeting_dir: Path,
     summarizer: NotesSummarizer,
+    report_template: str = DEFAULT_NOTES_REPORT_TEMPLATE,
 ) -> Path:
     """Route an owned meeting to its schema-specific safe Notes writer."""
 
@@ -39,14 +41,15 @@ def generate_owned_notes(
     if artifact is None:
         raise ValueError("Notes require a Meeting Memory-owned artifact")
     if artifact.ownership is ArtifactOwnership.V2:
-        return generate_v2_notes(meetings_dir, meeting_dir, summarizer)
-    return _generate_legacy_notes(meeting_dir, summarizer)
+        return generate_v2_notes(meetings_dir, meeting_dir, summarizer, report_template)
+    return _generate_legacy_notes(meeting_dir, summarizer, report_template)
 
 
 def generate_v2_notes(
     meetings_dir: Path,
     meeting_dir: Path,
     summarizer: NotesSummarizer,
+    report_template: str = DEFAULT_NOTES_REPORT_TEMPLATE,
 ) -> Path:
     """Summarize a stable confirmed snapshot, then publish only if still current."""
 
@@ -57,6 +60,7 @@ def generate_v2_notes(
         summary,
         source_transcript="transcript.md",
         speaker_status="confirmed",
+        report_template=report_template,
     )
     with meeting_lock(meetings_dir, meeting_dir.name):
         with open_meeting_document(meetings_dir, meeting_dir) as document:
@@ -71,6 +75,7 @@ def generate_v2_notes(
 def _generate_legacy_notes(
     meeting_dir: Path,
     summarizer: NotesSummarizer,
+    report_template: str,
 ) -> Path:
     with capture_legacy_document_snapshot(meeting_dir) as snapshot:
         if snapshot.frontmatter.get("speaker_status") != "confirmed":
@@ -82,6 +87,7 @@ def _generate_legacy_notes(
             summary,
             source_transcript=snapshot.metadata_name,
             speaker_status="confirmed",
+            report_template=report_template,
         )
         return write_legacy_notes(snapshot, rendered)
 

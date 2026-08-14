@@ -4,7 +4,7 @@
 **Status:** Draft  
 **Author:** Meeting Memory contributors
 **Date:** 2026-08-07
-**Version:** 0.6
+**Version:** 0.7
 **Methodology:** RFC-inspired SRS (requirement language per RFC 2119: MUST / SHOULD / MAY / MUST NOT)
 
 **Revision note (v0.2):** Added a second, first-class design goal — **the
@@ -31,6 +31,11 @@ compiled from pinned source with networking and unrelated codecs disabled.
 **Revision note (v0.6):** Made a complete Backblaze B2 configuration a required
 onboarding gate. Recording remains locally durable and provider failures remain
 isolated after setup; Transcription, Calendar, and Notes remain optional.
+
+**Revision note (v0.7):** Split the editable Notes file into provider
+instructions and a local-only Markdown layout. The typed Anthropic JSON
+contract remains fixed, while users can rename and reorder the visible report
+sections with validated placeholders.
 
 ---
 
@@ -261,9 +266,9 @@ processing or upload MUST require an explicit user backfill/retry action.
 **REQ-EXT-11** If the Claude API call fails or times out, the application MUST leave `transcript.md` untouched and write a failed/skipped derived-notes state without blocking transcript completion.
 
 **REQ-EXT-12** Each Anthropic request MUST contain the fixed output-schema
-instructions, the configured editable prompt, and only speaker-confirmed
-transcript text. It MUST NOT include more than the first 60,000 transcript
-characters.
+instructions, the configured editable instruction block, and only
+speaker-confirmed transcript text. It MUST NOT include the local Markdown
+layout or more than the first 60,000 transcript characters.
 
 ### 3.4 Backblaze B2 (S3-Compatible API)
 
@@ -395,7 +400,15 @@ transcripts.
 
 **REQ-F5-05** The summarize command MUST write `notes.md` and MUST NOT modify `transcript.md`.
 
-**REQ-F5-06** The summarization prompt MUST be configurable through `SUMMARY_PROMPT_FILE` and the tray's **Configuration › Notes Prompt...** editor. If the file contains `{transcript}`, the app MUST replace that placeholder with the clipped transcript; otherwise it MUST append the transcript below the prompt text. A saved UI change MUST apply to the next notes generation without an app restart.
+**REQ-F5-06** Notes instructions and report layout MUST be configurable through
+`SUMMARY_PROMPT_FILE` and the tray's **Configuration › Notes Instructions &
+Layout...** editor. Content above the app-owned layout marker is the provider
+instruction block. If that block contains `{transcript}`, the app MUST replace
+the placeholder with the clipped transcript; otherwise it MUST append the
+transcript below the instructions. Markdown below the marker MUST remain local
+and MUST support validated placeholders for meeting metadata plus the required
+`{summary}`, `{decisions}`, and `{action_items}` values. A saved UI change MUST
+apply to the next notes generation without an app restart.
 The app-managed default destination MUST be
 `~/Library/Application Support/meeting-memory/prompts/summary.md` in both
 checkout and bundled execution; the repository's `prompts/summary.md` is a
@@ -418,11 +431,18 @@ directory on the `MEETINGS_DIR` filesystem and atomically rename the completed
 directory into its final collision-safe path. It MUST NOT expose a partially
 committed final directory.
 
-**REQ-F6-03b** `notes.md` MAY be generated later with summary, decisions, and action items after speaker aliases are confirmed.
+**REQ-F6-03b** `notes.md` MAY be generated later from the structured summary,
+decisions, and action items after speaker aliases are confirmed. Its visible
+Markdown layout MAY use user-customized headings and ordering.
 
 **REQ-F6-04** `transcript.md` MUST contain a YAML frontmatter block (between `---` delimiters) as its first section, containing the fields specified in Section 6.1. Before transcription, its body MUST explain the local job state without raw provider exceptions.
 
-**REQ-F6-05** `notes.md` MUST contain the following H2 sections in order when generated: `## Summary`, `## Decisions`, `## Action Items`. Each section MUST be present even if empty (use `_None identified._` as placeholder).
+**REQ-F6-05** `notes.md` MUST preserve the fixed owned frontmatter and render
+its body from the validated local Notes layout. The layout MUST contain
+`{summary}`, `{decisions}`, and `{action_items}` so every structured value is
+present, but the surrounding headings and their order MAY be customized. The
+built-in layout MUST render `## Summary`, `## Decisions`, and `## Action Items`
+in that order. Empty collections MUST render `_None identified._`.
 
 **REQ-F6-06** The application MUST update the `b2_audio`, `b2_transcript`, and `backup_status` frontmatter fields after a successful B2 upload (see F7).
 
@@ -498,7 +518,7 @@ Configuration                      (hover submenu)
   Backup…
   Calendar…
   Notes…
-  Notes Prompt…
+  Notes Instructions & Layout…
   Authorize Google Calendar…
   Import Legacy Configuration…
 Debugging                          (hover submenu)
@@ -533,7 +553,11 @@ to compatibility mode.
 
 **REQ-F8-10** **Test macOS Notifications** MUST send a local notification for validating macOS notification behavior.
 
-**REQ-F8-11** **Configuration › Notes Prompt...** MUST open a native multiline editor for the effective `SUMMARY_PROMPT_FILE`, allow restoring the built-in default, reject an empty prompt, and show the file updated after saving.
+**REQ-F8-11** **Configuration › Notes Instructions & Layout...** MUST open a
+native multiline editor for the effective `SUMMARY_PROMPT_FILE`, allow
+restoring the built-in default, reject empty instructions, reject a layout that
+omits required or uses unsupported placeholders, and show the file updated
+after saving.
 
 **REQ-F8-12** **Configuration** and **Debugging** MUST be native hover submenus. Audio modes and user-editable settings MUST live under **Configuration**. Pending meeting tasks, interrupted recordings, backup/transcription retry, setup checks, and test notifications MUST live under **Debugging**, not at the tray root. Debugging actions MUST use explicit labels and native hover help that describes their scope.
 
@@ -713,7 +737,7 @@ own value and the other Backup bookkeeping fields are excluded from the hash.
 …
 ```
 
-### 6.3 notes.md Body Structure
+### 6.3 Default notes.md Body Structure
 
 ```markdown
 # Meeting Notes
@@ -1010,7 +1034,7 @@ explicitly. No reachable native UI action writes `.env`.
 | `ASSEMBLYAI_API_KEY` | Transcription | — | AssemblyAI key |
 | `ANTHROPIC_API_KEY` | Notes | — | Claude key for the `summarize` command |
 | `ANTHROPIC_MODEL` | Notes | `claude-haiku-4-5` | Summarization model override (OQ-5) |
-| `SUMMARY_PROMPT_FILE` | Notes | `~/Library/Application Support/meeting-memory/prompts/summary.md` | Personal prompt template used for Summary, Decisions, and Action Items; editable from **Configuration › Notes Prompt...**. An explicit process or legacy override may select another path. |
+| `SUMMARY_PROMPT_FILE` | Notes | `~/Library/Application Support/meeting-memory/prompts/summary.md` | Personal Notes instructions plus local Markdown layout; editable from **Configuration › Notes Instructions & Layout...**. An explicit process or legacy override may select another path. |
 | `KNOWN_SPEAKERS` | Calendar | `{}` | Optional JSON object mapping speaker display names to Calendar attendee match hints; app-managed values live in the private Application Support preference document. |
 | `GOOGLE_CALENDAR_CREDENTIALS_FILE` | Calendar | `credentials.json` | Path to OAuth client secrets |
 | `GOOGLE_CALENDAR_ID` | Calendar | `all` | Calendar scope to watch: `all`, `primary`, or a specific calendar ID |

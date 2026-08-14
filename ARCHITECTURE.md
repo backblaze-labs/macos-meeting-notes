@@ -288,8 +288,10 @@ and `config/runtime_layout.py` captures it once per process. Active configuratio
 migration, readiness, OAuth/prompt reads, native-helper lookup, and pinned local
 I/O no longer consult the ambient working directory. Checkout-relative process
 paths use the captured project root; selected legacy paths use the selected
-`.env` parent; app-owned relative paths and the default editable Notes prompt
-use Application Support. Bundled mode
+`.env` parent; app-owned relative paths and the default editable Notes
+instructions/layout document use Application Support. Its instruction block is
+the only editable part sent to Anthropic; the validated Markdown layout remains
+local. Bundled mode
 does not scan for `.env`, rejects relative process paths, uses the exact bundled
 Swift helper, and requires an explicit file selection before legacy preview.
 Migration converts selected legacy path values to absolute app preferences before

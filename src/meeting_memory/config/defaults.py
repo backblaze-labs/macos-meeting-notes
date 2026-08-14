@@ -18,7 +18,8 @@ PLACEHOLDER_MARKERS = ("replace-me", "changeme", "todo", "<", ">")
 
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"
 DEFAULT_SUMMARY_PROMPT_FILE = "prompts/summary.md"
-DEFAULT_SUMMARY_PROMPT_TEMPLATE = """Privacy rules:
+NOTES_REPORT_TEMPLATE_MARKER = "<!-- meeting-memory:notes-layout -->"
+DEFAULT_NOTES_INSTRUCTIONS_TEMPLATE = """Privacy rules:
 - Omit personal information that is not needed to understand the work.
 - Do not include emails, phone numbers, addresses, account IDs, or personal anecdotes.
 - Prefer speaker labels, roles, or null instead of full names when an owner is uncertain.
@@ -32,6 +33,27 @@ Content rules:
 Transcript:
 {transcript}
 """
+DEFAULT_NOTES_REPORT_TEMPLATE = """# Meeting Notes
+
+**Source:** {source_transcript}
+
+## Summary
+
+{summary}
+
+## Decisions
+
+{decisions}
+
+## Action Items
+
+{action_items}
+"""
+DEFAULT_SUMMARY_PROMPT_TEMPLATE = (
+    f"{DEFAULT_NOTES_INSTRUCTIONS_TEMPLATE.rstrip()}\n\n"
+    f"{NOTES_REPORT_TEMPLATE_MARKER}\n"
+    f"{DEFAULT_NOTES_REPORT_TEMPLATE}"
+)
 DEFAULT_GOOGLE_CALENDAR_CREDENTIALS_FILE = "credentials.json"
 DEFAULT_GOOGLE_CALENDAR_ID = "all"
 DEFAULT_KNOWN_SPEAKERS: tuple[KnownSpeaker, ...] = ()

@@ -172,7 +172,7 @@ def _notes_status(settings: RuntimeSettings) -> CapabilityStatus:
                 Capability.NOTES,
                 prompt_state,
                 prompt_problem,
-                "Fix SUMMARY_PROMPT_FILE or unset it to use the built-in prompt.",
+                "Fix SUMMARY_PROMPT_FILE or unset it to use the built-in Notes file.",
             )
     return _ready(Capability.NOTES, "Anthropic Notes are configured for reviewed transcripts.")
 

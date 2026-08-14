@@ -232,7 +232,7 @@ def run_relabel(path: Path) -> int:
 
 
 def run_summarize(path: Path) -> int:
-    from meeting_memory.repo.summarizer import ClaudeSummarizer
+    from meeting_memory.repo.summarizer import ClaudeSummarizer, load_prompt_document
     from meeting_memory.service.configuration_loader import (
         ConfigurationLoadError,
         load_configuration,
@@ -261,6 +261,7 @@ def run_summarize(path: Path) -> int:
                 model=config.model,
                 prompt_file=config.prompt_file,
             ),
+            load_prompt_document(config.prompt_file).report_template,
         )
     except Exception:
         sys.stderr.write("Notes generation failed safely; the transcript is unchanged.\n")

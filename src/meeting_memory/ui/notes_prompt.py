@@ -1,4 +1,4 @@
-"""Native editor for the notes-generation prompt."""
+"""Compatibility editor for Notes instructions and local Markdown layout."""
 
 from __future__ import annotations
 
@@ -30,7 +30,11 @@ def open_notes_prompt_window(
     try:
         current_prompt = read_summary_prompt(settings)
     except Exception:
-        _alert(rumps, "Notes Prompt", "The prompt could not be loaded safely.")
+        _alert(
+            rumps,
+            "Notes Instructions & Layout",
+            "The Notes configuration could not be loaded safely.",
+        )
         return False
 
     try:
@@ -44,18 +48,26 @@ def open_notes_prompt_window(
     if edited_prompt is None:
         return False
     if not edited_prompt.strip():
-        _alert(rumps, "Notes Prompt", "The notes prompt cannot be empty.")
+        _alert(
+            rumps,
+            "Notes Instructions & Layout",
+            "The Notes instructions and layout cannot be empty.",
+        )
         return False
 
     try:
         saved_path = write_summary_prompt(settings, edited_prompt)
     except Exception:
-        _alert(rumps, "Notes Prompt", "The prompt could not be saved safely.")
+        _alert(
+            rumps,
+            "Notes Instructions & Layout",
+            "Keep {summary}, {decisions}, and {action_items}, then try again.",
+        )
         return False
 
     _alert(
         rumps,
-        "Notes Prompt Saved",
+        "Notes Instructions & Layout Saved",
         f"The next notes generation will use {saved_path}.",
     )
     return True
@@ -81,11 +93,11 @@ def _prompt_notes_text(prompt: str, path: Path, rumps: Any) -> str | None:
         scroll_view.setHasHorizontalScroller_(False)
 
         alert = NSAlert.alloc().init()
-        alert.setMessageText_("Notes Prompt")
+        alert.setMessageText_("Notes Instructions & Layout")
         alert.setInformativeText_(
-            "Adds instructions for Summary, Decisions, and Action Items; "
-            "the JSON output contract is always enforced. "
-            "Use {transcript} where the transcript should appear; otherwise it is appended. "
+            "Instructions above the layout marker are sent to Anthropic. Markdown below it "
+            "stays local and controls notes.md. Keep {summary}, {decisions}, and "
+            "{action_items}; headings and order are editable. "
             f"Changes apply to the next notes generation.\n{path}"
         )
         alert.addButtonWithTitle_("Save")
@@ -97,7 +109,11 @@ def _prompt_notes_text(prompt: str, path: Path, rumps: Any) -> str | None:
             value = str(text_view.string())
             if value.strip():
                 return value
-            _alert(rumps, "Notes Prompt", "The notes prompt cannot be empty.")
+            _alert(
+                rumps,
+                "Notes Instructions & Layout",
+                "The Notes instructions and layout cannot be empty.",
+            )
             prompt = value
             continue
         if response == RESTORE_DEFAULT_RESPONSE:
@@ -109,11 +125,11 @@ def _prompt_notes_text(prompt: str, path: Path, rumps: Any) -> str | None:
 def _prompt_notes_fallback(prompt: str, path: Path, rumps: Any) -> str | None:
     window = rumps.Window(
         message=(
-            "The JSON output contract is fixed. Use {transcript} where the transcript "
-            "should appear; otherwise it is appended. "
+            "Instructions above the layout marker go to Anthropic. Markdown below it stays "
+            "local. Keep {summary}, {decisions}, and {action_items}. "
             f"Saving updates {path}."
         ),
-        title="Notes Prompt",
+        title="Notes Instructions & Layout",
         default_text=prompt,
         ok="Save",
         cancel=True,

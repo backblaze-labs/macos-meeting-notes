@@ -67,18 +67,21 @@ generation runs in a background thread from the tray, or through the local
   automatically. If notes are missing, skipped, or failed, the tray shows a
   **Debugging › Pending Meeting Tasks** action.
 - Anthropic receives the fixed output-schema instructions, the configured
-  editable prompt, and only a speaker-confirmed transcript excerpt clipped to
+  editable instruction block, and only a speaker-confirmed transcript excerpt clipped to
   at most 60,000 characters. Notes reserve up to 4,096 output tokens so longer
   meetings can complete the structured response; a response that still stops
   at the output limit is rejected rather than parsed or published. Anthropic
   never receives an unreviewed metadata stub.
-- The tray's **Configuration › Notes Prompt...** item opens the effective
-  `SUMMARY_PROMPT_FILE` in a native multiline editor. Saved changes apply to
-  the next notes generation without restarting the app. Editable text is
-  treated as additional instructions; the JSON output contract is fixed in the
-  adapter. Without an explicit path override, the editable copy is personal
-  state at `~/Library/Application Support/meeting-memory/prompts/summary.md`;
-  the repository prompt remains an unchanged built-in fallback.
+- The tray's **Configuration › Notes Instructions & Layout...** item opens the
+  effective `SUMMARY_PROMPT_FILE` in a native multiline editor. Text above the
+  app-owned marker supplies additional Anthropic instructions; Markdown below
+  it stays local and controls the `notes.md` headings and order through
+  validated placeholders. `{summary}`, `{decisions}`, and `{action_items}` are
+  required so the fixed JSON contract remains complete. Saved changes apply to
+  the next notes generation without restarting the app. Without an explicit
+  path override, the editable copy is personal state at
+  `~/Library/Application Support/meeting-memory/prompts/summary.md`; the
+  repository prompt remains an unchanged built-in fallback.
 - `meeting-memory summarize <meeting-folder>` requires
   `speaker_status: confirmed` and remains available as a backfill/retry command
   for `notes.md`.

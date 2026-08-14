@@ -38,7 +38,8 @@ def test_disclosures_name_provider_payload_and_trigger() -> None:
     notes = DISCLOSURES[Capability.NOTES]
     assert "Anthropic" in notes
     assert "fixed output-schema instructions" in notes
-    assert "configured prompt" in notes
+    assert "instruction block" in notes
+    assert "layout stays local" in notes
     assert "speaker-confirmed transcript excerpt" in notes
     assert "60,000 characters" in notes
     assert "explicit speaker confirmation" in notes

@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from meeting_memory.config.defaults import DEFAULT_SUMMARY_PROMPT_TEMPLATE
+from meeting_memory.config.defaults import (
+    DEFAULT_NOTES_REPORT_TEMPLATE,
+    DEFAULT_SUMMARY_PROMPT_TEMPLATE,
+    NOTES_REPORT_TEMPLATE_MARKER,
+)
+from meeting_memory.config.notes_template import parse_notes_prompt_document
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.summary_prompt import (
     read_summary_prompt,
@@ -26,7 +31,10 @@ def test_summary_prompt_storage_uses_configured_file(tmp_path: Path) -> None:
     saved_path = write_summary_prompt(settings, "Custom instructions\n{transcript}\n")
 
     assert saved_path == prompt_path
-    assert read_summary_prompt(settings) == "Custom instructions\n{transcript}\n"
+    assert read_summary_prompt(settings) == (
+        "Custom instructions\n{transcript}\n\n"
+        f"{NOTES_REPORT_TEMPLATE_MARKER}\n{DEFAULT_NOTES_REPORT_TEMPLATE}"
+    )
 
 
 def test_default_prompt_asset_matches_fallback() -> None:
@@ -38,6 +46,36 @@ def test_default_prompt_asset_matches_fallback() -> None:
 def test_summary_prompt_storage_rejects_blank_prompt(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="cannot be empty"):
         write_summary_prompt(_settings(tmp_path / "prompt.md"), "  \n")
+
+
+def test_summary_prompt_storage_rejects_layout_missing_required_content(
+    tmp_path: Path,
+) -> None:
+    prompt = (
+        f"Instructions\n{{transcript}}\n\n{NOTES_REPORT_TEMPLATE_MARKER}\n# Brief\n\n{{summary}}\n"
+    )
+
+    with pytest.raises(ValueError, match="missing required placeholders"):
+        write_summary_prompt(_settings(tmp_path / "prompt.md"), prompt)
+
+
+def test_summary_prompt_storage_rejects_unknown_layout_placeholder(
+    tmp_path: Path,
+) -> None:
+    prompt = (
+        f"Instructions\n\n{NOTES_REPORT_TEMPLATE_MARKER}\n"
+        "{summary}\n{decisions}\n{action_items}\n{transcript}\n"
+    )
+
+    with pytest.raises(ValueError, match=r"unsupported placeholders: \{transcript\}"):
+        write_summary_prompt(_settings(tmp_path / "prompt.md"), prompt)
+
+
+def test_legacy_prompt_parses_with_default_local_layout() -> None:
+    document = parse_notes_prompt_document("Focus on risks.\n{transcript}")
+
+    assert document.instructions == "Focus on risks.\n{transcript}"
+    assert document.report_template == DEFAULT_NOTES_REPORT_TEMPLATE.strip()
 
 
 def test_notes_prompt_window_saves_editor_value_for_next_generation(tmp_path: Path) -> None:
@@ -56,10 +94,12 @@ def test_notes_prompt_window_saves_editor_value_for_next_generation(tmp_path: Pa
 
     assert saved is True
     assert received == [(DEFAULT_SUMMARY_PROMPT_TEMPLATE, prompt_path)]
-    assert prompt_path.read_text(encoding="utf-8") == "Focus on risks.\n{transcript}\n"
+    saved = prompt_path.read_text(encoding="utf-8")
+    assert saved.startswith("Focus on risks.\n{transcript}\n\n")
+    assert NOTES_REPORT_TEMPLATE_MARKER in saved
     assert rumps.alerts == [
         (
-            "Notes Prompt Saved",
+            "Notes Instructions & Layout Saved",
             f"The next notes generation will use {prompt_path}.",
         )
     ]
@@ -88,7 +128,12 @@ def test_notes_prompt_window_reports_blank_prompt(tmp_path: Path) -> None:
     )
 
     assert saved is False
-    assert rumps.alerts == [("Notes Prompt", "The notes prompt cannot be empty.")]
+    assert rumps.alerts == [
+        (
+            "Notes Instructions & Layout",
+            "The Notes instructions and layout cannot be empty.",
+        )
+    ]
 
 
 def _settings(prompt_path: Path) -> Settings:
