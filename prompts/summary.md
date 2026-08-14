@@ -11,3 +11,20 @@ Content rules:
 
 Transcript:
 {transcript}
+
+<!-- meeting-memory:notes-layout -->
+# Meeting Notes
+
+**Source:** {source_transcript}
+
+## Summary
+
+{summary}
+
+## Decisions
+
+{decisions}
+
+## Action Items
+
+{action_items}

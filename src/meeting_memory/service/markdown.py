@@ -7,6 +7,11 @@ import unicodedata
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 
+from meeting_memory.config.defaults import DEFAULT_NOTES_REPORT_TEMPLATE
+from meeting_memory.config.notes_template import (
+    PLACEHOLDER_PATTERN,
+    validate_notes_report_template,
+)
 from meeting_memory.service.frontmatter import dump_frontmatter
 from meeting_memory.service.speaker_mapping import apply_speaker_mapping
 from meeting_memory.types.capabilities import MeetingJobState
@@ -191,6 +196,7 @@ def render_notes_markdown(
     *,
     source_transcript: str = "transcript.md",
     speaker_status: str = "confirmed",
+    report_template: str = DEFAULT_NOTES_REPORT_TEMPLATE,
 ) -> str:
     frontmatter = dump_frontmatter(
         {
@@ -204,28 +210,31 @@ def render_notes_markdown(
         },
         fields=NOTES_FRONTMATTER_FIELDS,
     )
-    return "\n".join(
-        [
-            frontmatter,
-            "",
-            "# Meeting Notes",
-            "",
-            f"**Source:** {source_transcript}",
-            "",
-            "## Summary",
-            "",
-            _summary_text(summary),
-            "",
-            "## Decisions",
-            "",
-            _decision_text(summary),
-            "",
-            "## Action Items",
-            "",
-            _action_item_text(summary),
-            "",
-        ]
-    )
+    body = _render_notes_report(meta, summary, source_transcript, report_template)
+    return f"{frontmatter}\n\n{body}\n"
+
+
+def _render_notes_report(
+    meta: MeetingMeta,
+    summary: SummaryResult,
+    source_transcript: str,
+    report_template: str,
+) -> str:
+    validate_notes_report_template(report_template)
+    values = {
+        "action_items": _action_item_text(summary),
+        "calendar_title": safe_frontmatter_text(meta.calendar_title),
+        "date": _human_date(meta.started_at),
+        "decisions": _decision_text(summary),
+        "duration_minutes": str(meta.duration_minutes),
+        "meeting_id": safe_frontmatter_text(meta.slug),
+        "source_transcript": safe_frontmatter_text(source_transcript),
+        "summary": _summary_text(summary),
+    }
+    return PLACEHOLDER_PATTERN.sub(
+        lambda match: values[match.group(1)],
+        report_template,
+    ).rstrip()
 
 
 def _human_date(value: datetime) -> str:

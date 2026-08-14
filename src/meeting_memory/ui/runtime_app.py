@@ -13,7 +13,7 @@ from meeting_memory.repo.b2_client import B2S3Client
 from meeting_memory.repo.calendar_client import GoogleCalendarClient
 from meeting_memory.repo.native_audio import convert_native_audio
 from meeting_memory.repo.native_audio_validation import validate_native_m4a
-from meeting_memory.repo.summarizer import ClaudeSummarizer
+from meeting_memory.repo.summarizer import ClaudeSummarizer, load_prompt_document
 from meeting_memory.repo.transcription import AssemblyAITranscriptionClient
 from meeting_memory.service.calendar_watcher import CalendarWatcher
 from meeting_memory.service.configuration_loader import (
@@ -203,10 +203,12 @@ def _notes_generator(configuration: LoadedConfiguration, *, enabled=lambda: True
 
     def generate(path):
         meeting_dir = path if path.is_dir() else path.parent
+        report_template = load_prompt_document(config.prompt_file).report_template
         return generate_owned_notes(
             configuration.meetings_dir_path,
             meeting_dir,
             summarizer,
+            report_template,
         )
 
     return generate

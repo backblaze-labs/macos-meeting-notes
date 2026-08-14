@@ -294,12 +294,13 @@ monthly storage. See [Backblaze B2 pricing](https://www.backblaze.com/cloud-stor
 
 Anthropic summary cost depends on the selected model, transcript length, and
 current Anthropic pricing. Each request sends the fixed output-schema
-instructions, your configured editable prompt, and only a speaker-confirmed
-transcript excerpt capped at 60,000 characters. Notes allow up to 4,096 output
-tokens so longer meetings can finish the structured response; an answer that
-still reaches that limit is rejected rather than saved as partial notes.
+instructions, your editable instruction block, and only a speaker-confirmed
+transcript excerpt capped at 60,000 characters. The report layout stays on your
+Mac. Notes allow up to 4,096 output tokens so longer meetings can finish the
+structured response; an answer that still reaches that limit is rejected
+rather than saved as partial notes.
 
-## Summary Prompt
+## Notes Instructions and Layout
 
 The versioned built-in template lives at
 [prompts/summary.md](prompts/summary.md), but the app never writes personal
@@ -308,20 +309,41 @@ fallback. Saving from the tray creates the private personal copy at
 `~/Library/Application Support/meeting-memory/prompts/summary.md`, in checkout
 and bundled execution alike. Set `SUMMARY_PROMPT_FILE` explicitly only when a
 development or legacy workflow needs another path. If the selected file
-contains `{transcript}`, the app replaces that placeholder with the clipped
-transcript; otherwise it appends the transcript below the prompt.
+contains `{transcript}` above the `<!-- meeting-memory:notes-layout -->` marker,
+the app replaces that placeholder with the clipped transcript; otherwise it
+appends the transcript below the instruction block.
 
 Older `.env` files created from the repository scaffold may contain
 `SUMMARY_PROMPT_FILE=prompts/summary.md`. That exact former scaffold default is
 treated as the app-owned default during upgrade, so it no longer keeps personal
 edits in the checkout. Other explicit legacy and process paths remain honored.
 
-Choose **Configuration › Notes Prompt...** in the tray to edit the effective
-additional instructions in a native multiline editor. The required JSON output
-contract stays fixed so custom text cannot change the parser-facing schema.
-Saving updates the effective personal prompt file, and the next notes
-generation uses the new text without restarting the app. The editor can also
-restore the built-in default into that personal copy.
+Choose **Configuration › Notes Instructions & Layout...** in the tray to edit
+both parts in a native multiline editor. Text above the marker controls the
+additional Anthropic instructions. Markdown below it stays local and controls
+the visible `notes.md` title, headings, prose, and section order. Keep the
+required `{summary}`, `{decisions}`, and `{action_items}` placeholders; optional
+metadata placeholders include `{calendar_title}`, `{date}`,
+`{duration_minutes}`, `{meeting_id}`, and `{source_transcript}`. The fixed JSON
+output contract remains unchanged. Saving applies to the next Notes generation
+without restarting, and the editor can restore the built-in default.
+
+For example, this local layout produces Spanish headings without changing what
+is sent to Anthropic:
+
+```markdown
+<!-- meeting-memory:notes-layout -->
+# {calendar_title}
+
+## Próximos pasos
+{action_items}
+
+## Resumen
+{summary}
+
+## Decisiones
+{decisions}
+```
 
 ## Speaker Review
 
@@ -354,10 +376,11 @@ Then generate or retry derived notes:
 meeting-memory summarize ~/Meetings/<meeting-folder>
 ```
 
-This writes `notes.md` with Summary, Decisions, and Action Items. If notes are
-missing, skipped, or failed after speakers are confirmed, the tray shows it
-under **Debugging › Pending Meeting Tasks**. No LLM is used for relabeling;
-Anthropic is used for notes generation.
+This writes `notes.md` with the configured local layout (the built-in default
+uses Summary, Decisions, and Action Items). If notes are missing, skipped, or
+failed after speakers are confirmed, the tray shows it under **Debugging ›
+Pending Meeting Tasks**. No LLM is used for relabeling; Anthropic is used for
+notes generation.
 
 Per-meeting `speaker_aliases` are the source of truth for who spoke in a
 specific recording. Global `Speaker A` / `Speaker B` mappings are intentionally

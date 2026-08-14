@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from meeting_memory.config.defaults import NOTES_REPORT_TEMPLATE_MARKER
 from meeting_memory.config.settings import Settings
 from meeting_memory.repo import summarizer
 from meeting_memory.repo.summarizer import (
@@ -129,6 +130,21 @@ def test_claude_summarizer_loads_custom_prompt_from_settings(tmp_path) -> None:
     assert client._prompt("next meeting").endswith(
         "Additional instructions:\nUpdated prompt\nnext meeting"
     )
+
+
+def test_custom_local_layout_is_not_sent_to_anthropic(tmp_path) -> None:
+    prompt_file = tmp_path / "summary.md"
+    prompt_file.write_text(
+        "Focus on risks.\n{transcript}\n\n"
+        f"{NOTES_REPORT_TEMPLATE_MARKER}\n"
+        "# Private local layout\n{summary}\n{decisions}\n{action_items}\n",
+        encoding="utf-8",
+    )
+
+    prompt = ClaudeSummarizer(api_key="secret", prompt_file=prompt_file)._prompt("hello")
+
+    assert prompt == "Additional instructions:\nFocus on risks.\nhello"
+    assert "Private local layout" not in prompt
 
 
 def test_custom_prompt_is_separate_from_contract_and_cannot_duplicate_transcript(

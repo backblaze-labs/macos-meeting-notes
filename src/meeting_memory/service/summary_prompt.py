@@ -10,6 +10,7 @@ from meeting_memory.config.defaults import (
     DEFAULT_SUMMARY_PROMPT_FILE,
     DEFAULT_SUMMARY_PROMPT_TEMPLATE,
 )
+from meeting_memory.config.notes_template import normalize_notes_prompt_document
 from meeting_memory.config.settings import Settings
 from meeting_memory.repo.prompt_source import MAX_PROMPT_BYTES, read_prompt_text
 from meeting_memory.service.atomic_io import atomic_replace_text_at
@@ -23,14 +24,13 @@ def summary_prompt_path(settings: Settings) -> Path:
 
 
 def read_summary_prompt(settings: Settings) -> str:
-    return read_prompt_text(summary_prompt_path(settings)) or DEFAULT_SUMMARY_PROMPT_TEMPLATE
+    content = read_prompt_text(summary_prompt_path(settings)) or DEFAULT_SUMMARY_PROMPT_TEMPLATE
+    return normalize_notes_prompt_document(content)
 
 
 def write_summary_prompt(settings: Settings, prompt: str) -> Path:
-    content = prompt.strip()
-    if not content:
-        raise ValueError("The notes prompt cannot be empty.")
-    encoded = f"{content}\n".encode()
+    content = normalize_notes_prompt_document(prompt)
+    encoded = content.encode()
     if len(encoded) > MAX_SUMMARY_PROMPT_BYTES:
         raise ValueError("The notes prompt exceeds the supported size.")
 

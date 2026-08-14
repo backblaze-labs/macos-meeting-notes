@@ -13,6 +13,11 @@ from meeting_memory.config.defaults import (
     DEFAULT_SUMMARY_PROMPT_FILE,
     DEFAULT_SUMMARY_PROMPT_TEMPLATE,
 )
+from meeting_memory.config.notes_template import (
+    NotesPromptDocument,
+    default_notes_prompt_document,
+    parse_notes_prompt_document,
+)
 from meeting_memory.config.settings import Settings
 from meeting_memory.repo.prompt_source import read_prompt_text
 from meeting_memory.repo.retry import (
@@ -117,18 +122,28 @@ class ClaudeSummarizer:
 
     def _prompt(self, transcript_text: str) -> str:
         clipped = transcript_text[: self.max_transcript_chars]
-        template = (
+        instructions = (
             load_prompt_template(self.prompt_file)
             if self.prompt_file is not None
-            else self.prompt_template
+            else parse_notes_prompt_document(self.prompt_template).instructions
         )
-        instructions = _insert_transcript(template, clipped)
-        return f"Additional instructions:\n{instructions}"
+        prompt = _insert_transcript(instructions, clipped)
+        return f"Additional instructions:\n{prompt}"
+
+
+def load_prompt_document(path: Path | None) -> NotesPromptDocument:
+    if path is None:
+        return default_notes_prompt_document()
+    content = read_prompt_text(path)
+    if content is None:
+        return default_notes_prompt_document()
+    return parse_notes_prompt_document(content)
 
 
 def load_prompt_template(path: Path | None) -> str:
-    prompt_path = path or Path(DEFAULT_SUMMARY_PROMPT_FILE)
-    return read_prompt_text(prompt_path) or DEFAULT_SUMMARY_PROMPT_TEMPLATE
+    """Return only provider instructions for legacy callers."""
+
+    return load_prompt_document(path).instructions
 
 
 def _insert_transcript(template: str, clipped: str) -> str:
