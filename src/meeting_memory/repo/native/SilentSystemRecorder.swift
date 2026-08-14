@@ -107,7 +107,8 @@ final class SilentSystemRecorder {
             try mixer.add(
                 converter.samples(from: buffer),
                 source: .system,
-                presentationSeconds: seconds
+                presentationSeconds: seconds,
+                arrivalSeconds: ProcessInfo.processInfo.systemUptime
             )
         } catch {
             failureHandler(error)

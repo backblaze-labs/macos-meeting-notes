@@ -75,19 +75,22 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     ) {
         guard sampleBuffer.isValid else { return }
         do {
+            let arrivalSeconds = ProcessInfo.processInfo.systemUptime
             let seconds = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
             switch outputType {
             case .audio:
                 try mixer.add(
                     systemConverter.samples(from: sampleBuffer),
                     source: .system,
-                    presentationSeconds: seconds
+                    presentationSeconds: seconds,
+                    arrivalSeconds: arrivalSeconds
                 )
             case .microphone:
                 try mixer.add(
                     microphoneConverter.samples(from: sampleBuffer),
                     source: .microphone,
-                    presentationSeconds: seconds
+                    presentationSeconds: seconds,
+                    arrivalSeconds: arrivalSeconds
                 )
             default:
                 break

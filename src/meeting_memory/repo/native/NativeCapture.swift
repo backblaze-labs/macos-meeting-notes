@@ -185,7 +185,8 @@ final class TimelineMixer {
 
     private let writer: WAVWriter
     private let enabledSources: Set<Source>
-    private var anchorSeconds: Double?
+    private var arrivalAnchorSeconds: Double?
+    private var sourceAnchors: [Source: (presentation: Double, arrival: Double)] = [:]
     private var pending: [Float] = []
     private var pendingBaseFrame: Int64 = 0
     private var highWater: [Source: Int64] = [:]
@@ -197,17 +198,40 @@ final class TimelineMixer {
         self.enabledSources = enabledSources
     }
 
-    func add(_ samples: [Float], source: Source, presentationSeconds: Double) throws {
+    func add(
+        _ samples: [Float],
+        source: Source,
+        presentationSeconds: Double,
+        arrivalSeconds: Double
+    ) throws {
         guard enabledSources.contains(source), !samples.isEmpty else { return }
+        guard presentationSeconds.isFinite, arrivalSeconds.isFinite else {
+            throw CaptureError.invalidAudioBuffer
+        }
         capturedFrames[source, default: 0] += Int64(samples.count)
         let peak = samples.reduce(Float.zero) { max($0, abs($1)) }
         capturedPeaks[source] = max(capturedPeaks[source] ?? 0, peak)
-        if anchorSeconds == nil {
-            anchorSeconds = presentationSeconds
+        if arrivalAnchorSeconds == nil {
+            arrivalAnchorSeconds = arrivalSeconds
         }
-        guard let anchorSeconds else { return }
+        if sourceAnchors[source] == nil {
+            sourceAnchors[source] = (presentationSeconds, arrivalSeconds)
+        }
+        guard let arrivalAnchorSeconds, let sourceAnchor = sourceAnchors[source] else {
+            return
+        }
 
-        var startFrame = Int64(((presentationSeconds - anchorSeconds) * 16_000).rounded())
+        let relativeSeconds = sourceAnchor.arrival - arrivalAnchorSeconds
+            + presentationSeconds - sourceAnchor.presentation
+        let relativeFrame = (relativeSeconds * 16_000).rounded()
+        guard
+            relativeFrame.isFinite,
+            relativeFrame >= Double(Int64.min),
+            relativeFrame <= Double(Int64.max)
+        else {
+            throw CaptureError.invalidAudioBuffer
+        }
+        var startFrame = Int64(relativeFrame)
         var values = samples
         if startFrame < pendingBaseFrame {
             let trim = min(values.count, Int(pendingBaseFrame - startFrame))
