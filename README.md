@@ -301,7 +301,7 @@ Mac. Notes allow up to 4,096 output tokens so longer meetings can finish the
 structured response; an answer that still reaches that limit is rejected
 rather than saved as partial notes.
 
-## Notes Instructions and Layout
+## Customize Notes
 
 The versioned built-in template lives at
 [prompts/summary.md](prompts/summary.md), but the app never writes personal
@@ -309,31 +309,33 @@ changes there. Until you customize it, the app uses that built-in text as a
 fallback. Saving from the tray creates the private personal copy at
 `~/Library/Application Support/meeting-memory/prompts/summary.md`, in checkout
 and bundled execution alike. Set `SUMMARY_PROMPT_FILE` explicitly only when a
-development or legacy workflow needs another path. If the selected file
-contains `{transcript}` above the `<!-- meeting-memory:notes-layout -->` marker,
-the app replaces that placeholder with the clipped transcript; otherwise it
-appends the transcript below the instruction block.
+development or legacy workflow needs another path. Meeting Memory inserts the
+speaker-confirmed transcript excerpt automatically when Notes runs. Advanced
+instruction templates may place `{transcript}` explicitly; otherwise the app
+appends it after the instruction block.
 
 Older `.env` files created from the repository scaffold may contain
 `SUMMARY_PROMPT_FILE=prompts/summary.md`. That exact former scaffold default is
 treated as the app-owned default during upgrade, so it no longer keeps personal
 edits in the checkout. Other explicit legacy and process paths remain honored.
 
-Choose **Configuration › Notes Instructions & Layout...** in the tray to edit
-both parts in a native multiline editor. Text above the marker controls the
-additional Anthropic instructions. Markdown below it stays local and controls
-the visible `notes.md` title, headings, prose, and section order. Keep the
-required `{summary}`, `{decisions}`, and `{action_items}` placeholders; optional
-metadata placeholders include `{calendar_title}`, `{date}`,
-`{duration_minutes}`, `{meeting_id}`, and `{source_transcript}`. The fixed JSON
-output contract remains unchanged. Saving applies to the next Notes generation
-without restarting, and the editor can restore the built-in default.
+Choose **Configuration › Notes Customization...** in the tray. **AI
+Instructions** controls the private/content guidance sent to Anthropic with the
+speaker-confirmed transcript excerpt. **Report Layout** stays local and offers
+a visual editor for the document title, section names and order, metadata, and
+a live `notes.md` preview. **Advanced Markdown** exposes the full local template
+when needed, with required `{summary}`, `{decisions}`, and `{action_items}`
+fields plus optional meeting metadata. Saving applies to the next Notes
+generation without restarting, and **Restore Defaults** resets both views.
+
+For compatibility, the private prompt file still stores both blocks separated
+by an app-owned marker. The standard workspace parses that detail internally
+and never displays it.
 
 For example, this local layout produces Spanish headings without changing what
 is sent to Anthropic:
 
 ```markdown
-<!-- meeting-memory:notes-layout -->
 # {calendar_title}
 
 ## Próximos pasos

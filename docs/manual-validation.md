@@ -153,7 +153,7 @@ With `ANTHROPIC_API_KEY` set:
 - `summary_status: ok`
 - With the built-in layout, `## Summary`, `## Decisions`, and `## Action Items`
   are present.
-- After changing **Configuration › Notes Instructions & Layout...**, the next
+- After changing **Configuration › Notes Customization...**, the next
   generated `notes.md` uses the custom headings/order and still contains all
   three required placeholder values.
 - If notes are missing or failed after speakers were confirmed, use the tray's
@@ -239,18 +239,21 @@ Pass criteria:
   success, stale preview, and failure.
 - Imported path values preserve the selected source's meaning after restart.
 
-Notes instructions and layout editor:
+Notes customization workspace:
 
-1. Open `Configuration › Notes Instructions & Layout...`.
-2. Add a recognizable instruction while preserving `{transcript}`.
-3. Rename and reorder the Markdown headings below the layout marker while
-   preserving `{summary}`, `{decisions}`, and `{action_items}`, then save.
-4. Generate notes for a confirmed transcript.
-5. Reopen the editor and choose `Restore Default`, then save again.
+1. Open `Configuration › Notes Customization...`.
+2. In `AI Instructions`, add a recognizable instruction.
+3. In `Report Layout`, rename and reorder sections, toggle metadata, and verify
+   the live preview before saving.
+4. Open `Advanced Markdown`, confirm the required generated fields remain
+   available, and return to the visual editor without losing the layout.
+5. Generate notes for a confirmed transcript.
+6. Reopen the workspace, choose `Restore Defaults`, and save again.
 
 Pass criteria:
 
-- The editor shows the path from `SUMMARY_PROMPT_FILE`.
+- The save confirmation shows the path from `SUMMARY_PROMPT_FILE`.
+- The app-owned storage marker never appears in the standard workspace.
 - The next notes generation uses both the edited instructions and local layout
   without restarting the app.
 - The custom headings appear in `notes.md`; layout text does not appear in the

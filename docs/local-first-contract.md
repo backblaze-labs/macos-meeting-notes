@@ -329,9 +329,9 @@ Phase 4 is intentionally split into independently reviewable slices:
 - **Phase 4D (complete implementation):** native per-capability forms share one
   worker coordinator in runtime and setup trays. Exact egress disclosure,
   secure blank-on-redisplay entry, app/process/legacy provenance, explicit
-  migration, explicit Calendar authorization, Notes instructions/layout editing, operation-ID
+  migration, explicit Calendar authorization, Notes customization, operation-ID
   stale suppression, and pause-before-terminal ordering are active. Setup keeps
-  Notes Instructions & Layout visibly unavailable until Recording Core is
+  Notes Customization visibly unavailable until Recording Core is
   repaired and the app restarts, avoiding ambient or incorrect path capture.
 
 The Phase 4 implementation criteria above are complete; Phase 5 owns official

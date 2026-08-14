@@ -9,9 +9,6 @@ Content rules:
 - Do not infer due dates.
 - Preserve technical names, project names, and company/product names when relevant.
 
-Transcript:
-{transcript}
-
 <!-- meeting-memory:notes-layout -->
 # Meeting Notes
 

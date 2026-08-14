@@ -19,7 +19,12 @@ def test_active_trays_cannot_reach_legacy_environment_writers() -> None:
             "configuration_surface.py",
             "configuration_forms.py",
             "migration_form.py",
+            "prompt_controller.py",
             "prompt_form.py",
+            "prompt_layout_rows.py",
+            "prompt_preview.py",
+            "prompt_widgets.py",
+            "prompt_window.py",
             "submenus.py",
         )
     )

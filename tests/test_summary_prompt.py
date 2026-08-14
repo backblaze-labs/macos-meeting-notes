@@ -99,7 +99,7 @@ def test_notes_prompt_window_saves_editor_value_for_next_generation(tmp_path: Pa
     assert NOTES_REPORT_TEMPLATE_MARKER in saved
     assert rumps.alerts == [
         (
-            "Notes Instructions & Layout Saved",
+            "Notes Customization Saved",
             f"The next notes generation will use {prompt_path}.",
         )
     ]
@@ -130,7 +130,7 @@ def test_notes_prompt_window_reports_blank_prompt(tmp_path: Path) -> None:
     assert saved is False
     assert rumps.alerts == [
         (
-            "Notes Instructions & Layout",
+            "Notes Customization",
             "The Notes instructions and layout cannot be empty.",
         )
     ]

@@ -76,7 +76,7 @@ def configuration_submenu(
             menu.NOTES_PROMPT_LABEL,
             (lambda _sender: actions.open_notes_prompt()) if notes_prompt_available else None,
             tooltip=(
-                "Edit the Anthropic instructions and local Markdown layout used by Notes."
+                "Customize AI instructions and the local report layout used by Notes."
                 if notes_prompt_available
                 else "Available after Recording Core setup is complete and the app restarts."
             ),

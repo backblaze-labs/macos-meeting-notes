@@ -183,8 +183,8 @@ class ConfigurationSurfaceUI:
         draft = self._coordinator.consume_prompt(event.operation_id)
         if draft is None:
             self._alert(
-                "Notes instructions and layout expired.",
-                "Open Notes Instructions & Layout again.",
+                "Notes customization expired.",
+                "Open Notes Customization again.",
             )
             return
         self._modal = True
@@ -193,7 +193,7 @@ class ConfigurationSurfaceUI:
         except Exception:
             updated = None
             self._alert(
-                "Notes instructions and layout could not be opened safely.",
+                "Notes customization could not be opened safely.",
                 "Close other dialogs and try again.",
             )
         finally:
