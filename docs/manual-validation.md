@@ -274,10 +274,13 @@ Recovery:
 
 1. Start a short recording.
 2. Force quit the app process before stopping.
-3. Reopen the app.
+3. Within two seconds, verify that no `MeetingMemoryCapture record` process
+   remains and that the staging WAV size has stopped changing.
+4. Reopen the app.
 
 Pass criteria:
 
+- The native capture helper exits and closes the WAV when its app parent dies.
 - `Debugging` shows `Interrupted Recordings`.
 - Clicking a recovered item converts and processes it.
 

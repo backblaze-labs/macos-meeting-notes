@@ -43,17 +43,29 @@ struct MeetingMemoryNativeCapture {
             return
         }
         guard
-            arguments.count == 4,
+            arguments.count == 8,
             arguments[0] == "record",
             arguments[2] == "--output",
-            let mode = CaptureMode(rawValue: arguments[1])
+            arguments[4] == "--parent-pid",
+            arguments[6] == "--watchdog-seconds",
+            let mode = CaptureMode(rawValue: arguments[1]),
+            let parentPID = Int32(arguments[5]),
+            parentPID > 1,
+            let watchdogSeconds = TimeInterval(arguments[7]),
+            watchdogSeconds > 0
         else {
             throw CaptureError.message(
                 "Usage: meeting-memory-native-capture record "
-                    + "<full-meeting|silent-system-only> --output <path>"
+                    + "<full-meeting|silent-system-only> --output <path> "
+                    + "--parent-pid <pid> --watchdog-seconds <seconds>"
             )
         }
-        try await record(mode: mode, outputPath: arguments[3])
+        try await record(
+            mode: mode,
+            outputPath: arguments[3],
+            parentPID: parentPID,
+            watchdogSeconds: watchdogSeconds
+        )
     }
 
     private static func checkSupport() throws {
@@ -154,12 +166,20 @@ struct MeetingMemoryNativeCapture {
         throw CaptureError.message("Bundled AAC encoder timed out safely.")
     }
 
-    private static func record(mode: CaptureMode, outputPath: String) async throws {
+    private static func record(
+        mode: CaptureMode,
+        outputPath: String,
+        parentPID: pid_t,
+        watchdogSeconds: TimeInterval
+    ) async throws {
         guard #available(macOS 15.0, *) else { throw CaptureError.unsupportedSystem }
         let outputURL = URL(fileURLWithPath: outputPath)
         try? FileManager.default.removeItem(at: outputURL)
         let writer = try WAVWriter(url: outputURL)
-        let lifetime = RecordingLifetime()
+        let lifetime = RecordingLifetime(
+            parentPID: parentPID,
+            watchdogSeconds: watchdogSeconds
+        )
 
         switch mode {
         case .fullMeeting:
@@ -212,62 +232,5 @@ struct MeetingMemoryNativeCapture {
                 "sources": mixer.metrics(),
             ])
         }
-    }
-}
-
-private enum RecordingOutcome {
-    case stop
-    case failure(Error)
-}
-
-final class RecordingLifetime {
-    private let lock = NSLock()
-    private var sources: [DispatchSourceSignal] = []
-    private var outcome: RecordingOutcome?
-    private var continuation: CheckedContinuation<RecordingOutcome, Never>?
-
-    init() {
-        signal(SIGINT, SIG_IGN)
-        signal(SIGTERM, SIG_IGN)
-        for signalNumber in [SIGINT, SIGTERM] {
-            let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
-            source.setEventHandler { [weak self] in self?.resolve(.stop) }
-            source.resume()
-            sources.append(source)
-        }
-    }
-
-    func fail(_ error: Error) {
-        resolve(.failure(error))
-    }
-
-    func waitForStopOrFailure() async -> Error? {
-        let result = await withCheckedContinuation { continuation in
-            lock.lock()
-            if let outcome {
-                lock.unlock()
-                continuation.resume(returning: outcome)
-            } else {
-                self.continuation = continuation
-                lock.unlock()
-            }
-        }
-        sources.forEach { $0.cancel() }
-        sources.removeAll()
-        if case let .failure(error) = result { return error }
-        return nil
-    }
-
-    private func resolve(_ result: RecordingOutcome) {
-        lock.lock()
-        guard outcome == nil else {
-            lock.unlock()
-            return
-        }
-        outcome = result
-        let pendingContinuation = continuation
-        continuation = nil
-        lock.unlock()
-        pendingContinuation?.resume(returning: result)
     }
 }
