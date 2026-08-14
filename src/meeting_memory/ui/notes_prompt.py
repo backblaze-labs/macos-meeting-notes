@@ -6,16 +6,20 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from meeting_memory.config.defaults import DEFAULT_SUMMARY_PROMPT_TEMPLATE
+from meeting_memory.config.notes_template import (
+    compose_notes_prompt_document,
+    parse_notes_prompt_document,
+)
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.summary_prompt import (
     read_summary_prompt,
     summary_prompt_path,
     write_summary_prompt,
 )
+from meeting_memory.types.configuration_surface import PromptDraft
 from meeting_memory.ui import load_rumps
+from meeting_memory.ui.prompt_form import edit_prompt
 
-RESTORE_DEFAULT_RESPONSE = 1002
 PromptEditor = Callable[[str, Path], str | None]
 
 
@@ -32,7 +36,7 @@ def open_notes_prompt_window(
     except Exception:
         _alert(
             rumps,
-            "Notes Instructions & Layout",
+            "Notes Customization",
             "The Notes configuration could not be loaded safely.",
         )
         return False
@@ -50,7 +54,7 @@ def open_notes_prompt_window(
     if not edited_prompt.strip():
         _alert(
             rumps,
-            "Notes Instructions & Layout",
+            "Notes Customization",
             "The Notes instructions and layout cannot be empty.",
         )
         return False
@@ -60,96 +64,57 @@ def open_notes_prompt_window(
     except Exception:
         _alert(
             rumps,
-            "Notes Instructions & Layout",
+            "Notes Customization",
             "Keep {summary}, {decisions}, and {action_items}, then try again.",
         )
         return False
 
     _alert(
         rumps,
-        "Notes Instructions & Layout Saved",
+        "Notes Customization Saved",
         f"The next notes generation will use {saved_path}.",
     )
     return True
 
 
 def _prompt_notes_text(prompt: str, path: Path, rumps: Any) -> str | None:
-    from AppKit import NSAlert, NSFont, NSMakeRect, NSScrollView, NSTextView
-
-    while True:
-        text_view = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, 720, 420))
-        text_view.setString_(prompt)
-        text_view.setEditable_(True)
-        text_view.setSelectable_(True)
-        text_view.setRichText_(False)
-        text_view.setFont_(NSFont.userFixedPitchFontOfSize_(12))
-        text_view.setHorizontallyResizable_(False)
-        text_view.setVerticallyResizable_(True)
-        _disable_smart_replacements(text_view)
-
-        scroll_view = NSScrollView.alloc().initWithFrame_(NSMakeRect(0, 0, 720, 420))
-        scroll_view.setDocumentView_(text_view)
-        scroll_view.setHasVerticalScroller_(True)
-        scroll_view.setHasHorizontalScroller_(False)
-
-        alert = NSAlert.alloc().init()
-        alert.setMessageText_("Notes Instructions & Layout")
-        alert.setInformativeText_(
-            "Instructions above the layout marker are sent to Anthropic. Markdown below it "
-            "stays local and controls notes.md. Keep {summary}, {decisions}, and "
-            "{action_items}; headings and order are editable. "
-            f"Changes apply to the next notes generation.\n{path}"
-        )
-        alert.addButtonWithTitle_("Save")
-        alert.addButtonWithTitle_("Cancel")
-        alert.addButtonWithTitle_("Restore Default")
-        alert.setAccessoryView_(scroll_view)
-        response = int(alert.runModal())
-        if response in {1, 1000}:
-            value = str(text_view.string())
-            if value.strip():
-                return value
-            _alert(
-                rumps,
-                "Notes Instructions & Layout",
-                "The Notes instructions and layout cannot be empty.",
-            )
-            prompt = value
-            continue
-        if response == RESTORE_DEFAULT_RESPONSE:
-            prompt = DEFAULT_SUMMARY_PROMPT_TEMPLATE
-            continue
-        return None
+    del path, rumps
+    updated = edit_prompt(PromptDraft(prompt))
+    return None if updated is None else updated.text
 
 
 def _prompt_notes_fallback(prompt: str, path: Path, rumps: Any) -> str | None:
-    window = rumps.Window(
+    document = parse_notes_prompt_document(prompt)
+    instructions_window = rumps.Window(
         message=(
-            "Instructions above the layout marker go to Anthropic. Markdown below it stays "
-            "local. Keep {summary}, {decisions}, and {action_items}. "
-            f"Saving updates {path}."
+            "These instructions and a speaker-confirmed transcript excerpt are sent to "
+            "Anthropic only when Notes runs. Report structure is configured separately."
         ),
-        title="Notes Instructions & Layout",
-        default_text=prompt,
-        ok="Save",
+        title="AI Instructions",
+        default_text=document.instructions,
+        ok="Continue",
         cancel=True,
         dimensions=(720, 420),
     )
-    response = window.run()
-    if not getattr(response, "clicked", False):
+    instructions = instructions_window.run()
+    if not getattr(instructions, "clicked", False):
         return None
-    return str(response.text)
-
-
-def _disable_smart_replacements(text_view: Any) -> None:
-    for selector in (
-        "setAutomaticQuoteSubstitutionEnabled_",
-        "setAutomaticDashSubstitutionEnabled_",
-        "setAutomaticTextReplacementEnabled_",
-    ):
-        setter = getattr(text_view, selector, None)
-        if callable(setter):
-            setter(False)
+    layout_window = rumps.Window(
+        message=(
+            "This Markdown stays on your Mac and controls notes.md. Keep {summary}, "
+            "{decisions}, and {action_items}. "
+            f"Saving updates {path}."
+        ),
+        title="Report Layout",
+        default_text=document.report_template,
+        ok="Save Changes",
+        cancel=True,
+        dimensions=(720, 420),
+    )
+    layout = layout_window.run()
+    if not getattr(layout, "clicked", False):
+        return None
+    return compose_notes_prompt_document(str(instructions.text), str(layout.text))
 
 
 def _alert(rumps: Any, title: str, message: str) -> None:

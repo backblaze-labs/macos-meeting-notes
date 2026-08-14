@@ -1,72 +1,19 @@
-"""Main-thread-only native editor for private Notes instructions and layout."""
+"""Main-thread-only native workspace for private Notes customization."""
 
-from meeting_memory.config.defaults import DEFAULT_SUMMARY_PROMPT_TEMPLATE
+from meeting_memory.config.notes_template import (
+    parse_notes_prompt_document,
+    parse_visual_notes_layout,
+)
 from meeting_memory.types.configuration_surface import PromptDraft
-from meeting_memory.ui.configuration_forms import OK_RESPONSES
-
-RESTORE_DEFAULT_RESPONSE = 1002
+from meeting_memory.ui.prompt_controller import create_prompt_controller
+from meeting_memory.ui.prompt_window import build_prompt_window
 
 
 def edit_prompt(draft: PromptDraft) -> PromptDraft | None:
-    from AppKit import NSAlert, NSFont, NSMakeRect, NSScrollView, NSTextView
+    """Edit provider instructions and the local report layout as separate concepts."""
 
-    prompt = draft.text
-    while True:
-        text_view = NSTextView.alloc().initWithFrame_(NSMakeRect(0, 0, 720, 420))
-        text_view.setString_(prompt)
-        text_view.setEditable_(True)
-        text_view.setSelectable_(True)
-        text_view.setRichText_(False)
-        text_view.setFont_(NSFont.userFixedPitchFontOfSize_(12))
-        text_view.setHorizontallyResizable_(False)
-        text_view.setVerticallyResizable_(True)
-        _disable_smart_replacements(text_view)
-        scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(0, 0, 720, 420))
-        scroll.setDocumentView_(text_view)
-        scroll.setHasVerticalScroller_(True)
-        scroll.setHasHorizontalScroller_(False)
-        alert = NSAlert.alloc().init()
-        alert.setMessageText_("Notes Instructions & Layout")
-        alert.setInformativeText_(
-            "Text above the layout marker is sent to Anthropic with a speaker-confirmed "
-            "transcript excerpt. Markdown below it stays local and controls notes.md. Keep "
-            "{summary}, {decisions}, and {action_items}; headings and order are editable. "
-            "Changes apply to the next Notes generation without restarting."
-        )
-        alert.addButtonWithTitle_("Save")
-        alert.addButtonWithTitle_("Cancel")
-        alert.addButtonWithTitle_("Restore Default")
-        alert.setAccessoryView_(scroll)
-        response = int(alert.runModal())
-        if response in OK_RESPONSES:
-            value = str(text_view.string())
-            if value.strip():
-                return PromptDraft(value)
-            _show_empty_prompt()
-            prompt = value
-            continue
-        if response == RESTORE_DEFAULT_RESPONSE:
-            prompt = DEFAULT_SUMMARY_PROMPT_TEMPLATE
-            continue
-        return None
-
-
-def _disable_smart_replacements(text_view) -> None:
-    for selector in (
-        "setAutomaticQuoteSubstitutionEnabled_",
-        "setAutomaticDashSubstitutionEnabled_",
-        "setAutomaticTextReplacementEnabled_",
-    ):
-        setter = getattr(text_view, selector, None)
-        if callable(setter):
-            setter(False)
-
-
-def _show_empty_prompt() -> None:
-    from AppKit import NSAlert
-
-    alert = NSAlert.alloc().init()
-    alert.setMessageText_("Notes Instructions & Layout")
-    alert.setInformativeText_("The Notes instructions and layout cannot be empty.")
-    alert.addButtonWithTitle_("OK")
-    alert.runModal()
+    document = parse_notes_prompt_document(draft.text)
+    visual_layout = parse_visual_notes_layout(document.report_template)
+    views = build_prompt_window(document, visual_layout)
+    controller = create_prompt_controller(document, visual_layout, views)
+    return controller.run()

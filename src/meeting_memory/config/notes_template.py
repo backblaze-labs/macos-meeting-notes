@@ -24,6 +24,7 @@ NOTES_REPORT_PLACEHOLDERS = frozenset(
     }
 )
 REQUIRED_NOTES_REPORT_PLACEHOLDERS = frozenset({"summary", "decisions", "action_items"})
+VISUAL_NOTES_SECTION_KEYS = ("summary", "decisions", "action_items")
 PLACEHOLDER_PATTERN = re.compile(r"(?<!\{)\{([A-Za-z_][A-Za-z0-9_]*)\}(?!\})")
 
 
@@ -33,6 +34,24 @@ class NotesPromptDocument:
 
     instructions: str
     report_template: str
+
+
+@dataclass(frozen=True, slots=True)
+class NotesVisualSection:
+    """One required generated value with its user-facing Markdown heading."""
+
+    key: str
+    heading: str
+
+
+@dataclass(frozen=True, slots=True)
+class NotesVisualLayout:
+    """The report subset supported by the native visual layout editor."""
+
+    title: str
+    sections: tuple[NotesVisualSection, ...]
+    include_source: bool = True
+    include_date: bool = False
 
 
 def parse_notes_prompt_document(text: str) -> NotesPromptDocument:
@@ -63,8 +82,93 @@ def normalize_notes_prompt_document(text: str) -> str:
     )
 
 
+def compose_notes_prompt_document(instructions: str, report_template: str) -> str:
+    """Compose the private storage format without exposing its marker to the UI."""
+
+    return normalize_notes_prompt_document(
+        f"{instructions.rstrip()}\n\n{NOTES_REPORT_TEMPLATE_MARKER}\n{report_template.strip()}"
+    )
+
+
 def default_notes_prompt_document() -> NotesPromptDocument:
     return parse_notes_prompt_document(DEFAULT_SUMMARY_PROMPT_TEMPLATE)
+
+
+def parse_visual_notes_layout(report_template: str) -> NotesVisualLayout | None:
+    """Return a lossless visual model, or ``None`` for advanced Markdown."""
+
+    validate_notes_report_template(report_template)
+    lines = report_template.strip().splitlines()
+    if not lines or not lines[0].startswith("# ") or lines[0].startswith("## "):
+        return None
+    title = lines[0][2:].strip()
+    if not _valid_visual_label(title):
+        return None
+
+    include_source = False
+    include_date = False
+    sections: list[NotesVisualSection] = []
+    index = 1
+    while index < len(lines):
+        line = lines[index].strip()
+        index += 1
+        if not line:
+            continue
+        if line == "**Source:** {source_transcript}":
+            if include_source:
+                return None
+            include_source = True
+            continue
+        if line == "**Date:** {date}":
+            if include_date:
+                return None
+            include_date = True
+            continue
+        if not line.startswith("## "):
+            return None
+        heading = line[3:].strip()
+        while index < len(lines) and not lines[index].strip():
+            index += 1
+        if index >= len(lines):
+            return None
+        placeholder = lines[index].strip()
+        index += 1
+        match = re.fullmatch(r"\{([a-z_]+)\}", placeholder)
+        if (
+            match is None
+            or match.group(1) not in VISUAL_NOTES_SECTION_KEYS
+            or not _valid_visual_label(heading)
+        ):
+            return None
+        sections.append(NotesVisualSection(match.group(1), heading))
+
+    keys = tuple(section.key for section in sections)
+    if len(set(keys)) != len(keys) or frozenset(keys) != REQUIRED_NOTES_REPORT_PLACEHOLDERS:
+        return None
+    return NotesVisualLayout(title, tuple(sections), include_source, include_date)
+
+
+def render_visual_notes_layout(layout: NotesVisualLayout) -> str:
+    """Render a visual layout model into the validated local Markdown template."""
+
+    if not isinstance(layout, NotesVisualLayout) or not _valid_visual_label(layout.title):
+        raise ValueError("The document title cannot be empty or contain Markdown fields.")
+    keys = tuple(section.key for section in layout.sections)
+    if len(set(keys)) != len(keys) or frozenset(keys) != REQUIRED_NOTES_REPORT_PLACEHOLDERS:
+        raise ValueError("Every generated Notes section must appear exactly once.")
+
+    blocks = [f"# {layout.title.strip()}"]
+    if layout.include_date:
+        blocks.append("**Date:** {date}")
+    if layout.include_source:
+        blocks.append("**Source:** {source_transcript}")
+    for section in layout.sections:
+        if not _valid_visual_label(section.heading):
+            raise ValueError("Section titles cannot be empty or contain Markdown fields.")
+        blocks.append(f"## {section.heading.strip()}\n\n{{{section.key}}}")
+    report_template = "\n\n".join(blocks)
+    validate_notes_report_template(report_template)
+    return report_template
 
 
 def validate_notes_report_template(report_template: str) -> None:
@@ -79,3 +183,7 @@ def validate_notes_report_template(report_template: str) -> None:
     if missing:
         labels = ", ".join(sorted(f"{{{name}}}" for name in missing))
         raise ValueError(f"The Notes layout is missing required placeholders: {labels}.")
+
+
+def _valid_visual_label(value: str) -> bool:
+    return bool(value.strip()) and "\n" not in value and not any(char in value for char in "{}")

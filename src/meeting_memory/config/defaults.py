@@ -29,9 +29,6 @@ Content rules:
 - Keep the summary focused on work topics, decisions, risks, and next steps.
 - Do not infer due dates.
 - Preserve technical names, project names, and company/product names when relevant.
-
-Transcript:
-{transcript}
 """
 DEFAULT_NOTES_REPORT_TEMPLATE = """# Meeting Notes
 

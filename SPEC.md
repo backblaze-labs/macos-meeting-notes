@@ -37,6 +37,13 @@ instructions and a local-only Markdown layout. The typed Anthropic JSON
 contract remains fixed, while users can rename and reorder the visible report
 sections with validated placeholders.
 
+**Revision note (v0.8):** Replaced the combined raw Notes editor with a native
+customization workspace. AI Instructions and Report Layout are separate tabs;
+the layout tab provides editable titles, section ordering, metadata controls,
+a live preview, and optional advanced Markdown. The app-owned storage marker
+remains an internal compatibility detail and is never shown in the standard
+editor.
+
 ---
 
 ## Table of Contents
@@ -411,9 +418,11 @@ transcripts.
 **REQ-F5-05** The summarize command MUST write `notes.md` and MUST NOT modify `transcript.md`.
 
 **REQ-F5-06** Notes instructions and report layout MUST be configurable through
-`SUMMARY_PROMPT_FILE` and the tray's **Configuration › Notes Instructions &
-Layout...** editor. Content above the app-owned layout marker is the provider
-instruction block. If that block contains `{transcript}`, the app MUST replace
+`SUMMARY_PROMPT_FILE` and the tray's **Configuration › Notes Customization...**
+editor. The native workspace separates provider instructions from the local
+report layout and MUST NOT expose the app-owned storage marker in its standard
+visual editor. Content above that internal marker is the provider instruction
+block. If that block contains `{transcript}`, the app MUST replace
 the placeholder with the clipped transcript; otherwise it MUST append the
 transcript below the instructions. Markdown below the marker MUST remain local
 and MUST support validated placeholders for meeting metadata plus the required
@@ -528,7 +537,7 @@ Configuration                      (hover submenu)
   Backup…
   Calendar…
   Notes…
-  Notes Instructions & Layout…
+  Notes Customization…
   Authorize Google Calendar…
   Import Legacy Configuration…
 Debugging                          (hover submenu)
@@ -563,11 +572,14 @@ to compatibility mode.
 
 **REQ-F8-10** **Test macOS Notifications** MUST send a local notification for validating macOS notification behavior.
 
-**REQ-F8-11** **Configuration › Notes Instructions & Layout...** MUST open a
-native multiline editor for the effective `SUMMARY_PROMPT_FILE`, allow
-restoring the built-in default, reject empty instructions, reject a layout that
-omits required or uses unsupported placeholders, and show the file updated
-after saving.
+**REQ-F8-11** **Configuration › Notes Customization...** MUST open a native
+workspace for the effective `SUMMARY_PROMPT_FILE`. AI Instructions and Report
+Layout MUST be separate views. The visual layout editor MUST support report and
+section titles, required-section ordering, local metadata toggles, and a live
+preview; advanced Markdown MUST remain available without showing the app-owned
+storage marker. The workspace MUST allow restoring the built-in default,
+reject empty instructions, reject a layout that omits required or uses
+unsupported placeholders, and show the file updated after saving.
 
 **REQ-F8-12** **Configuration** and **Debugging** MUST be native hover submenus. Audio modes and user-editable settings MUST live under **Configuration**. Pending meeting tasks, interrupted recordings, backup/transcription retry, setup checks, and test notifications MUST live under **Debugging**, not at the tray root. Debugging actions MUST use explicit labels and native hover help that describes their scope.
 
@@ -807,10 +819,10 @@ The codebase is organized into five strictly-ordered layers under `src/meeting_m
 | Layer | Package | Components (file → responsibility) |
 |---|---|---|
 | **types** | `types/` | `capabilities.py` (`Capability`, `CapabilityState`, `CapabilityStatus`, `MeetingJobState`, `ReadinessReport`) · `configuration.py` / `configuration_resolution.py` (Phase 4 allowlists, secret references, fixed consumer scopes, issues, enablement, and value-free provenance) · `meeting.py` (`MeetingMeta`, slug helpers-as-data) · `transcript.py` (`TranscriptResult`, `TranscriptSegment`) · `summary.py` (`SummaryResult` with decisions + action items) · `events.py` (UI events emitted to the tray: `MeetingDetected`, `NotifyEvent`, `RecordingStateChanged`). Pure data — **no SDK imports, no cross-layer imports.** |
-| **config** | `config/` | Capability-scoped settings, typed schema, pure precedence resolution, and secret payload codec; depends only on `types`. `settings.py` retains characterized legacy APIs. Source I/O and active composition stay in `service/`. |
+| **config** | `config/` | Capability-scoped settings, typed schema, pure precedence resolution, secret payload codec, and `notes_template.py` parsing/validation for the private Notes document plus its visual-layout subset; depends only on `types`. `settings.py` retains characterized legacy APIs. Source I/O and active composition stay in `service/`. |
 | **repo** | `repo/` | Existing provider/native adapters plus `secret_store.py`, the generic immutable-generation Keychain adapter activated only through opaque preference references. `calendar_client.py` retains the compatible Google OAuth Keychain identity. **The only layer permitted to import external SDKs.** |
 | **service** | `service/` | Existing local orchestration plus readiness, the private atomic preference store, and `configuration_loader.py` with its bounded source readers and fixed runtime/readiness/auth/search/summarize scopes. Calls `repo`, returns `types`; **no `rumps`, no SDKs.** |
-| **ui** | `ui/` | `tray.py` (`rumps.App` subclass; menu state, action dispatch, notifications, status timer, `rumps.Timer` draining the event queue) · `setup_readiness.py` (background setup check + UI rendering) · `controller.py` (recording/pipeline/sync handoff) · `menu.py` (menu label helpers) · `submenus.py` (Configuration and Debugging menu composition) · `preferences.py` (minimal settings window) · `notes_prompt.py` (native prompt editor) · `notifications.py` (rumps notification wrapper + fallback) · `title_prompt.py` (ad-hoc title prompt) · `macos.py` / `icons.py` (macOS UI helpers). **The only layer permitted to import `rumps`.** |
+| **ui** | `ui/` | `tray.py` (`rumps.App` subclass; menu state, action dispatch, notifications, status timer, `rumps.Timer` draining the event queue) · `setup_readiness.py` (background setup check + UI rendering) · `controller.py` (recording/pipeline/sync handoff) · `menu.py` (menu label helpers) · `submenus.py` (Configuration and Debugging menu composition) · `preferences.py` (minimal settings window) · `prompt_form.py` / `prompt_window.py` / `prompt_controller.py` (native Notes Customization workspace, visual layout editor, preview, and advanced Markdown) · `notes_prompt.py` (compatibility entrypoint) · `notifications.py` (rumps notification wrapper + fallback) · `title_prompt.py` (ad-hoc title prompt) · `macos.py` / `icons.py` (macOS UI helpers). **The only layer permitted to import `rumps`.** |
 | *cross-cutting* | — | `__main__.py` (entrypoint; subcommands; logging; starts the capability-scoped runtime) · `doctor.py` (typed preflight renderer, §7.6) · `logging_config.py` (logs → `~/Library/Logs/meeting-memory/app.log`). |
 
 ### 7.2 Processing Sequence (Happy Path)
@@ -1044,7 +1056,7 @@ explicitly. No reachable native UI action writes `.env`.
 | `ASSEMBLYAI_API_KEY` | Transcription | — | AssemblyAI key |
 | `ANTHROPIC_API_KEY` | Notes | — | Claude key for the `summarize` command |
 | `ANTHROPIC_MODEL` | Notes | `claude-haiku-4-5` | Summarization model override (OQ-5) |
-| `SUMMARY_PROMPT_FILE` | Notes | `~/Library/Application Support/meeting-memory/prompts/summary.md` | Personal Notes instructions plus local Markdown layout; editable from **Configuration › Notes Instructions & Layout...**. An explicit process or legacy override may select another path. |
+| `SUMMARY_PROMPT_FILE` | Notes | `~/Library/Application Support/meeting-memory/prompts/summary.md` | Personal Notes instructions plus local Markdown layout; editable from **Configuration › Notes Customization...**. An explicit process or legacy override may select another path. |
 | `KNOWN_SPEAKERS` | Calendar | `{}` | Optional JSON object mapping speaker display names to Calendar attendee match hints; app-managed values live in the private Application Support preference document. |
 | `GOOGLE_CALENDAR_CREDENTIALS_FILE` | Calendar | `credentials.json` | Path to OAuth client secrets |
 | `GOOGLE_CALENDAR_ID` | Calendar | `all` | Calendar scope to watch: `all`, `primary`, or a specific calendar ID |

@@ -291,7 +291,11 @@ paths use the captured project root; selected legacy paths use the selected
 `.env` parent; app-owned relative paths and the default editable Notes
 instructions/layout document use Application Support. Its instruction block is
 the only editable part sent to Anthropic; the validated Markdown layout remains
-local. Bundled mode
+local. The native Notes Customization workspace parses the combined private
+file at the UI boundary: AI Instructions and Report Layout are separate tabs,
+the standard layout editor works through a typed visual model and preview, and
+advanced Markdown preserves layouts outside that visual subset. The app-owned
+storage marker never appears in the standard editor. Bundled mode
 does not scan for `.env`, rejects relative process paths, uses the exact bundled
 Swift helper, and requires an explicit file selection before legacy preview.
 Migration converts selected legacy path values to absolute app preferences before
