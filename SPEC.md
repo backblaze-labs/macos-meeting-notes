@@ -363,6 +363,11 @@ recordings remain discoverable only for compatible recovery.
 
 **REQ-F3-08** The tray MUST expose Full Meeting and Silent System Only as the two audio modes for the next recording. Mode changes while recording MUST be rejected.
 
+**REQ-F3-09** The native capture helper MUST stop and finalize its staging WAV
+when its owning application process exits. It MUST also enforce an independent
+watchdog slightly beyond `MAX_RECORDING_MINUTES`, so a crashed or unresponsive
+application cannot leave an unbounded capture running.
+
 ### F4: Transcription
 
 **REQ-F4-01** When Transcription is `ready`, the transcription pipeline MUST start automatically after durable local audio is committed. When it is unavailable, the application MUST retain the local recording and expose transcription setup/retry without blocking recording completion.

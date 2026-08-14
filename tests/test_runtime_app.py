@@ -99,6 +99,7 @@ def test_optional_constructor_failures_do_not_block_core(
         b2_bucket_name="bucket",
         google_calendar_credentials_file=credentials,
         anthropic_api_key="notes-key",
+        max_recording_minutes=17,
     )
     Tray.ran = False
     monkeypatch.setattr(runtime_app, "load_configuration", lambda _use: _loaded(settings))
@@ -117,6 +118,7 @@ def test_optional_constructor_failures_do_not_block_core(
     assert Tray.controller.committer.policy_provider().transcription is False
     assert Tray.controller.committer.policy_provider().backup is False
     assert Tray.controller.notes_generator is None
+    assert Tray.controller.recorder.capture_starter.keywords == {"max_duration_seconds": 17 * 60}
 
 
 def test_runtime_surface_owns_registered_monotonic_pause(tmp_path: Path, monkeypatch) -> None:

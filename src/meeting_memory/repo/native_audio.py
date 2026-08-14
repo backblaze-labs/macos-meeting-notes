@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import queue
 import signal
 import subprocess
@@ -11,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TextIO
 
+from meeting_memory.config.defaults import DEFAULT_MAX_RECORDING_MINUTES
 from meeting_memory.repo.native_audio_build import (
     NativeAudioCaptureError,
     build_native_capture_helper,
@@ -28,6 +30,8 @@ __all__ = (
 
 START_TIMEOUT_SECONDS = 60
 STOP_TIMEOUT_SECONDS = 20
+NATIVE_WATCHDOG_GRACE_SECONDS = 30
+DEFAULT_MAX_DURATION_SECONDS = DEFAULT_MAX_RECORDING_MINUTES * 60
 
 
 @dataclass
@@ -111,10 +115,32 @@ class _HelperStatus:
             return self._failure_message
 
 
-def start_native_capture(mode_key: str, output_path: Path) -> NativeCaptureProcess:
+def start_native_capture(
+    mode_key: str,
+    output_path: Path,
+    *,
+    max_duration_seconds: int = DEFAULT_MAX_DURATION_SECONDS,
+) -> NativeCaptureProcess:
+    if (
+        not isinstance(max_duration_seconds, int)
+        or isinstance(max_duration_seconds, bool)
+        or max_duration_seconds <= 0
+    ):
+        raise ValueError("max_duration_seconds must be a positive integer")
     helper = native_capture_helper_path()
+    watchdog_seconds = max_duration_seconds + NATIVE_WATCHDOG_GRACE_SECONDS
     process = subprocess.Popen(
-        [str(helper), "record", mode_key, "--output", str(output_path)],
+        [
+            str(helper),
+            "record",
+            mode_key,
+            "--output",
+            str(output_path),
+            "--parent-pid",
+            str(os.getpid()),
+            "--watchdog-seconds",
+            str(watchdog_seconds),
+        ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,

@@ -66,8 +66,14 @@ workers and emit typed events for the tray main thread to render.
 - `MAX_RECORDING_MINUTES` is enforced as a hard safety limit. When reached, the
   controller stops the active recording, atomically commits local artifacts,
   and starts only configured optional jobs.
+- The native helper also watches the exact parent process that launched it. If
+  the app exits or crashes, the helper stops within roughly one second and
+  finalizes the staging WAV instead of continuing as an orphan. An independent
+  native watchdog stops capture 30 seconds after the configured limit if the
+  controller is alive but unable to perform its normal stop.
 - Interrupted indexed WAV files appear in the tray as recovered recordings and
-  can be committed by the user.
+  can be committed by the user. Recovery never starts transcription or backup
+  until the user explicitly selects that recording.
 - The runtime commits `recording.m4a` locally before starting any
   optional provider work. A missing or failed Transcription, Backup, Calendar,
   or Notes capability must not discard or hide the recording.
@@ -122,6 +128,7 @@ workers and emit typed events for the tray main thread to render.
 - `src/meeting_memory/repo/native_audio.py`
 - `src/meeting_memory/repo/native_audio_build.py`
 - `src/meeting_memory/repo/native/NativeCapture.swift`
+- `src/meeting_memory/repo/native/RecordingLifetime.swift`
 - `src/meeting_memory/ui/tray.py`
 - `src/meeting_memory/ui/title_prompt.py`
 
@@ -129,6 +136,7 @@ workers and emit typed events for the tray main thread to render.
 
 - `tests/test_recorder.py`
 - `tests/test_native_audio.py`
+- `tests/test_native_recording_lifetime.py`
 - `tests/test_recovery.py`
 - `tests/test_recovery_audio.py`
 - `tests/test_recovery_receipt.py`

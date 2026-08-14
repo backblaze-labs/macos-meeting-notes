@@ -5,13 +5,14 @@ from __future__ import annotations
 import logging
 import queue
 import tempfile
+from functools import partial
 from pathlib import Path
 
 from meeting_memory.config.runtime import RuntimeSettings
 from meeting_memory.logging_config import configure_logging
 from meeting_memory.repo.b2_client import B2S3Client
 from meeting_memory.repo.calendar_client import GoogleCalendarClient
-from meeting_memory.repo.native_audio import convert_native_audio
+from meeting_memory.repo.native_audio import convert_native_audio, start_native_capture
 from meeting_memory.repo.native_audio_validation import validate_native_m4a
 from meeting_memory.repo.summarizer import ClaudeSummarizer, load_prompt_document
 from meeting_memory.repo.transcription import AssemblyAITranscriptionClient
@@ -87,7 +88,13 @@ def run_runtime_app() -> int:
             backup=policy.backup,
         ),
     )
-    recorder = RecorderService(temp_dir=_recording_staging(settings))
+    recorder = RecorderService(
+        temp_dir=_recording_staging(settings),
+        capture_starter=partial(
+            start_native_capture,
+            max_duration_seconds=settings.max_recording_minutes * 60,
+        ),
+    )
     legacy_recovery = LegacyRecoveryRuntime(
         Path(tempfile.gettempdir()),
         _legacy_recovery_marker(settings),

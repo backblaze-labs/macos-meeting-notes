@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import os
 import subprocess
 import threading
 from pathlib import Path
@@ -58,13 +59,45 @@ def test_start_and_stop_native_capture_waits_for_ready_event(
     output.write_bytes(b"RIFF" + b"\0" * 64)
     process = FakeProcess()
     monkeypatch.setattr(native_audio, "native_capture_helper_path", lambda: helper)
-    monkeypatch.setattr(native_audio.subprocess, "Popen", lambda *args, **kwargs: process)
+    calls: list[list[str]] = []
 
-    capture = native_audio.start_native_capture("full-meeting", output)
+    def popen(command, **_kwargs):
+        calls.append(command)
+        return process
+
+    monkeypatch.setattr(native_audio.subprocess, "Popen", popen)
+
+    capture = native_audio.start_native_capture(
+        "full-meeting",
+        output,
+        max_duration_seconds=60,
+    )
     result = capture.stop()
 
     assert result == output
     assert process.signals == [native_audio.signal.SIGINT]
+    assert calls == [
+        [
+            str(helper),
+            "record",
+            "full-meeting",
+            "--output",
+            str(output),
+            "--parent-pid",
+            str(os.getpid()),
+            "--watchdog-seconds",
+            "90",
+        ]
+    ]
+
+
+def test_native_capture_rejects_invalid_maximum_duration(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        native_audio.start_native_capture(
+            "full-meeting",
+            tmp_path / "recording.wav",
+            max_duration_seconds=0,
+        )
 
 
 def test_native_capture_rejects_async_error_even_when_helper_exits_zero(
