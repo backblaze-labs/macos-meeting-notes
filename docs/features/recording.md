@@ -39,9 +39,6 @@ workers and emit typed events for the tray main thread to render.
 ## Behavior Notes
 
 - The helper resamples and downmixes native streams into a 16 kHz mono WAV.
-  System and microphone presentation clocks are rebased independently, then
-  their first packets are aligned by monotonic arrival time so Bluetooth input
-  devices cannot make valid microphone samples appear already elapsed.
 - WAV-to-M4A conversion prefers AVFoundation. Hosts without an AudioToolbox AAC
   encoder use `MeetingMemoryFFmpegAudioEncoder`, a separate minimal LGPL
   FFmpeg build whose network support and unrelated formats are disabled. The
