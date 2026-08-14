@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import queue
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from meeting_memory.service.recorder import RecorderService
 from meeting_memory.service.recovery import mark_audio_for_recovery
@@ -21,7 +22,7 @@ def test_normal_recovery_discovery_ignores_legacy_temp_markers(tmp_path) -> None
     meta = _meta("legacy")
     mark_audio_for_recovery(legacy_audio, meta)
     controller = TrayController(
-        settings=object(),
+        settings=SimpleNamespace(max_recording_minutes=180),
         recorder=type("Recorder", (), {"temp_dir": tmp_path})(),
         event_queue=queue.Queue(),
     )
@@ -34,7 +35,7 @@ def test_normal_recovery_discovery_returns_private_indexed_sessions(tmp_path) ->
     entry = create_recovery_session(tmp_path, meta)
     entry.wav_path.write_bytes(b"indexed audio")
     controller = TrayController(
-        settings=object(),
+        settings=SimpleNamespace(max_recording_minutes=180),
         recorder=type("Recorder", (), {"temp_dir": tmp_path})(),
         event_queue=queue.Queue(),
     )
@@ -62,7 +63,7 @@ def test_live_capture_is_hidden_and_rejected_as_recovery(tmp_path) -> None:
         {"commit": lambda self, entry, meta: calls.append((entry, meta))},
     )()
     controller = TrayController(
-        settings=object(),
+        settings=SimpleNamespace(max_recording_minutes=180),
         recorder=recorder,
         committer=committer,
         event_queue=queue.Queue(),

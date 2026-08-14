@@ -368,6 +368,11 @@ when its owning application process exits. It MUST also enforce an independent
 watchdog slightly beyond `MAX_RECORDING_MINUTES`, so a crashed or unresponsive
 application cannot leave an unbounded capture running.
 
+**REQ-F3-10** While a recording remains active, the application MUST send a
+notification with a Stop action after 60 minutes and every 30 minutes
+thereafter. When a reminder coincides with `MAX_RECORDING_MINUTES`, the
+auto-stop notification MUST replace the reminder.
+
 ### F4: Transcription
 
 **REQ-F4-01** When Transcription is `ready`, the transcription pipeline MUST start automatically after durable local audio is committed. When it is unavailable, the application MUST retain the local recording and expose transcription setup/retry without blocking recording completion.

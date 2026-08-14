@@ -56,7 +56,7 @@ def test_tray_controller_auto_stops_at_recording_limit(tmp_path: Path) -> None:
     )
 
     controller.start_recording("Long Meeting")
-    controller._auto_stop_recording("Long Meeting", controller._recording_token)
+    controller._duration_guard.run("Long Meeting", controller._recording_token)
 
     assert sleeps == [60]
     assert recorder.is_recording is False

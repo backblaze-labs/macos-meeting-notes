@@ -34,6 +34,7 @@ from meeting_memory.types.recovery import RecoveryIndexEntry, RecoveryOrigin
 from meeting_memory.types.transcript import SpeakerReviewState
 from meeting_memory.ui.legacy_processing import launch_legacy_processing
 from meeting_memory.ui.macos import open_in_finder
+from meeting_memory.ui.recording_duration_guard import RecordingDurationGuard
 from meeting_memory.ui.recording_transitions import RecordingTransitions
 from meeting_memory.ui.recovery_actions import is_active_recovery, list_recoveries
 
@@ -62,6 +63,7 @@ class TrayController:
     sleeper: Callable[[float], None] = time.sleep
     _known_meetings: dict[str, CalendarMeeting] = field(default_factory=dict, init=False)
     _recording_token: object | None = field(default=None, init=False)
+    _duration_guard: RecordingDurationGuard = field(init=False)
     _transitions: RecordingTransitions = field(init=False)
     _notes_runtime: RuntimeNotesGate = field(init=False)
 
@@ -79,6 +81,16 @@ class TrayController:
             on_started=self._recording_started,
             on_stopped=self._recording_stopped,
             thread_factory=self.thread_factory,
+        )
+        self._duration_guard = RecordingDurationGuard(
+            max_duration_minutes=self.settings.max_recording_minutes,
+            event_sink=self.event_queue.put,
+            is_active=lambda token: (
+                self._recording_token is token and self.recorder.is_recording
+            ),
+            stop_recording=self.stop_recording,
+            thread_factory=self.timer_thread_factory,
+            sleeper=self.sleeper,
         )
 
     def start_recording(
@@ -100,7 +112,7 @@ class TrayController:
     def _recording_started(self, title: str, reminder_end: datetime | None) -> None:
         self._recording_token = object()
         token = self._recording_token
-        self._schedule_auto_stop(title, token)
+        self._duration_guard.start(title, token)
         self._schedule_stop_reminder(title, reminder_end, token)
 
     def _recording_stopped(self, result: RecordingResult) -> None:
@@ -279,19 +291,3 @@ class TrayController:
                     action="stop_recording",
                 )
             )
-
-    def _schedule_auto_stop(self, calendar_title: str, token: object) -> None:
-        self.timer_thread_factory(
-            target=self._auto_stop_recording, args=(calendar_title, token), daemon=True
-        ).start()
-
-    def _auto_stop_recording(self, calendar_title: str, token: object) -> None:
-        self.sleeper(self.settings.max_recording_minutes * 60)
-        if self._recording_token is token and self.recorder.is_recording:
-            self.event_queue.put(
-                NotifyEvent(
-                    title="Recording limit reached",
-                    body=f"{calendar_title} reached {self.settings.max_recording_minutes} min.",
-                )
-            )
-            self.stop_recording()

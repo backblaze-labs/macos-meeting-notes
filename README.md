@@ -174,9 +174,10 @@ bundled, offline minimal LGPL encoder only when the host lacks AAC encoding.
 
 While recording, the status bar shows a live timer and the tray menu switches to
 `Stop Recording`. When a calendar-backed recording reaches the event end time,
-the app sends a `Stop` reminder action. After transcription finishes, the app
-writes `transcript.md`; the completion notification opens the meeting directory
-so you can review speaker aliases.
+the app sends a `Stop` reminder action. Long recordings also send a reminder
+after one hour and every 30 minutes after that, until recording stops. After
+transcription finishes, the app writes `transcript.md`; the completion
+notification opens the meeting directory so you can review speaker aliases.
 
 If the app crashes during recording, restart it and check the tray for
 **Debugging › Interrupted Recordings**. Failed B2 uploads can be retried with

@@ -13,7 +13,6 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = ROOT / "src" / "meeting_memory"
 TESTS_ROOT = ROOT / "tests"
 LAYERS = {"types": 0, "config": 1, "repo": 2, "service": 3, "ui": 4}
-
 EXTERNAL_SDK_PREFIXES = (
     "anthropic",
     "assemblyai",
@@ -154,6 +153,7 @@ REQUIRED_SOURCE_FILES = (
     "ui/setup_readiness.py",
     "ui/runtime_app.py",
     "ui/recording_health.py",
+    "ui/recording_duration_guard.py",
     "ui/recording_transitions.py",
     "ui/submenus.py",
     "ui/preferences.py",
