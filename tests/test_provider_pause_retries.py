@@ -93,13 +93,13 @@ def test_notes_rechecks_admission_after_prompt_snapshot(monkeypatch) -> None:
     def prompt(_path):
         nonlocal allowed
         allowed = False
-        return "prompt"
+        return summarizer.default_notes_prompt_document()
 
     def provider(*_args, **_kwargs):
         nonlocal provider_created
         provider_created = True
 
-    monkeypatch.setattr(summarizer, "load_prompt_template", prompt)
+    monkeypatch.setattr(summarizer, "load_prompt_document", prompt)
     monkeypatch.setattr(summarizer, "_anthropic_client", provider)
 
     with pytest.raises(EgressPaused):

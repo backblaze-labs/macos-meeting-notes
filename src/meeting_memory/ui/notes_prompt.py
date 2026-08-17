@@ -55,7 +55,7 @@ def open_notes_prompt_window(
         _alert(
             rumps,
             "Notes Customization",
-            "The Notes instructions and layout cannot be empty.",
+            "The Notes profile cannot be empty.",
         )
         return False
 
@@ -65,7 +65,7 @@ def open_notes_prompt_window(
         _alert(
             rumps,
             "Notes Customization",
-            "Keep {summary}, {decisions}, and {action_items}, then try again.",
+            "Complete the required template fields and try again.",
         )
         return False
 
@@ -85,6 +85,13 @@ def _prompt_notes_text(prompt: str, path: Path, rumps: Any) -> str | None:
 
 def _prompt_notes_fallback(prompt: str, path: Path, rumps: Any) -> str | None:
     document = parse_notes_prompt_document(prompt)
+    if document.profile is not None:
+        _alert(
+            rumps,
+            "Notes Customization",
+            "This profile needs the native editor. Restart Meeting Memory and try again.",
+        )
+        return None
     instructions_window = rumps.Window(
         message=(
             "These instructions and a speaker-confirmed transcript excerpt are sent to "

@@ -1,34 +1,45 @@
-"""Target/action controller for the native Notes customization workspace."""
+"""Controller for template selection and advanced Notes profile editing."""
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
-from meeting_memory.config.notes_template import (
-    NotesPromptDocument,
-    NotesVisualLayout,
-    NotesVisualSection,
-    compose_notes_prompt_document,
-    default_notes_prompt_document,
-    parse_visual_notes_layout,
-    render_visual_notes_layout,
+from meeting_memory.config.notes_profiles import (
+    default_profile_instructions,
+    validate_notes_profile_ready,
 )
+from meeting_memory.config.notes_template import compose_notes_profile_document
 from meeting_memory.types.configuration_surface import PromptDraft
-from meeting_memory.ui.prompt_layout_rows import placeholder_visual_layout
-from meeting_memory.ui.prompt_preview import update_notes_preview
-from meeting_memory.ui.prompt_widgets import bind
+from meeting_memory.types.notes_profile import NotesProfile, NotesProfileKind
+from meeting_memory.ui.prompt_controller_views import (
+    AUDIENCES,
+    FORMATS,
+    apply_profile,
+    refresh_previews,
+    sync_section_controls,
+    wire_controls,
+)
+from meeting_memory.ui.prompt_profile_editing import (
+    add_section,
+    move_section,
+    remove_section,
+    replace_section,
+    select_template,
+)
+from meeting_memory.ui.prompt_profile_state import custom_profile, with_user_name
 from meeting_memory.ui.prompt_window import PromptWindowViews
 
 _CONTROLLER_CLASS: Any | None = None
 
 
 def create_prompt_controller(
-    document: NotesPromptDocument,
-    visual_layout: NotesVisualLayout | None,
+    profile: NotesProfile,
+    instructions: str,
     views: PromptWindowViews,
 ) -> Any:
     controller = _controller_class().alloc().init()
-    controller.configure(document, visual_layout, views)
+    controller.configure(profile, instructions, views)
     return controller
 
 
@@ -44,20 +55,18 @@ def _controller_class() -> Any:
         @objc.python_method
         def configure(
             self,
-            document: NotesPromptDocument,
-            visual_layout: NotesVisualLayout | None,
+            profile: NotesProfile,
+            instructions: str,
             views: PromptWindowViews,
         ) -> None:
+            self._profile = profile
+            self._instructions = instructions
             self._views = views
+            self._selected_section = 0
             self._result = None
-            self._advanced = visual_layout is None
-            layout = visual_layout or placeholder_visual_layout()
-            self._section_order = [section.key for section in layout.sections]
-            self._wire_controls()
-            self._apply_visual_layout(layout)
-            self._show_advanced(self._advanced)
-            views.instructions_editor.setString_(document.instructions)
-            views.layout.advanced_editor.setString_(document.report_template)
+            self._syncing = False
+            wire_controls(self)
+            apply_profile(self, profile)
             views.window.setDelegate_(self)
 
         @objc.python_method
@@ -72,84 +81,117 @@ def _controller_class() -> Any:
             return self._result
 
         def switchPage_(self, _sender: Any) -> None:
-            instructions = self._views.page_selector.selectedSegment() == 0
-            self._views.instructions_page.setHidden_(not instructions)
-            self._views.layout.page.setHidden_(instructions)
+            templates = self._views.page_selector.selectedSegment() == 0
+            self._views.templates.page.setHidden_(not templates)
+            self._views.advanced.page.setHidden_(templates)
             self._hide_error()
 
-        def visualChanged_(self, _sender: Any) -> None:
-            self._hide_error()
-            self._refresh_preview()
+        def customizeTemplate_(self, _sender: Any) -> None:
+            self._views.page_selector.setSelectedSegment_(1)
+            self.switchPage_(None)
 
-        def controlTextDidChange_(self, _notification: Any) -> None:
-            self._hide_error()
-            self._refresh_preview()
+        def chooseClassic_(self, _sender: Any) -> None:
+            self._choose_template(NotesProfileKind.CLASSIC)
 
-        def textDidChange_(self, _notification: Any) -> None:
+        def choosePersonal_(self, _sender: Any) -> None:
+            name = str(self._views.templates.user_name.stringValue())
+            self._choose_template(NotesProfileKind.PERSONAL, user_name=name)
+
+        def sectionChanged_(self, _sender: Any) -> None:
+            self._commit_section(show_error=False)
+            self._selected_section = int(
+                self._views.advanced.section_selector.indexOfSelectedItem()
+            )
+            sync_section_controls(self)
             self._hide_error()
+
+        def addSection_(self, _sender: Any) -> None:
+            self._commit_section(show_error=False)
+            try:
+                self._profile, self._selected_section = add_section(self._profile)
+            except ValueError as exc:
+                self._show_error(str(exc))
+                return
+            apply_profile(self, self._profile)
+
+        def removeSection_(self, _sender: Any) -> None:
+            self._profile, self._selected_section = remove_section(
+                self._profile, self._selected_section
+            )
+            apply_profile(self, self._profile)
 
         def moveSection_(self, sender: Any) -> None:
-            index = int(sender.tag()) // 2
-            shift = -1 if int(sender.tag()) % 2 == 0 else 1
-            destination = index + shift
-            if destination < 0 or destination >= len(self._section_order):
-                return
-            headings = self._headings_by_key()
-            self._section_order[index], self._section_order[destination] = (
-                self._section_order[destination],
-                self._section_order[index],
+            self._commit_section(show_error=False)
+            shift = -1 if int(sender.tag()) == -1 else 1
+            self._profile, self._selected_section = move_section(
+                self._profile, self._selected_section, shift
             )
-            self._sync_section_rows(headings)
-            self._refresh_preview()
+            apply_profile(self, self._profile)
 
-        def openAdvanced_(self, _sender: Any) -> None:
-            try:
-                report_template = render_visual_notes_layout(self._layout_from_controls())
-            except ValueError as exc:
-                self._show_error(_validation_message(exc))
+        def profileOptionChanged_(self, _sender: Any) -> None:
+            if self._syncing:
                 return
-            self._views.layout.advanced_editor.setString_(report_template)
-            self._show_advanced(True)
-
-        def closeAdvanced_(self, _sender: Any) -> None:
-            report_template = str(self._views.layout.advanced_editor.string())
             try:
-                layout = parse_visual_notes_layout(report_template)
-            except ValueError as exc:
-                self._show_error(_validation_message(exc))
-                return
-            if layout is None:
-                self._show_error(
-                    "This custom template cannot be represented visually. "
-                    "Keep editing Markdown or restore the default layout."
+                updated = replace(
+                    self._profile,
+                    include_source=bool(self._views.advanced.include_source.state()),
+                    include_date=bool(self._views.advanced.include_date.state()),
                 )
+                self._profile = custom_profile(updated)
+                self._commit_section(show_error=False)
+            except ValueError:
                 return
-            self._apply_visual_layout(layout)
-            self._show_advanced(False)
+            refresh_previews(self)
 
-        def restoreDefaults_(self, _sender: Any) -> None:
-            document = default_notes_prompt_document()
-            layout = parse_visual_notes_layout(document.report_template)
-            if layout is None:
+        def controlTextDidChange_(self, notification: Any) -> None:
+            if self._syncing:
                 return
-            self._views.instructions_editor.setString_(document.instructions)
-            self._views.layout.advanced_editor.setString_(document.report_template)
-            self._apply_visual_layout(layout)
-            self._show_advanced(False)
+            control = notification.object()
+            try:
+                if control is self._views.templates.user_name:
+                    self._profile = with_user_name(self._profile, str(control.stringValue()))
+                    self._views.advanced.user_name.setStringValue_(str(control.stringValue()))
+                elif control is self._views.advanced.user_name:
+                    self._profile = custom_profile(
+                        with_user_name(self._profile, str(control.stringValue()))
+                    )
+                    self._views.templates.user_name.setStringValue_(str(control.stringValue()))
+                elif control is self._views.advanced.report_title:
+                    self._profile = custom_profile(
+                        replace(self._profile, report_title=str(control.stringValue()))
+                    )
+                elif control is self._views.advanced.section_title:
+                    self._commit_section(show_error=False)
+            except ValueError:
+                return
+            refresh_previews(self)
+
+        def textDidChange_(self, notification: Any) -> None:
+            if self._syncing:
+                return
+            control = notification.object()
+            if control is self._views.advanced.guidance:
+                self._commit_section(show_error=False)
+            elif control is self._views.advanced.instructions:
+                self._instructions = str(control.string())
             self._hide_error()
 
+        def restoreDefaults_(self, _sender: Any) -> None:
+            self._instructions = default_profile_instructions()
+            self._profile = select_template(NotesProfileKind.CLASSIC)
+            self._selected_section = 0
+            self._views.page_selector.setSelectedSegment_(0)
+            self.switchPage_(None)
+            apply_profile(self, self._profile)
+
         def saveChanges_(self, _sender: Any) -> None:
-            instructions = str(self._views.instructions_editor.string()).strip()
-            if not instructions:
-                self._show_error("AI instructions cannot be empty.")
-                return
             try:
-                report_template = (
-                    str(self._views.layout.advanced_editor.string())
-                    if self._advanced
-                    else render_visual_notes_layout(self._layout_from_controls())
-                )
-                combined = compose_notes_prompt_document(instructions, report_template)
+                self._commit_all_controls()
+                validate_notes_profile_ready(self._profile)
+                instructions = str(self._views.advanced.instructions.string()).strip()
+                if not instructions:
+                    raise ValueError("General AI guidance cannot be empty.")
+                combined = compose_notes_profile_document(instructions, self._profile)
             except ValueError as exc:
                 self._show_error(_validation_message(exc))
                 return
@@ -166,89 +208,45 @@ def _controller_class() -> Any:
             return False
 
         @objc.python_method
-        def _wire_controls(self) -> None:
-            views = self._views
-            bind(views.page_selector, self, "switchPage:")
-            bind(views.restore, self, "restoreDefaults:")
-            bind(views.cancel, self, "cancelChanges:")
-            bind(views.save, self, "saveChanges:")
-            bind(views.layout.include_source, self, "visualChanged:")
-            bind(views.layout.include_date, self, "visualChanged:")
-            bind(views.layout.open_advanced, self, "openAdvanced:")
-            bind(views.layout.close_advanced, self, "closeAdvanced:")
-            views.instructions_editor.setDelegate_(self)
-            views.layout.advanced_editor.setDelegate_(self)
-            views.layout.document_title.setDelegate_(self)
-            for row in views.layout.sections:
-                row.title.setDelegate_(self)
-                bind(row.move_up, self, "moveSection:")
-                bind(row.move_down, self, "moveSection:")
+        def _choose_template(self, kind: NotesProfileKind, *, user_name: str = "") -> None:
+            self._instructions = default_profile_instructions()
+            self._profile = select_template(kind, user_name=user_name)
+            self._selected_section = 0
+            apply_profile(self, self._profile)
 
         @objc.python_method
-        def _layout_from_controls(self) -> NotesVisualLayout:
-            sections = tuple(
-                NotesVisualSection(key, str(row.title.stringValue()).strip())
-                for key, row in zip(
-                    self._section_order,
-                    self._views.layout.sections,
-                    strict=True,
+        def _commit_all_controls(self) -> None:
+            self._profile = replace(
+                self._profile,
+                report_title=str(self._views.advanced.report_title.stringValue()).strip(),
+                include_source=bool(self._views.advanced.include_source.state()),
+                include_date=bool(self._views.advanced.include_date.state()),
+            )
+            name_control = (
+                self._views.templates.user_name
+                if self._profile.kind is NotesProfileKind.PERSONAL
+                else self._views.advanced.user_name
+            )
+            self._profile = with_user_name(self._profile, str(name_control.stringValue()))
+            self._commit_section(show_error=True)
+
+        @objc.python_method
+        def _commit_section(self, *, show_error: bool) -> None:
+            try:
+                self._profile = replace_section(
+                    self._profile,
+                    self._selected_section,
+                    title=str(self._views.advanced.section_title.stringValue()).strip(),
+                    instructions=str(self._views.advanced.guidance.string()).strip(),
+                    audience=AUDIENCES[int(self._views.advanced.audience.indexOfSelectedItem())],
+                    output_format=FORMATS[
+                        int(self._views.advanced.output_format.indexOfSelectedItem())
+                    ],
                 )
-            )
-            return NotesVisualLayout(
-                str(self._views.layout.document_title.stringValue()).strip(),
-                sections,
-                bool(self._views.layout.include_source.state()),
-                bool(self._views.layout.include_date.state()),
-            )
-
-        @objc.python_method
-        def _apply_visual_layout(self, layout: NotesVisualLayout) -> None:
-            self._section_order = [section.key for section in layout.sections]
-            self._views.layout.document_title.setStringValue_(layout.title)
-            self._views.layout.include_source.setState_(int(layout.include_source))
-            self._views.layout.include_date.setState_(int(layout.include_date))
-            self._sync_section_rows(
-                {section.key: section.heading for section in layout.sections}
-            )
-            self._refresh_preview()
-
-        @objc.python_method
-        def _sync_section_rows(self, headings: dict[str, str]) -> None:
-            kinds = {
-                "summary": "Generated summary",
-                "decisions": "Generated decisions",
-                "action_items": "Generated action items",
-            }
-            last = len(self._views.layout.sections) - 1
-            for index, (key, row) in enumerate(
-                zip(self._section_order, self._views.layout.sections, strict=True)
-            ):
-                row.title.setStringValue_(headings[key])
-                row.kind.setStringValue_(kinds[key])
-                row.move_up.setEnabled_(index > 0)
-                row.move_down.setEnabled_(index < last)
-
-        @objc.python_method
-        def _headings_by_key(self) -> dict[str, str]:
-            return {
-                key: str(row.title.stringValue())
-                for key, row in zip(
-                    self._section_order,
-                    self._views.layout.sections,
-                    strict=True,
-                )
-            }
-
-        @objc.python_method
-        def _refresh_preview(self) -> None:
-            update_notes_preview(self._views.layout.preview, self._layout_from_controls())
-
-        @objc.python_method
-        def _show_advanced(self, visible: bool) -> None:
-            self._advanced = visible
-            self._views.layout.visual.setHidden_(visible)
-            self._views.layout.advanced.setHidden_(not visible)
-            self._hide_error()
+            except ValueError as exc:
+                if show_error:
+                    raise
+                self._show_error(str(exc))
 
         @objc.python_method
         def _show_error(self, message: str) -> None:
@@ -271,12 +269,16 @@ def _controller_class() -> Any:
 
 def _validation_message(error: ValueError) -> str:
     message = str(error)
-    if "unsupported placeholders" in message:
-        return "Advanced Markdown uses an unsupported field. Use only the fields listed."
+    if "required template field" in message:
+        return "Enter your name before saving this template."
+    if "section titles" in message:
+        return "Give every section a short, single-line title."
+    if "generation guidance" in message:
+        return "Describe what the selected section should capture."
+    if "unknown template fields" in message:
+        return "This section uses a template field that is not configured."
+    if "layout marker" in message or "profile marker" in message:
+        return "Remove Meeting Memory's private storage separators before saving."
     if "missing required placeholders" in message:
-        return "Include {summary}, {decisions}, and {action_items} before saving."
-    if "layout marker" in message:
-        return "Remove the app-owned separator from Advanced Markdown before saving."
-    if "layout cannot be empty" in message:
-        return "Advanced Markdown cannot be empty."
+        return "The generated profile layout is incomplete. Restore Classic and try again."
     return message

@@ -8,8 +8,16 @@ from dataclasses import dataclass
 from meeting_memory.config.defaults import (
     DEFAULT_NOTES_REPORT_TEMPLATE,
     DEFAULT_SUMMARY_PROMPT_TEMPLATE,
+    NOTES_PROFILE_MARKER,
     NOTES_REPORT_TEMPLATE_MARKER,
 )
+from meeting_memory.config.notes_profiles import (
+    decode_notes_profile,
+    encode_notes_profile,
+    render_profile_report_template,
+    validate_notes_profile_ready,
+)
+from meeting_memory.types.notes_profile import NotesProfile
 
 NOTES_REPORT_PLACEHOLDERS = frozenset(
     {
@@ -20,10 +28,12 @@ NOTES_REPORT_PLACEHOLDERS = frozenset(
         "duration_minutes",
         "meeting_id",
         "source_transcript",
+        "sections",
         "summary",
     }
 )
 REQUIRED_NOTES_REPORT_PLACEHOLDERS = frozenset({"summary", "decisions", "action_items"})
+PROFILE_NOTES_REPORT_PLACEHOLDERS = frozenset({"sections"})
 VISUAL_NOTES_SECTION_KEYS = ("summary", "decisions", "action_items")
 PLACEHOLDER_PATTERN = re.compile(r"(?<!\{)\{([A-Za-z_][A-Za-z0-9_]*)\}(?!\})")
 
@@ -34,6 +44,7 @@ class NotesPromptDocument:
 
     instructions: str
     report_template: str
+    profile: NotesProfile | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,32 +72,66 @@ def parse_notes_prompt_document(text: str) -> NotesPromptDocument:
         raise ValueError("The Notes instructions and layout cannot be empty.")
     if text.count(NOTES_REPORT_TEMPLATE_MARKER) > 1:
         raise ValueError("The Notes layout marker must appear exactly once.")
+    if text.count(NOTES_PROFILE_MARKER) > 1:
+        raise ValueError("The Notes profile marker must appear at most once.")
 
-    instructions, marker, report_template = text.partition(NOTES_REPORT_TEMPLATE_MARKER)
+    instructions, marker, remainder = text.partition(NOTES_REPORT_TEMPLATE_MARKER)
     instructions = instructions.strip()
     if not instructions:
         raise ValueError("The Notes instructions cannot be empty.")
     if not marker:
         report_template = DEFAULT_NOTES_REPORT_TEMPLATE
+        if NOTES_PROFILE_MARKER in text:
+            raise ValueError("The Notes profile requires a local layout marker.")
+        profile = None
+    else:
+        report_template, profile_marker, profile_text = remainder.partition(NOTES_PROFILE_MARKER)
+        profile = decode_notes_profile(profile_text.strip()) if profile_marker else None
     report_template = report_template.strip()
-    validate_notes_report_template(report_template)
-    return NotesPromptDocument(instructions, report_template)
+    validate_notes_report_template(report_template, profile_mode=profile is not None)
+    if profile is not None:
+        validate_notes_profile_ready(profile)
+    return NotesPromptDocument(instructions, report_template, profile)
 
 
 def normalize_notes_prompt_document(text: str) -> str:
     """Return the canonical combined document shown and saved by the editor."""
 
     document = parse_notes_prompt_document(text)
+    suffix = ""
+    if document.profile is not None:
+        suffix = f"\n{NOTES_PROFILE_MARKER}\n{encode_notes_profile(document.profile)}"
     return (
-        f"{document.instructions}\n\n{NOTES_REPORT_TEMPLATE_MARKER}\n{document.report_template}\n"
+        f"{document.instructions}\n\n{NOTES_REPORT_TEMPLATE_MARKER}\n"
+        f"{document.report_template}{suffix}\n"
     )
 
 
-def compose_notes_prompt_document(instructions: str, report_template: str) -> str:
+def compose_notes_prompt_document(
+    instructions: str,
+    report_template: str,
+    *,
+    profile: NotesProfile | None = None,
+) -> str:
     """Compose the private storage format without exposing its marker to the UI."""
 
+    suffix = ""
+    if profile is not None:
+        suffix = f"\n{NOTES_PROFILE_MARKER}\n{encode_notes_profile(profile)}"
     return normalize_notes_prompt_document(
-        f"{instructions.rstrip()}\n\n{NOTES_REPORT_TEMPLATE_MARKER}\n{report_template.strip()}"
+        f"{instructions.rstrip()}\n\n{NOTES_REPORT_TEMPLATE_MARKER}\n"
+        f"{report_template.strip()}{suffix}"
+    )
+
+
+def compose_notes_profile_document(instructions: str, profile: NotesProfile) -> str:
+    """Compose a validated profile-backed Notes document."""
+
+    validate_notes_profile_ready(profile)
+    return compose_notes_prompt_document(
+        instructions,
+        render_profile_report_template(profile),
+        profile=profile,
     )
 
 
@@ -171,7 +216,7 @@ def render_visual_notes_layout(layout: NotesVisualLayout) -> str:
     return report_template
 
 
-def validate_notes_report_template(report_template: str) -> None:
+def validate_notes_report_template(report_template: str, *, profile_mode: bool = False) -> None:
     if not report_template:
         raise ValueError("The Notes layout cannot be empty.")
     placeholders = frozenset(PLACEHOLDER_PATTERN.findall(report_template))
@@ -179,10 +224,15 @@ def validate_notes_report_template(report_template: str) -> None:
     if unknown:
         labels = ", ".join(sorted(f"{{{name}}}" for name in unknown))
         raise ValueError(f"The Notes layout has unsupported placeholders: {labels}.")
-    missing = REQUIRED_NOTES_REPORT_PLACEHOLDERS - placeholders
+    required = (
+        PROFILE_NOTES_REPORT_PLACEHOLDERS if profile_mode else REQUIRED_NOTES_REPORT_PLACEHOLDERS
+    )
+    missing = required - placeholders
     if missing:
         labels = ", ".join(sorted(f"{{{name}}}" for name in missing))
         raise ValueError(f"The Notes layout is missing required placeholders: {labels}.")
+    if profile_mode and placeholders & REQUIRED_NOTES_REPORT_PLACEHOLDERS:
+        raise ValueError("Profile layouts must use {sections} instead of legacy generated fields.")
 
 
 def _valid_visual_label(value: str) -> bool:

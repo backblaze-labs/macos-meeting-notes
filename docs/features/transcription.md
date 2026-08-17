@@ -73,15 +73,15 @@ generation runs in a background thread from the tray, or through the local
   at the output limit is rejected rather than parsed or published. Anthropic
   never receives an unreviewed metadata stub.
 - The tray's **Configuration › Notes Customization...** item opens a native
-  workspace for the effective `SUMMARY_PROMPT_FILE`. AI Instructions and Report
-  Layout are separate tabs. The visual layout editor supports titles, required
-  section ordering, metadata toggles, and a live preview; advanced Markdown
-  remains available for arbitrary local formatting. The app-owned storage
-  marker is parsed internally and never appears in the standard workspace.
-  `{summary}`, `{decisions}`, and `{action_items}` remain required so the fixed
-  JSON contract stays complete. Saved changes apply to the next notes
-  generation without restarting the app. Without an explicit path override,
-  the editable copy is personal state at
+  workspace for the effective `SUMMARY_PROMPT_FILE`. Templates offers the
+  built-in Classic report and a Personal Focus report that requires the user's
+  name. Advanced defines one to eight ordered sections, with separate title,
+  guidance, audience, and Markdown format controls plus metadata choices,
+  general AI guidance, and a live preview. The app-owned storage markers and
+  versioned profile payload never appear in the workspace. Saved changes alter
+  both the requested structured section IDs and the next local `notes.md`
+  without restarting the app. Without an explicit path override, the editable
+  copy is personal state at
   `~/Library/Application Support/meeting-memory/prompts/summary.md`; the
   repository prompt remains an unchanged built-in fallback.
 - `meeting-memory summarize <meeting-folder>` requires

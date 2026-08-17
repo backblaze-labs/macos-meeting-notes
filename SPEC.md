@@ -3,8 +3,8 @@
 
 **Status:** Draft  
 **Author:** Meeting Memory contributors
-**Date:** 2026-08-07
-**Version:** 0.7
+**Date:** 2026-08-17
+**Version:** 0.9
 **Methodology:** RFC-inspired SRS (requirement language per RFC 2119: MUST / SHOULD / MAY / MUST NOT)
 
 **Revision note (v0.2):** Added a second, first-class design goal — **the
@@ -43,6 +43,11 @@ the layout tab provides editable titles, section ordering, metadata controls,
 a live preview, and optional advanced Markdown. The app-owned storage marker
 remains an internal compatibility detail and is never shown in the standard
 editor.
+
+**Revision note (v0.9):** Replaced the fixed three-output customization model
+with versioned Notes profiles. Templates provides Classic and Personal Focus
+recipes; Advanced controls the exact generated sections, audience, format, and
+guidance. Required template fields are validated before saving.
 
 ---
 
@@ -268,7 +273,10 @@ processing or upload MUST require an explicit user backfill/retry action.
 
 **REQ-EXT-09** When Notes is configured and invoked, the application MUST use the `anthropic` Python SDK to call Claude, defaulting to `claude-haiku-4-5` and honoring an optional `ANTHROPIC_MODEL` override (§8).
 
-**REQ-EXT-10** The summarization prompt MUST request three structured outputs in a single call: (a) a summary paragraph, (b) a bullet list of decisions, (c) a list of action items each with optional owner name.
+**REQ-EXT-10** The summarization prompt MUST request one strict structured
+response in a single call. The built-in Classic profile requests Summary,
+Decisions, and Action Items. A saved Notes profile instead requests exactly
+its configured section IDs in the configured order.
 
 **REQ-EXT-11** If the Claude API call fails or times out, the application MUST leave `transcript.md` untouched and write a failed/skipped derived-notes state without blocking transcript completion.
 
@@ -409,25 +417,35 @@ setup/retry without blocking it. `meeting-memory summarize <meeting-folder>`
 MUST remain available as a manual backfill/retry command for confirmed
 transcripts.
 
-**REQ-F5-02** The Claude prompt MUST instruct the model to produce output in a structured format parseable into three distinct sections: Summary, Decisions, and Action Items.
+**REQ-F5-02** The Claude prompt MUST instruct the model to produce output in a
+strict format parseable into the exact sections selected by the effective
+Notes profile. Section IDs and visible titles MUST come from trusted local
+profile data rather than model-selected keys.
 
-**REQ-F5-03** Each action item MUST include at minimum a task description. An owner name (extracted from context) SHOULD be included when identifiable. A due date SHOULD be included only when explicitly mentioned in the meeting.
+**REQ-F5-03** In the Classic profile, each action item MUST include at minimum
+a task description. An owner name (extracted from context) SHOULD be included
+when identifiable. A due date SHOULD be included only when explicitly
+mentioned in the meeting.
 
-**REQ-F5-04** Action items MUST be formatted as GitHub Flavored Markdown task list items: `- [ ] <owner>: <task>` or `- [ ] <task>` when no owner is identifiable.
+**REQ-F5-04** Sections configured as Task checklist MUST be formatted as
+GitHub Flavored Markdown task list items. The Classic profile uses
+`- [ ] <owner>: <task>` or `- [ ] <task>` when no owner is identifiable.
 
 **REQ-F5-05** The summarize command MUST write `notes.md` and MUST NOT modify `transcript.md`.
 
-**REQ-F5-06** Notes instructions and report layout MUST be configurable through
+**REQ-F5-06** Notes generation MUST be configurable through
 `SUMMARY_PROMPT_FILE` and the tray's **Configuration › Notes Customization...**
-editor. The native workspace separates provider instructions from the local
-report layout and MUST NOT expose the app-owned storage marker in its standard
-visual editor. Content above that internal marker is the provider instruction
-block. If that block contains `{transcript}`, the app MUST replace
-the placeholder with the clipped transcript; otherwise it MUST append the
-transcript below the instructions. Markdown below the marker MUST remain local
-and MUST support validated placeholders for meeting metadata plus the required
-`{summary}`, `{decisions}`, and `{action_items}` values. A saved UI change MUST
-apply to the next notes generation without an app restart.
+editor. The native workspace MUST offer the Classic profile, a Personal Focus
+profile, and an Advanced section builder. A profile defines the report title,
+ordered sections, each section's generation guidance, audience and Markdown
+format, optional local metadata, and reusable user-entered fields. Required
+fields, including the Personal Focus profile's **Your name**, MUST prevent an
+invalid save. General AI guidance MUST remain separate from the section recipe.
+If it contains `{transcript}`, the app MUST replace the placeholder with the
+clipped transcript; otherwise it MUST append the transcript. The local report
+layout and versioned profile metadata MUST NOT be sent to Anthropic or exposed
+as raw storage markers in the standard UI. A saved UI change MUST apply to the
+next notes generation without an app restart.
 The app-managed default destination MUST be
 `~/Library/Application Support/meeting-memory/prompts/summary.md` in both
 checkout and bundled execution; the repository's `prompts/summary.md` is a
@@ -450,18 +468,19 @@ directory on the `MEETINGS_DIR` filesystem and atomically rename the completed
 directory into its final collision-safe path. It MUST NOT expose a partially
 committed final directory.
 
-**REQ-F6-03b** `notes.md` MAY be generated later from the structured summary,
-decisions, and action items after speaker aliases are confirmed. Its visible
-Markdown layout MAY use user-customized headings and ordering.
+**REQ-F6-03b** `notes.md` MAY be generated later from the structured sections
+in the effective Notes profile after speaker aliases are confirmed. Its
+visible Markdown body MUST contain only the configured sections, in order.
 
 **REQ-F6-04** `transcript.md` MUST contain a YAML frontmatter block (between `---` delimiters) as its first section, containing the fields specified in Section 6.1. Before transcription, its body MUST explain the local job state without raw provider exceptions.
 
 **REQ-F6-05** `notes.md` MUST preserve the fixed owned frontmatter and render
-its body from the validated local Notes layout. The layout MUST contain
-`{summary}`, `{decisions}`, and `{action_items}` so every structured value is
-present, but the surrounding headings and their order MAY be customized. The
-built-in layout MUST render `## Summary`, `## Decisions`, and `## Action Items`
-in that order. Empty collections MUST render `_None identified._`.
+its body from the validated local Notes profile. The profile-backed layout MUST
+contain `{sections}` exactly once. The built-in Classic profile MUST render
+`## Summary`, `## Decisions`, and `## Action Items` in that order. Other
+profiles MAY use one to eight independently configured sections. Empty results
+MUST render `_None identified._`. Existing legacy three-field layouts remain
+readable for compatibility.
 
 **REQ-F6-06** The application MUST update the `b2_audio`, `b2_transcript`, and `backup_status` frontmatter fields after a successful B2 upload (see F7).
 
@@ -573,13 +592,14 @@ to compatibility mode.
 **REQ-F8-10** **Test macOS Notifications** MUST send a local notification for validating macOS notification behavior.
 
 **REQ-F8-11** **Configuration › Notes Customization...** MUST open a native
-workspace for the effective `SUMMARY_PROMPT_FILE`. AI Instructions and Report
-Layout MUST be separate views. The visual layout editor MUST support report and
-section titles, required-section ordering, local metadata toggles, and a live
-preview; advanced Markdown MUST remain available without showing the app-owned
-storage marker. The workspace MUST allow restoring the built-in default,
-reject empty instructions, reject a layout that omits required or uses
-unsupported placeholders, and show the file updated after saving.
+workspace for the effective `SUMMARY_PROMPT_FILE`. Templates and Advanced MUST
+be separate views. Templates MUST offer Classic and Personal Focus recipes;
+the latter MUST collect a required **Your name** value. Advanced MUST support a
+report title, one to eight ordered sections, per-section title/guidance/audience
+/format, local metadata toggles, separate general AI guidance, and a live
+preview without showing app-owned storage markers. The workspace MUST allow
+restoring Classic, reject incomplete required fields or empty guidance, and
+show the file updated after saving.
 
 **REQ-F8-12** **Configuration** and **Debugging** MUST be native hover submenus. Audio modes and user-editable settings MUST live under **Configuration**. Pending meeting tasks, interrupted recordings, backup/transcription retry, setup checks, and test notifications MUST live under **Debugging**, not at the tray root. Debugging actions MUST use explicit labels and native hover help that describes their scope.
 
@@ -759,7 +779,7 @@ own value and the other Backup bookkeeping fields are excluded from the hash.
 …
 ```
 
-### 6.3 Default notes.md Body Structure
+### 6.3 Classic notes.md Body Structure
 
 ```markdown
 # Meeting Notes
@@ -818,11 +838,11 @@ The codebase is organized into five strictly-ordered layers under `src/meeting_m
 
 | Layer | Package | Components (file → responsibility) |
 |---|---|---|
-| **types** | `types/` | `capabilities.py` (`Capability`, `CapabilityState`, `CapabilityStatus`, `MeetingJobState`, `ReadinessReport`) · `configuration.py` / `configuration_resolution.py` (Phase 4 allowlists, secret references, fixed consumer scopes, issues, enablement, and value-free provenance) · `meeting.py` (`MeetingMeta`, slug helpers-as-data) · `transcript.py` (`TranscriptResult`, `TranscriptSegment`) · `summary.py` (`SummaryResult` with decisions + action items) · `events.py` (UI events emitted to the tray: `MeetingDetected`, `NotifyEvent`, `RecordingStateChanged`). Pure data — **no SDK imports, no cross-layer imports.** |
-| **config** | `config/` | Capability-scoped settings, typed schema, pure precedence resolution, secret payload codec, and `notes_template.py` parsing/validation for the private Notes document plus its visual-layout subset; depends only on `types`. `settings.py` retains characterized legacy APIs. Source I/O and active composition stay in `service/`. |
+| **types** | `types/` | `capabilities.py` (`Capability`, `CapabilityState`, `CapabilityStatus`, `MeetingJobState`, `ReadinessReport`) · `configuration.py` / `configuration_resolution.py` (Phase 4 allowlists, secret references, fixed consumer scopes, issues, enablement, and value-free provenance) · `meeting.py` (`MeetingMeta`, slug helpers-as-data) · `transcript.py` (`TranscriptResult`, `TranscriptSegment`) · `notes_profile.py` (profile, section, audience, format, and reusable-field boundary data) · `summary.py` (`SummaryResult` with legacy values or generated profile sections) · `events.py` (UI events emitted to the tray: `MeetingDetected`, `NotifyEvent`, `RecordingStateChanged`). Pure data — **no SDK imports, no cross-layer imports.** |
+| **config** | `config/` | Capability-scoped settings, typed schema, pure precedence resolution, secret payload codec, `notes_profiles.py` presets/validation/codec, and `notes_template.py` parsing/validation for the private versioned Notes document; depends only on `types`. `settings.py` retains characterized legacy APIs. Source I/O and active composition stay in `service/`. |
 | **repo** | `repo/` | Existing provider/native adapters plus `secret_store.py`, the generic immutable-generation Keychain adapter activated only through opaque preference references. `calendar_client.py` retains the compatible Google OAuth Keychain identity. **The only layer permitted to import external SDKs.** |
 | **service** | `service/` | Existing local orchestration plus readiness, the private atomic preference store, and `configuration_loader.py` with its bounded source readers and fixed runtime/readiness/auth/search/summarize scopes. Calls `repo`, returns `types`; **no `rumps`, no SDKs.** |
-| **ui** | `ui/` | `tray.py` (`rumps.App` subclass; menu state, action dispatch, notifications, status timer, `rumps.Timer` draining the event queue) · `setup_readiness.py` (background setup check + UI rendering) · `controller.py` (recording/pipeline/sync handoff) · `menu.py` (menu label helpers) · `submenus.py` (Configuration and Debugging menu composition) · `preferences.py` (minimal settings window) · `prompt_form.py` / `prompt_window.py` / `prompt_controller.py` (native Notes Customization workspace, visual layout editor, preview, and advanced Markdown) · `notes_prompt.py` (compatibility entrypoint) · `notifications.py` (rumps notification wrapper + fallback) · `title_prompt.py` (ad-hoc title prompt) · `macos.py` / `icons.py` (macOS UI helpers). **The only layer permitted to import `rumps`.** |
+| **ui** | `ui/` | `tray.py` (`rumps.App` subclass; menu state, action dispatch, notifications, status timer, `rumps.Timer` draining the event queue) · `setup_readiness.py` (background setup check + UI rendering) · `controller.py` (recording/pipeline/sync handoff) · `menu.py` (menu label helpers) · `submenus.py` (Configuration and Debugging menu composition) · `preferences.py` (minimal settings window) · `prompt_form.py` / `prompt_window.py` / `prompt_controller.py` plus profile page helpers (native template picker, Advanced section builder, and live preview) · `notes_prompt.py` (compatibility entrypoint) · `notifications.py` (rumps notification wrapper + fallback) · `title_prompt.py` (ad-hoc title prompt) · `macos.py` / `icons.py` (macOS UI helpers). **The only layer permitted to import `rumps`.** |
 | *cross-cutting* | — | `__main__.py` (entrypoint; subcommands; logging; starts the capability-scoped runtime) · `doctor.py` (typed preflight renderer, §7.6) · `logging_config.py` (logs → `~/Library/Logs/meeting-memory/app.log`). |
 
 ### 7.2 Processing Sequence (Happy Path)

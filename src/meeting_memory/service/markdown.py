@@ -13,10 +13,16 @@ from meeting_memory.config.notes_template import (
     validate_notes_report_template,
 )
 from meeting_memory.service.frontmatter import dump_frontmatter
+from meeting_memory.service.notes_rendering import (
+    action_item_text,
+    decision_text,
+    generated_sections_text,
+    summary_text,
+)
 from meeting_memory.service.speaker_mapping import apply_speaker_mapping
 from meeting_memory.types.capabilities import MeetingJobState
 from meeting_memory.types.meeting import MeetingMeta, PostCommitPolicy
-from meeting_memory.types.summary import ActionItem, SummaryResult
+from meeting_memory.types.summary import SummaryResult
 from meeting_memory.types.transcript import TranscriptResult
 
 TRANSCRIPT_FRONTMATTER_FIELDS = (
@@ -220,16 +226,18 @@ def _render_notes_report(
     source_transcript: str,
     report_template: str,
 ) -> str:
-    validate_notes_report_template(report_template)
+    placeholders = frozenset(PLACEHOLDER_PATTERN.findall(report_template))
+    validate_notes_report_template(report_template, profile_mode="sections" in placeholders)
     values = {
-        "action_items": _action_item_text(summary),
+        "action_items": action_item_text(summary),
         "calendar_title": safe_frontmatter_text(meta.calendar_title),
         "date": _human_date(meta.started_at),
-        "decisions": _decision_text(summary),
+        "decisions": decision_text(summary),
         "duration_minutes": str(meta.duration_minutes),
         "meeting_id": safe_frontmatter_text(meta.slug),
         "source_transcript": safe_frontmatter_text(source_transcript),
-        "summary": _summary_text(summary),
+        "sections": generated_sections_text(summary),
+        "summary": summary_text(summary),
     }
     return PLACEHOLDER_PATTERN.sub(
         lambda match: values[match.group(1)],
@@ -243,32 +251,6 @@ def _human_date(value: datetime) -> str:
 
 def _participants(transcript: TranscriptResult) -> str:
     return ", ".join(transcript.participants) or "_None identified._"
-
-
-def _summary_text(summary: SummaryResult) -> str:
-    if summary.status == "skipped":
-        return "_Summarization skipped._"
-    if summary.status == "failed":
-        return "_Summarization failed._"
-    return summary.summary or "_Summarization skipped._"
-
-
-def _decision_text(summary: SummaryResult) -> str:
-    if not summary.decisions:
-        return "_None identified._"
-    return "\n".join(f"- {decision}" for decision in summary.decisions)
-
-
-def _action_item_text(summary: SummaryResult) -> str:
-    if not summary.action_items:
-        return "_None identified._"
-    return "\n".join(_format_action_item(item) for item in summary.action_items)
-
-
-def _format_action_item(item: ActionItem) -> str:
-    owner = f"{item.owner}: " if item.owner else ""
-    due = f" (Due: {item.due_date})" if item.due_date else ""
-    return f"- [ ] {owner}{item.task}{due}"
 
 
 def _transcript_text(transcript: TranscriptResult) -> str:
@@ -294,7 +276,6 @@ def safe_frontmatter_text(value: str) -> str:
     """Keep generated metadata single-purpose and free of control characters."""
 
     without_controls = "".join(
-        " " if unicodedata.category(character).startswith("C") else character
-        for character in value
+        " " if unicodedata.category(character).startswith("C") else character for character in value
     )
     return re.sub(r"\s+", " ", without_controls).strip()

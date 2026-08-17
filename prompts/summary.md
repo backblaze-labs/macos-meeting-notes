@@ -5,7 +5,7 @@ Privacy rules:
 - Do not quote casual/private conversation unless it directly affects a work decision.
 
 Content rules:
-- Keep the summary focused on work topics, decisions, risks, and next steps.
+- Keep generated notes focused on relevant work topics, progress, risks, and next steps.
 - Do not infer due dates.
 - Preserve technical names, project names, and company/product names when relevant.
 

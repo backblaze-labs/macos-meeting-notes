@@ -225,11 +225,15 @@ under Application Support. Component-wise no-follow directory pinning, strict
 unsafe paths and lost concurrent updates. Unconditional `save` is create-only
 bootstrap; every later Phase 4 writer must load a snapshot and use
 compare-and-swap.
-This includes the structured `KNOWN_SPEAKERS` value. The editable Notes prompt
-is a separate private file at
+This includes the structured `KNOWN_SPEAKERS` value. The editable, versioned
+Notes profile and its general guidance are a separate private file at
 `~/Library/Application Support/meeting-memory/prompts/summary.md`; the
 repository prompt is only the versioned built-in fallback and is never the
-destination of an app-managed edit.
+destination of an app-managed edit. The profile declares ordered section IDs,
+titles, audience, Markdown format, section guidance, metadata choices, and
+non-secret reusable fields. Anthropic receives the general guidance, exact
+section contract, and speaker-confirmed transcript; it never receives the
+local report wrapper or private storage markers.
 `repo/secret_store.py` writes provider payloads under immutable generated
 Keychain accounts in a service distinct from the compatible Google OAuth token
 service. Multi-field B2 credentials form one payload, so a single preference
@@ -289,13 +293,13 @@ migration, readiness, OAuth/prompt reads, native-helper lookup, and pinned local
 I/O no longer consult the ambient working directory. Checkout-relative process
 paths use the captured project root; selected legacy paths use the selected
 `.env` parent; app-owned relative paths and the default editable Notes
-instructions/layout document use Application Support. Its instruction block is
-the only editable part sent to Anthropic; the validated Markdown layout remains
-local. The native Notes Customization workspace parses the combined private
-file at the UI boundary: AI Instructions and Report Layout are separate tabs,
-the standard layout editor works through a typed visual model and preview, and
-advanced Markdown preserves layouts outside that visual subset. The app-owned
-storage marker never appears in the standard editor. Bundled mode
+profile document use Application Support. Anthropic receives only the general
+guidance, generated section recipe, fixed output contract, and confirmed
+transcript; the validated Markdown wrapper and encoded profile remain local.
+The native Notes Customization workspace parses the combined private file at
+the UI boundary: Templates offers Classic and Personal Focus, while Advanced
+edits a typed one-to-eight-section model with a live preview. App-owned storage
+markers never appear in the editor. Bundled mode
 does not scan for `.env`, rejects relative process paths, uses the exact bundled
 Swift helper, and requires an explicit file selection before legacy preview.
 Migration converts selected legacy path values to absolute app preferences before

@@ -18,7 +18,7 @@ from meeting_memory.types.configuration_surface import (
 def loaded_prompt_outcome() -> PromptOutcome:
     return PromptOutcome(
         PromptOperationState.LOADED,
-        "Notes instructions and layout loaded.",
+        "Notes profile loaded.",
         "Review it before saving.",
     )
 
@@ -26,7 +26,7 @@ def loaded_prompt_outcome() -> PromptOutcome:
 def saved_prompt_outcome(path: Path) -> PromptOutcome:
     return PromptOutcome(
         PromptOperationState.SAVED,
-        "Notes instructions and layout saved.",
+        "Notes profile saved.",
         "The next Notes run will use it.",
         PromptDestination(path),
     )
@@ -35,8 +35,8 @@ def saved_prompt_outcome(path: Path) -> PromptOutcome:
 def failed_prompt_outcome() -> PromptOutcome:
     return PromptOutcome(
         PromptOperationState.FAILED,
-        "Notes instructions and layout could not be handled safely.",
-        "Check the file and required layout placeholders, then try again.",
+        "Notes profile could not be handled safely.",
+        "Check its required template fields and try again.",
     )
 
 

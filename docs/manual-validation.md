@@ -153,9 +153,12 @@ With `ANTHROPIC_API_KEY` set:
 - `summary_status: ok`
 - With the built-in layout, `## Summary`, `## Decisions`, and `## Action Items`
   are present.
-- After changing **Configuration › Notes Customization...**, the next
-  generated `notes.md` uses the custom headings/order and still contains all
-  three required placeholder values.
+- After selecting **Personal focus**, entering your name, and saving, the next
+  generated `notes.md` contains `## Updates by person` and `## My tasks`, omits
+  the Classic Decisions/Action Items sections, and includes no task assigned
+  exclusively to someone else.
+- After changing Advanced section titles, order, focus, formats, or guidance,
+  the next generated `notes.md` contains exactly those configured sections.
 - If notes are missing or failed after speakers were confirmed, use the tray's
   **Debugging › Pending Meeting Tasks** item or run
   `meeting-memory summarize <meeting-folder>`.
@@ -165,8 +168,8 @@ Without `ANTHROPIC_API_KEY`:
 - confirmed speaker review or `meeting-memory summarize <meeting-folder>` still
   writes `notes.md`.
 - `summary_status: skipped`
-- The `{summary}` position contains `_Summarization skipped._` (under
-  `## Summary` in the built-in layout).
+- The generated body contains `_Summarization skipped._`; the Classic layout
+  places it under `## Summary`.
 
 If Claude fails:
 
@@ -241,23 +244,25 @@ Pass criteria:
 
 Notes customization workspace:
 
-1. Open `Configuration › Notes Customization...`.
-2. In `AI Instructions`, add a recognizable instruction.
-3. In `Report Layout`, rename and reorder sections, toggle metadata, and verify
-   the live preview before saving.
-4. Open `Advanced Markdown`, confirm the required generated fields remain
-   available, and return to the visual editor without losing the layout.
-5. Generate notes for a confirmed transcript.
-6. Reopen the workspace, choose `Restore Defaults`, and save again.
+1. Open `Configuration › Notes Customization...` and confirm Templates is the
+   initial view for the Classic profile.
+2. Select Personal focus. Confirm Save rejects a blank **Your name**, then enter
+   a name and verify the preview shows Updates by person and My tasks.
+3. Open Advanced. Add a section, rename it, change its focus and format, move it,
+   and verify each change in the live preview. Change the general AI guidance.
+4. Save and generate notes for a confirmed transcript containing tasks assigned
+   both to the configured user and to someone else.
+5. Reopen the workspace, choose `Restore Classic`, and save again.
 
 Pass criteria:
 
 - The save confirmation shows the path from `SUMMARY_PROMPT_FILE`.
 - The app-owned storage marker never appears in the standard workspace.
-- The next notes generation uses both the edited instructions and local layout
-  without restarting the app.
-- The custom headings appear in `notes.md`; layout text does not appear in the
-  Anthropic request.
+- The next notes generation uses both general guidance and the configured
+  section recipe without restarting the app.
+- The custom headings appear in `notes.md`; local layout text and storage
+  metadata do not appear in the Anthropic request.
+- Personal focus keeps only tasks explicitly assigned to the configured user.
 - Restoring the default replaces the editor contents with the built-in prompt.
 
 ## 11. Auto-Stop, Recovery, Diagnostics, and Search

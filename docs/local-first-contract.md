@@ -226,10 +226,13 @@ meeting metadata, or exported support text.
 
 App-managed personal state MUST stay outside the source checkout. Structured
 non-secret preferences, including `KNOWN_SPEAKERS`, live in the private
-Application Support preference document. A customized Notes prompt lives at
+Application Support preference document. A customized, versioned Notes profile
+and its general guidance live together at
 `~/Library/Application Support/meeting-memory/prompts/summary.md`; the tracked
-repository prompt is only the built-in fallback. Explicit process and legacy
-path overrides remain development/compatibility inputs and are not rewritten.
+repository prompt is only the Classic built-in fallback. Profile fields may
+contain non-secret identity hints such as the user's display name. Explicit
+process and legacy path overrides remain development/compatibility inputs and
+are not rewritten.
 The exact former scaffold value `SUMMARY_PROMPT_FILE=prompts/summary.md` is
 interpreted as the built-in default during upgrade, not as an intentional
 custom path; other explicit legacy values retain their original path semantics.

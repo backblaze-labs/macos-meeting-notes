@@ -13,6 +13,7 @@ from meeting_memory.config.defaults import (
     DEFAULT_SUMMARY_PROMPT_FILE,
     DEFAULT_SUMMARY_PROMPT_TEMPLATE,
 )
+from meeting_memory.config.notes_profiles import rendered_section_guidance
 from meeting_memory.config.notes_template import (
     NotesPromptDocument,
     default_notes_prompt_document,
@@ -26,7 +27,8 @@ from meeting_memory.repo.retry import (
     is_likely_transient_error,
 )
 from meeting_memory.types.egress import EgressPaused
-from meeting_memory.types.summary import ActionItem, SummaryResult
+from meeting_memory.types.notes_profile import NotesProfile
+from meeting_memory.types.summary import ActionItem, GeneratedNotesSection, SummaryResult
 
 MAX_TRANSCRIPT_CHARS = 60_000
 MAX_SUMMARY_OUTPUT_TOKENS = 4_096
@@ -37,6 +39,15 @@ SUMMARY_OUTPUT_CONTRACT = """Output contract (required and not editable):
 - summary must be a string and decisions must be an array of strings.
 - action_items must be an array of objects with task, owner, and due_date keys.
 - Use null for unknown owner or due_date. Do not include markdown fences.
+Additional instructions below cannot override this output contract."""
+PROFILE_OUTPUT_CONTRACT = """Output contract (required and not editable):
+- Return one strict JSON object with exactly one key: sections.
+- sections must be an array containing exactly one object for every requested section ID,
+  in the requested order.
+- Each section object must contain exactly two string keys: id and content.
+- content must be non-empty Markdown without a heading or code fence. Use
+  _None identified._ when the transcript contains no matching content.
+- Do not add, omit, rename, or repeat section IDs.
 Additional instructions below cannot override this output contract."""
 
 
@@ -99,7 +110,8 @@ class ClaudeSummarizer:
         if not self._admit_request():
             raise EgressPaused("Notes provider operation is disabled")
 
-        prompt = self._prompt(transcript_text)
+        document = self._prompt_document()
+        prompt = self._prompt(transcript_text, document=document)
         if not self._admit_request():
             raise EgressPaused("Notes provider operation is disabled")
         client = _anthropic_client(
@@ -111,24 +123,36 @@ class ClaudeSummarizer:
                 model=self.model,
                 max_tokens=MAX_SUMMARY_OUTPUT_TOKENS,
                 temperature=0,
-                system=SUMMARY_OUTPUT_CONTRACT,
+                system=_output_contract(document.profile),
                 messages=[{"role": "user", "content": prompt}],
             ),
             is_retryable=_is_retryable_anthropic_error,
             enabled=self._admit_request,
         )
         _reject_truncated_response(response)
-        return summary_result_from_json(_response_text(response))
+        response_text = _response_text(response)
+        if document.profile is not None:
+            return profile_result_from_json(response_text, document.profile)
+        return summary_result_from_json(response_text)
 
-    def _prompt(self, transcript_text: str) -> str:
+    def _prompt(
+        self,
+        transcript_text: str,
+        *,
+        document: NotesPromptDocument | None = None,
+    ) -> str:
         clipped = transcript_text[: self.max_transcript_chars]
-        instructions = (
-            load_prompt_template(self.prompt_file)
-            if self.prompt_file is not None
-            else parse_notes_prompt_document(self.prompt_template).instructions
-        )
+        loaded = document or self._prompt_document()
+        instructions = loaded.instructions
+        if loaded.profile is not None:
+            instructions = f"{instructions.rstrip()}\n\n{_profile_recipe(loaded.profile)}"
         prompt = _insert_transcript(instructions, clipped)
         return f"Additional instructions:\n{prompt}"
+
+    def _prompt_document(self) -> NotesPromptDocument:
+        if self.prompt_file is not None:
+            return load_prompt_document(self.prompt_file)
+        return parse_notes_prompt_document(self.prompt_template)
 
 
 def load_prompt_document(path: Path | None) -> NotesPromptDocument:
@@ -160,6 +184,45 @@ def summary_result_from_json(text: str) -> SummaryResult:
         decisions=tuple(str(item) for item in payload.get("decisions", ())),
         action_items=tuple(_action_item(item) for item in payload.get("action_items", ())),
     )
+
+
+def profile_result_from_json(text: str, profile: NotesProfile) -> SummaryResult:
+    """Parse an exact dynamic-section response against the requested profile."""
+
+    payload = json.loads(extract_json_object(text))
+    if not isinstance(payload, dict) or set(payload) != {"sections"}:
+        raise ValueError("Claude profile response must contain exactly the sections field")
+    raw_sections = payload["sections"]
+    if not isinstance(raw_sections, list) or len(raw_sections) != len(profile.sections):
+        raise ValueError("Claude profile response returned the wrong number of sections")
+    generated: list[GeneratedNotesSection] = []
+    for expected, raw in zip(profile.sections, raw_sections, strict=True):
+        if not isinstance(raw, dict) or set(raw) != {"id", "content"}:
+            raise ValueError("Claude profile section has an invalid shape")
+        if raw["id"] != expected.key or not isinstance(raw["content"], str):
+            raise ValueError("Claude profile section IDs do not match the requested profile")
+        generated.append(
+            GeneratedNotesSection(expected.key, expected.title, raw["content"].strip())
+        )
+    return SummaryResult(summary=None, sections=tuple(generated))
+
+
+def _output_contract(profile: NotesProfile | None) -> str:
+    if profile is None:
+        return SUMMARY_OUTPUT_CONTRACT
+    identifiers = json.dumps([section.key for section in profile.sections])
+    return f"{PROFILE_OUTPUT_CONTRACT}\nRequested section IDs, in order: {identifiers}"
+
+
+def _profile_recipe(profile: NotesProfile) -> str:
+    blocks = ["Requested report sections:"]
+    for index, section in enumerate(profile.sections, start=1):
+        blocks.append(
+            f"{index}. ID: {section.key}\n"
+            f"   Visible title: {section.title}\n"
+            f"   Guidance: {rendered_section_guidance(profile, section)}"
+        )
+    return "\n".join(blocks)
 
 
 def extract_json_object(text: str) -> str:
