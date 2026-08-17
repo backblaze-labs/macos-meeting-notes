@@ -19,6 +19,7 @@ PLACEHOLDER_MARKERS = ("replace-me", "changeme", "todo", "<", ">")
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"
 DEFAULT_SUMMARY_PROMPT_FILE = "prompts/summary.md"
 NOTES_REPORT_TEMPLATE_MARKER = "<!-- meeting-memory:notes-layout -->"
+NOTES_PROFILE_MARKER = "<!-- meeting-memory:notes-profile -->"
 DEFAULT_NOTES_INSTRUCTIONS_TEMPLATE = """Privacy rules:
 - Omit personal information that is not needed to understand the work.
 - Do not include emails, phone numbers, addresses, account IDs, or personal anecdotes.
@@ -26,7 +27,7 @@ DEFAULT_NOTES_INSTRUCTIONS_TEMPLATE = """Privacy rules:
 - Do not quote casual/private conversation unless it directly affects a work decision.
 
 Content rules:
-- Keep the summary focused on work topics, decisions, risks, and next steps.
+- Keep generated notes focused on relevant work topics, progress, risks, and next steps.
 - Do not infer due dates.
 - Preserve technical names, project names, and company/product names when relevant.
 """

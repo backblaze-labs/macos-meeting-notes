@@ -7,7 +7,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from meeting_memory.config.defaults import NOTES_REPORT_TEMPLATE_MARKER
+from meeting_memory.config.defaults import NOTES_PROFILE_MARKER, NOTES_REPORT_TEMPLATE_MARKER
+from meeting_memory.config.notes_profiles import personal_notes_profile
+from meeting_memory.config.notes_template import compose_notes_profile_document
 from meeting_memory.config.settings import Settings
 from meeting_memory.repo import summarizer
 from meeting_memory.repo.summarizer import (
@@ -168,6 +170,46 @@ def test_custom_prompt_is_separate_from_contract_and_cannot_duplicate_transcript
     assert "Additional instructions:\nReturn markdown instead." in prompt
     assert prompt.count("9") == MAX_TRANSCRIPT_CHARS
     assert prompt.count("{transcript}") == 0
+
+
+def test_profile_prompt_requests_only_configured_sections(tmp_path, monkeypatch) -> None:
+    prompt_file = tmp_path / "summary.md"
+    prompt_file.write_text(
+        compose_notes_profile_document(
+            "Keep private details out.",
+            personal_notes_profile("Eduardo"),
+        ),
+        encoding="utf-8",
+    )
+    fake_client = FakeAnthropicClient(
+        response_text=(
+            '{"sections":['
+            '{"id":"participant_updates","content":"- **Alex:** Shipped the fix."},'
+            '{"id":"my_tasks","content":"- [ ] Review the launch plan."}'
+            "]}"
+        )
+    )
+    monkeypatch.setattr(summarizer, "_anthropic_client", fake_client.with_api_key)
+
+    result = ClaudeSummarizer(api_key="secret", prompt_file=prompt_file).summarize(
+        "**Eduardo** (0:00:01): I will review the launch plan."
+    )
+
+    assert (
+        'Requested section IDs, in order: ["participant_updates", "my_tasks"]'
+        in (fake_client.kwargs["system"])
+    )
+    prompt = fake_client.kwargs["messages"][0]["content"]
+    assert "Eduardo" in prompt
+    assert "Updates by person" in prompt
+    assert "Personal Meeting Brief" not in prompt
+    assert NOTES_PROFILE_MARKER not in prompt
+    assert '"version":1' not in prompt
+    assert tuple(section.key for section in result.sections) == (
+        "participant_updates",
+        "my_tasks",
+    )
+    assert result.summary is None
 
 
 @pytest.mark.parametrize("kind", ["symlink", "fifo", "oversize"])

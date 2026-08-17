@@ -131,7 +131,7 @@ def test_notes_prompt_window_reports_blank_prompt(tmp_path: Path) -> None:
     assert rumps.alerts == [
         (
             "Notes Customization",
-            "The Notes instructions and layout cannot be empty.",
+            "The Notes profile cannot be empty.",
         )
     ]
 

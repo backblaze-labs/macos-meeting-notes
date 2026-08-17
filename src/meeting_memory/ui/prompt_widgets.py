@@ -69,6 +69,30 @@ def checkbox(title: str, frame: tuple[int, int, int, int], *, checked: bool) -> 
     return control
 
 
+def radio_button(title: str, frame: tuple[int, int, int, int], *, selected: bool) -> Any:
+    from AppKit import (
+        NSButton,
+        NSButtonTypeRadio,
+        NSControlStateValueOff,
+        NSControlStateValueOn,
+        NSMakeRect,
+    )
+
+    control = NSButton.alloc().initWithFrame_(NSMakeRect(*frame))
+    control.setButtonType_(NSButtonTypeRadio)
+    control.setTitle_(title)
+    control.setState_(NSControlStateValueOn if selected else NSControlStateValueOff)
+    return control
+
+
+def popup_button(items: tuple[str, ...], frame: tuple[int, int, int, int]) -> Any:
+    from AppKit import NSMakeRect, NSPopUpButton
+
+    control = NSPopUpButton.alloc().initWithFrame_pullsDown_(NSMakeRect(*frame), False)
+    control.addItemsWithTitles_(items)
+    return control
+
+
 def text_editor(
     value: str,
     frame: tuple[int, int, int, int],
@@ -85,11 +109,7 @@ def text_editor(
     text_view.setEditable_(editable)
     text_view.setSelectable_(True)
     text_view.setRichText_(False)
-    font = (
-        NSFont.userFixedPitchFontOfSize_(size)
-        if fixed_pitch
-        else NSFont.systemFontOfSize_(size)
-    )
+    font = NSFont.userFixedPitchFontOfSize_(size) if fixed_pitch else NSFont.systemFontOfSize_(size)
     text_view.setFont_(font)
     text_view.setHorizontallyResizable_(False)
     text_view.setVerticallyResizable_(True)

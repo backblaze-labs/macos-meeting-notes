@@ -319,34 +319,27 @@ Older `.env` files created from the repository scaffold may contain
 treated as the app-owned default during upgrade, so it no longer keeps personal
 edits in the checkout. Other explicit legacy and process paths remain honored.
 
-Choose **Configuration › Notes Customization...** in the tray. **AI
-Instructions** controls the private/content guidance sent to Anthropic with the
-speaker-confirmed transcript excerpt. **Report Layout** stays local and offers
-a visual editor for the document title, section names and order, metadata, and
-a live `notes.md` preview. **Advanced Markdown** exposes the full local template
-when needed, with required `{summary}`, `{decisions}`, and `{action_items}`
-fields plus optional meeting metadata. Saving applies to the next Notes
-generation without restarting, and **Restore Defaults** resets both views.
+Choose **Configuration › Notes Customization...** in the tray. Start in
+**Templates** with either:
 
-For compatibility, the private prompt file still stores both blocks separated
-by an app-owned marker. The standard workspace parses that detail internally
-and never displays it.
+- **Classic meeting notes** — Summary, Decisions, and Action Items for everyone.
+- **Personal focus** — bullet updates grouped by participant, followed only by
+  tasks explicitly assigned to you. Enter **Your name** so the model can apply
+  that boundary without guessing.
 
-For example, this local layout produces Spanish headings without changing what
-is sent to Anthropic:
+Open **Advanced** to change the report title and build one to eight ordered
+sections. Each section has its own title, plain-language guidance, focus
+(whole meeting, each participant, or only you), and output format (paragraph,
+bullet list, or task checklist). Source/date metadata and the general AI
+guidance are configured separately, with a live `notes.md` preview throughout.
+Saving applies to the next Notes generation without restarting. **Restore
+Classic** returns to the built-in profile.
 
-```markdown
-# {calendar_title}
-
-## Próximos pasos
-{action_items}
-
-## Resumen
-{summary}
-
-## Decisiones
-{decisions}
-```
+For compatibility, the private prompt file still stores the general guidance,
+local report layout, and versioned profile metadata behind app-owned markers.
+The workspace parses those details internally and never displays them. Older
+saved three-section layouts remain readable and are upgraded when saved from
+the new workspace.
 
 ## Speaker Review
 
