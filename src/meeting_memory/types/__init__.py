@@ -7,6 +7,11 @@ from meeting_memory.types.artifacts import (
     MeetingArtifact,
     MeetingJob,
 )
+from meeting_memory.types.audio import (
+    CaptureDiagnostics,
+    CaptureHealthWarning,
+    CaptureSourceDiagnostics,
+)
 from meeting_memory.types.capabilities import (
     Capability,
     CapabilityState,
@@ -76,6 +81,9 @@ __all__ = [
     "Capability",
     "CapabilityState",
     "CapabilityStatus",
+    "CaptureDiagnostics",
+    "CaptureHealthWarning",
+    "CaptureSourceDiagnostics",
     "AppPreferences",
     "CapabilityPreference",
     "CapabilityResolution",

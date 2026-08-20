@@ -198,18 +198,20 @@ struct MeetingMemoryNativeCapture {
                 "mode": mode.rawValue,
                 "microphone": microphone ?? "unknown",
             ])
+            let reporter = CaptureDiagnosticsReporter(
+                mode: mode,
+                microphone: microphone,
+                metricsProvider: recorder.metrics
+            )
+            reporter.start()
             var captureError = await lifetime.waitForStopOrFailure()
             do {
                 try await recorder.stop()
             } catch {
                 captureError = captureError ?? error
             }
+            reporter.stop(outputPath: outputURL.path)
             if let captureError { throw captureError }
-            emitJSON([
-                "event": "stopped",
-                "output": outputURL.path,
-                "sources": mixer.metrics(),
-            ])
         case .silentSystemOnly:
             let mixer = TimelineMixer(writer: writer, enabledSources: [.system])
             let recorder = SilentSystemRecorder(mixer: mixer, failureHandler: lifetime.fail)
@@ -219,18 +221,20 @@ struct MeetingMemoryNativeCapture {
                 "mode": mode.rawValue,
                 "microphone": "off",
             ])
+            let reporter = CaptureDiagnosticsReporter(
+                mode: mode,
+                microphone: nil,
+                metricsProvider: recorder.metrics
+            )
+            reporter.start()
             var captureError = await lifetime.waitForStopOrFailure()
             do {
                 try recorder.stop()
             } catch {
                 captureError = captureError ?? error
             }
+            reporter.stop(outputPath: outputURL.path)
             if let captureError { throw captureError }
-            emitJSON([
-                "event": "stopped",
-                "output": outputURL.path,
-                "sources": mixer.metrics(),
-            ])
         }
     }
 }

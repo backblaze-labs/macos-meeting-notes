@@ -76,9 +76,7 @@ class RumpsTrayApp:
         self.recording_item = None
         self.recording_label = ""
         self.recording_health = RecordingHealthMonitor(controller.recorder, controller.event_queue)
-        self.audio_mode_menu = AudioModeMenu(
-            self.rumps, self.controller, rebuild_menu=self.rebuild_menu
-        )  # noqa: E501
+        self.audio_mode_menu = AudioModeMenu(self.rumps, self.controller, rebuild_menu=self.rebuild_menu)  # noqa: E501
         if configuration_surface is None:
             configuration_surface = ConfigurationSurfaceCoordinator(
                 controller.event_queue.put, prompt_settings=controller.settings
@@ -191,6 +189,7 @@ class RumpsTrayApp:
         return menu.tray_title(
             is_recording=self.controller.recorder.is_recording,
             duration_seconds=self.controller.recording_duration_seconds(),
+            audio_warning=bool(getattr(self.controller.recorder, "recording_warning", None)),
         )
 
     def update_tray_title(self) -> None:
@@ -202,6 +201,7 @@ class RumpsTrayApp:
         return menu.recording_label(
             is_recording=self.controller.recorder.is_recording,
             duration_seconds=self.controller.recording_duration_seconds(),
+            audio_warning=bool(getattr(self.controller.recorder, "recording_warning", None)),
         )
 
     def update_recording_label(self) -> None:

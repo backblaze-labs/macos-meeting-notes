@@ -27,6 +27,10 @@ composition and durable lifecycle are defined in
 - Schema-v2 `transcript.md` metadata stub published atomically with the audio
 - `MeetingMeta` passed to the pipeline
 - Visible recording duration in the status bar and tray menu
+- Persistent live audio-health warning when an expected source is missing,
+  stalled, persistently silent, or losing frames
+- Final per-source capture diagnostics in the recovery index, transcript
+  frontmatter, and app log
 
 ## Threading
 
@@ -39,6 +43,16 @@ workers and emit typed events for the tray main thread to render.
 ## Behavior Notes
 
 - The helper resamples and downmixes native streams into a 16 kHz mono WAV.
+- Full Meeting rebases the system and microphone presentation clocks
+  independently against their monotonic callback arrival times. A large offset
+  between ScreenCaptureKit clock domains therefore cannot discard one source.
+- The helper reports callback, frame, peak, discard, and timing counters every
+  five seconds. Missing or stalled sources warn after ten seconds; system audio
+  that arrives with no signal warns after 45 seconds. A warning adds `⚠︎` to
+  the timer and Stop label and sends a macOS notification with a Stop action.
+- Stopping requires a valid final source report. Its `healthy` or `warning`
+  result is saved under `capture_diagnostics` before local commit; a warning at
+  stop produces a final notification even if the live alert was missed.
 - WAV-to-M4A conversion prefers AVFoundation. Hosts without an AudioToolbox AAC
   encoder use `MeetingMemoryFFmpegAudioEncoder`, a separate minimal LGPL
   FFmpeg build whose network support and unrelated formats are disabled. The
@@ -80,6 +94,9 @@ workers and emit typed events for the tray main thread to render.
 - The runtime commits `recording.m4a` locally before starting any
   optional provider work. A missing or failed Transcription, Backup, Calendar,
   or Notes capability must not discard or hide the recording.
+- Conversion, publication, Transcription, Backup, and Notes run independently
+  of the recording control. The next call can start as soon as the previous
+  helper has stopped, even while that previous transcript is still pending.
 - It assembles audio plus metadata in a same-filesystem staging
   directory and publishes the complete meeting directory with one atomic
   rename. **Debugging › Find Legacy Recordings...** can scan legacy system-temp
@@ -129,8 +146,10 @@ workers and emit typed events for the tray main thread to render.
 - `src/meeting_memory/ui/processing_launch.py`
 - `src/meeting_memory/ui/recording_transitions.py`
 - `src/meeting_memory/repo/native_audio.py`
+- `src/meeting_memory/repo/native_audio_health.py`
 - `src/meeting_memory/repo/native_audio_build.py`
 - `src/meeting_memory/repo/native/NativeCapture.swift`
+- `src/meeting_memory/repo/native/CaptureDiagnostics.swift`
 - `src/meeting_memory/repo/native/RecordingLifetime.swift`
 - `src/meeting_memory/ui/tray.py`
 - `src/meeting_memory/ui/title_prompt.py`
@@ -140,6 +159,9 @@ workers and emit typed events for the tray main thread to render.
 - `tests/test_recorder.py`
 - `tests/test_native_audio.py`
 - `tests/test_native_recording_lifetime.py`
+- `tests/test_native_timeline_mixer.py`
+- `tests/test_audio_capture_diagnostics.py`
+- `tests/test_back_to_back_recordings.py`
 - `tests/test_recovery.py`
 - `tests/test_recovery_audio.py`
 - `tests/test_recovery_receipt.py`

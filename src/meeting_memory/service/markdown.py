@@ -57,6 +57,9 @@ TRANSCRIPT_STUB_FIELDS = (
     "b2_transcript",
     "backup_status",
     "backup_uploaded_revision",
+    "capture_mode",
+    "capture_status",
+    "capture_diagnostics",
 )
 
 NOTES_FRONTMATTER_FIELDS = (
@@ -80,27 +83,30 @@ def render_transcript_stub(
         MeetingJobState.PENDING if policy.transcription else MeetingJobState.NOT_REQUESTED
     )
     backup_status = MeetingJobState.PENDING if policy.backup else MeetingJobState.NOT_REQUESTED
+    diagnostics = meta.capture_diagnostics
+    values: dict[str, object] = {
+        "schema_version": 2,
+        "created_by": "meeting-memory",
+        "id": safe_frontmatter_text(meta.slug),
+        "date": meta.started_at.isoformat(),
+        "duration_minutes": meta.duration_minutes,
+        "calendar_title": safe_frontmatter_text(meta.calendar_title),
+        "participants": [],
+        "assemblyai_id": None,
+        "transcription_status": transcription_status.value,
+        "speaker_candidates": [safe_frontmatter_text(value) for value in meta.speaker_candidates],
+        "speaker_aliases": {},
+        "speaker_status": "not_available",
+        "b2_audio": None,
+        "b2_transcript": None,
+        "backup_status": backup_status.value,
+        "backup_uploaded_revision": None,
+        "capture_mode": diagnostics.mode if diagnostics else None,
+        "capture_status": diagnostics.status if diagnostics else "unavailable",
+        "capture_diagnostics": diagnostics.to_payload() if diagnostics else None,
+    }
     frontmatter = dump_frontmatter(
-        {
-            "schema_version": 2,
-            "created_by": "meeting-memory",
-            "id": safe_frontmatter_text(meta.slug),
-            "date": meta.started_at.isoformat(),
-            "duration_minutes": meta.duration_minutes,
-            "calendar_title": safe_frontmatter_text(meta.calendar_title),
-            "participants": [],
-            "assemblyai_id": None,
-            "transcription_status": transcription_status.value,
-            "speaker_candidates": [
-                safe_frontmatter_text(value) for value in meta.speaker_candidates
-            ],
-            "speaker_aliases": {},
-            "speaker_status": "not_available",
-            "b2_audio": None,
-            "b2_transcript": None,
-            "backup_status": backup_status.value,
-            "backup_uploaded_revision": None,
-        },
+        values,
         fields=TRANSCRIPT_STUB_FIELDS,
     )
     state_text = {

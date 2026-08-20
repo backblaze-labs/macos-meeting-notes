@@ -124,9 +124,7 @@ def test_render_transcript_stub_is_exact_schema_v2_and_sanitized() -> None:
         speaker_candidates=(" Alex\tSmith ",),
     )
 
-    markdown = render_transcript_stub(
-        meta, PostCommitPolicy(transcription=True, backup=False)
-    )
+    markdown = render_transcript_stub(meta, PostCommitPolicy(transcription=True, backup=False))
 
     assert markdown == "\n".join(
         [
@@ -147,6 +145,9 @@ def test_render_transcript_stub_is_exact_schema_v2_and_sanitized() -> None:
             "b2_transcript: null",
             'backup_status: "not_requested"',
             "backup_uploaded_revision: null",
+            "capture_mode: null",
+            'capture_status: "unavailable"',
+            "capture_diagnostics: null",
             "---",
             "",
             "# Transcript",

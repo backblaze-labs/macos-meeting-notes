@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import os
 import stat
 import threading
@@ -20,10 +22,12 @@ from meeting_memory.service.recovery_index import (
     pin_recovery_source,
     update_recovery_session_meta,
 )
+from meeting_memory.types.audio import CaptureDiagnostics, CaptureHealthWarning
 from meeting_memory.types.meeting import MeetingMeta, build_meeting_slug
 from meeting_memory.types.recovery import RecoveryIndexEntry
 
 DEFAULT_CAPTURE_MODE = "full-meeting"
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -45,21 +49,21 @@ class RecordingResult:
 class RecorderService:
     capture_mode: str = DEFAULT_CAPTURE_MODE
     temp_dir: Path = field(
-        default_factory=lambda: Path(DEFAULT_MEETINGS_DIR).expanduser()
-        / ".meeting-memory-staging"
-        / "recordings"
+        default_factory=lambda: (
+            Path(DEFAULT_MEETINGS_DIR).expanduser() / ".meeting-memory-staging" / "recordings"
+        )
     )
-    now: Callable[[], datetime] = field(
-        default_factory=lambda: lambda: datetime.now().astimezone()
-    )
+    now: Callable[[], datetime] = field(default_factory=lambda: lambda: datetime.now().astimezone())
     capture_starter: Callable[[str, Path], Any] = start_native_capture
     converter: Callable[[Path, Path], None] | None = None
+
     def __post_init__(self) -> None:
         self._lock = threading.RLock()
         self._capture_io_lock = threading.Lock()
         self._capture = None
         self._session: RecordingSession | None = None
         self._stopping = False
+        self._recording_warning: CaptureHealthWarning | None = None
 
     @property
     def is_recording(self) -> bool:
@@ -75,6 +79,11 @@ class RecorderService:
     def active_session(self) -> RecordingSession | None:
         with self._lock:
             return self._session
+
+    @property
+    def recording_warning(self) -> CaptureHealthWarning | None:
+        with self._lock:
+            return self._recording_warning
 
     def start(
         self,
@@ -104,12 +113,14 @@ class RecorderService:
                 _discard_empty_session(recovery)
                 raise
 
+            self._recording_warning = None
             session = RecordingSession(
                 meta=meta,
                 wav_path=wav_path,
                 recovery=recovery,
             )
             self._session = session
+            LOGGER.info("Recording started slug=%s mode=%s", slug, self.capture_mode)
             return session
 
     def stop(self) -> RecordingResult | None:
@@ -124,6 +135,9 @@ class RecorderService:
             with self._capture_io_lock:
                 if capture is not None:
                     capture.stop()
+            diagnostics = getattr(capture, "diagnostics", None)
+            if diagnostics is not None and not isinstance(diagnostics, CaptureDiagnostics):
+                raise TypeError("capture diagnostics must use the typed boundary model")
 
             duration_minutes = max(
                 0,
@@ -135,10 +149,19 @@ class RecorderService:
                 calendar_title=session.meta.calendar_title,
                 duration_minutes=duration_minutes,
                 speaker_candidates=session.meta.speaker_candidates,
+                capture_diagnostics=diagnostics,
             )
             if session.recovery is None:
                 raise RuntimeError("recording session has no recovery index")
             recovery = update_recovery_session_meta(session.recovery, meta)
+            LOGGER.info(
+                "Recording completed slug=%s diagnostics=%s",
+                meta.slug,
+                json.dumps(
+                    diagnostics.to_payload() if diagnostics else {"status": "unavailable"},
+                    sort_keys=True,
+                ),
+            )
             if self.converter is not None:
                 m4a_path = recovery.source_path.with_suffix(".m4a")
                 self.converter(recovery.source_path, m4a_path)
@@ -156,9 +179,10 @@ class RecorderService:
                 if self._session is session:
                     self._session = None
                     self._capture = None
+                    self._recording_warning = None
                 self._stopping = False
 
-    def check_health(self) -> None:
+    def check_health(self) -> CaptureHealthWarning | None:
         with self._lock:
             capture = self._capture
             session = self._session
@@ -170,26 +194,35 @@ class RecorderService:
 
         with self._capture_io_lock:
             with self._lock:
-                if (
-                    self._capture is not capture
-                    or self._session is not session
-                    or self._stopping
-                ):
+                if self._capture is not capture or self._session is not session or self._stopping:
                     return
             try:
-                checker()
+                warning = checker()
             except Exception:
                 with self._lock:
                     should_report = (
-                        self._capture is capture
-                        and self._session is session
-                        and not self._stopping
+                        self._capture is capture and self._session is session and not self._stopping
                     )
                     if should_report:
                         self._capture = None
                         self._session = None
+                        self._recording_warning = None
                 if should_report:
                     raise
+                return None
+            if warning is not None and not isinstance(warning, CaptureHealthWarning):
+                raise TypeError("capture warning must use the typed boundary model")
+            if warning is not None:
+                with self._lock:
+                    if self._capture is capture and self._session is session:
+                        self._recording_warning = warning
+                LOGGER.warning(
+                    "Recording health warning slug=%s code=%s message=%s",
+                    session.meta.slug,
+                    warning.code,
+                    warning.message,
+                )
+            return warning
 
 
 def _discard_empty_session(entry: RecoveryIndexEntry) -> None:

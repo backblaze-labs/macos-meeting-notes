@@ -68,6 +68,10 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
         stream = nil
     }
 
+    func metrics(startedAt: Double, now: Double) -> [String: Any] {
+        captureQueue.sync { mixer.metrics(startedAt: startedAt, now: now) }
+    }
+
     func stream(
         _ stream: SCStream,
         didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
@@ -76,18 +80,21 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
         guard sampleBuffer.isValid else { return }
         do {
             let seconds = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sampleBuffer))
+            let arrivalSeconds = ProcessInfo.processInfo.systemUptime
             switch outputType {
             case .audio:
                 try mixer.add(
                     systemConverter.samples(from: sampleBuffer),
                     source: .system,
-                    presentationSeconds: seconds
+                    presentationSeconds: seconds,
+                    arrivalSeconds: arrivalSeconds
                 )
             case .microphone:
                 try mixer.add(
                     microphoneConverter.samples(from: sampleBuffer),
                     source: .microphone,
-                    presentationSeconds: seconds
+                    presentationSeconds: seconds,
+                    arrivalSeconds: arrivalSeconds
                 )
             default:
                 break
