@@ -388,6 +388,29 @@ notification with a Stop action after 60 minutes and every 30 minutes
 thereafter. When a reminder coincides with `MAX_RECORDING_MINUTES`, the
 auto-stop notification MUST replace the reminder.
 
+**REQ-F3-11** Full Meeting capture MUST rebase the system-audio and microphone
+presentation clocks independently before mixing them. A valid source MUST NOT
+be discarded merely because ScreenCaptureKit reports its timestamps in a
+different clock domain from the other source.
+
+**REQ-F3-12** The native helper MUST report per-source capture health while a
+recording is active. If an expected source produces no callbacks for ten
+seconds, stops producing callbacks for ten seconds, or loses a material number
+of frames during mixing, the tray MUST show a persistent warning and send a
+notification with a Stop action. System audio that continues to arrive at a
+zero peak for 45 seconds MUST also warn.
+
+**REQ-F3-13** Every successfully stopped native recording MUST retain final
+per-source diagnostics in its recovery index and schema-v2 transcript metadata,
+including callback count, captured frames, peak level, discarded frames, and
+first/last callback timing. The application log MUST identify the meeting slug,
+capture mode, warnings, and final diagnostics without recording audio content
+or credentials.
+
+**REQ-F3-14** Stopping one meeting and starting the next MUST NOT wait for the
+previous meeting's conversion, local publication, transcription, backup, or
+notes work. Optional work remains single-flight per meeting rather than global.
+
 ### F4: Transcription
 
 **REQ-F4-01** When Transcription is `ready`, the transcription pipeline MUST start automatically after durable local audio is committed. When it is unavailable, the application MUST retain the local recording and expose transcription setup/retry without blocking recording completion.

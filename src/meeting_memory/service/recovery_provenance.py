@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 
 
@@ -26,3 +27,17 @@ def source_provenance_from_payload(
     ):
         raise ValueError("recovery source provenance does not match the source")
     return device, inode, size, digest
+
+
+def source_sha256(descriptor: int, size: int) -> str:
+    """Hash the exact pinned source bytes recorded in the recovery index."""
+
+    digest = hashlib.sha256()
+    offset = 0
+    while offset < size:
+        chunk = os.pread(descriptor, min(1024 * 1024, size - offset), offset)
+        if not chunk:
+            break
+        digest.update(chunk)
+        offset += len(chunk)
+    return digest.hexdigest()

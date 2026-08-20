@@ -29,16 +29,28 @@ AUTHORIZE_CALENDAR_LABEL = "Authorize Google Calendar..."
 QUIT_LABEL = "Quit"
 
 
-def recording_label(*, is_recording: bool, duration_seconds: int = 0) -> str:
+def recording_label(
+    *,
+    is_recording: bool,
+    duration_seconds: int = 0,
+    audio_warning: bool = False,
+) -> str:
     if is_recording:
-        return f"■ Stop Recording · {_format_duration(duration_seconds)}"
+        prefix = "⚠︎ " if audio_warning else ""
+        return f"{prefix}■ Stop Recording · {_format_duration(duration_seconds)}"
     return "▶ Start Recording"
 
 
-def tray_title(*, is_recording: bool, duration_seconds: int = 0) -> str | None:
+def tray_title(
+    *,
+    is_recording: bool,
+    duration_seconds: int = 0,
+    audio_warning: bool = False,
+) -> str | None:
     if not is_recording:
         return None
-    return _format_duration(duration_seconds)
+    prefix = "⚠︎ " if audio_warning else ""
+    return f"{prefix}{_format_duration(duration_seconds)}"
 
 
 def recent_meeting_label(meeting: RecentMeeting) -> str:

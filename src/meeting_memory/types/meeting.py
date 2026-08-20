@@ -7,6 +7,8 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
+from meeting_memory.types.audio import CaptureDiagnostics
+
 TITLE_SLUG_MAX_LENGTH = 40
 DEFAULT_MEETING_TITLE = "Untitled"
 CANONICAL_MEETING_SLUG = re.compile(r"[a-z0-9]+(?:[-_][a-z0-9]+)*", flags=re.ASCII)
@@ -19,6 +21,7 @@ class MeetingMeta:
     calendar_title: str = DEFAULT_MEETING_TITLE
     duration_minutes: int = 0
     speaker_candidates: tuple[str, ...] = ()
+    capture_diagnostics: CaptureDiagnostics | None = None
 
     def __post_init__(self) -> None:
         if not self.slug:

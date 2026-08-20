@@ -94,6 +94,9 @@ failure.
    staging directory located on the same filesystem as `MEETINGS_DIR`. The WAV
    is recoverable after a crash.
 2. **Stopping:** close the helper and validate that the WAV is non-empty.
+   A successful native stop also requires final per-source capture diagnostics;
+   missing diagnostics preserve the indexed WAV for explicit recovery rather
+   than silently claiming a verified capture.
 3. **Committing locally:** finish a collision-safe staging directory containing
    two closed, readable artifacts—`recording.m4a` plus a compatible
    `transcript.md` metadata stub—then publish that whole directory into
@@ -128,7 +131,15 @@ transcription_status: not_requested | pending | running | succeeded | failed
 backup_status: not_requested | pending | running | succeeded | failed
 backup_uploaded_revision: null
 speaker_status: not_available
+capture_mode: full-meeting | silent-system-only | null
+capture_status: healthy | warning | unavailable
+capture_diagnostics: null | {elapsed_seconds, warnings, sources}
 ```
+
+For new native recordings, `capture_diagnostics.sources` retains bounded
+callback, frame, peak, discarded-frame, and first/last callback timing evidence
+for every source expected by the selected mode. These fields are capture
+evidence, not provider state, and transcript/backup updates MUST preserve them.
 
 The transcript body explains the current state without exposing raw provider
 exceptions. A meeting directory MUST NOT be considered committed while its

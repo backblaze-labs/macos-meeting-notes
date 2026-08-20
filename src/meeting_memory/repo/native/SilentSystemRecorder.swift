@@ -81,7 +81,11 @@ final class SilentSystemRecorder {
         ioProcID = nil
         aggregateID = kAudioObjectUnknown
         tapID = kAudioObjectUnknown
-        try mixer.finish()
+        try queue.sync { try mixer.finish() }
+    }
+
+    func metrics(startedAt: Double, now: Double) -> [String: Any] {
+        queue.sync { mixer.metrics(startedAt: startedAt, now: now) }
     }
 
     private func receive(
@@ -107,7 +111,8 @@ final class SilentSystemRecorder {
             try mixer.add(
                 converter.samples(from: buffer),
                 source: .system,
-                presentationSeconds: seconds
+                presentationSeconds: seconds,
+                arrivalSeconds: ProcessInfo.processInfo.systemUptime
             )
         } catch {
             failureHandler(error)

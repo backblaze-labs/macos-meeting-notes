@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import stat
@@ -20,8 +19,12 @@ from meeting_memory.service.pinned_fs import (
     read_regular_text_at,
     same_open_directory,
 )
-from meeting_memory.service.recovery_provenance import source_provenance_from_payload
+from meeting_memory.service.recovery_provenance import (
+    source_provenance_from_payload,
+    source_sha256,
+)
 from meeting_memory.service.recovery_publication import publication_from_payload
+from meeting_memory.types.audio import CaptureDiagnostics
 from meeting_memory.types.meeting import MeetingMeta, validate_meeting_slug
 from meeting_memory.types.recovery import (
     RecoveryIndexEntry,
@@ -141,7 +144,7 @@ def pin_recovery_source(entry: RecoveryIndexEntry) -> RecoveryIndexEntry:
         info = os.fstat(descriptor)
         if not stat.S_ISREG(info.st_mode) or info.st_size == 0:
             raise ValueError("recovery source must be a non-empty regular file")
-        digest = _source_sha256(descriptor, info.st_size)
+        digest = source_sha256(descriptor, info.st_size)
     finally:
         if "descriptor" in locals():
             os.close(descriptor)
@@ -231,6 +234,11 @@ def _meta_from_payload(payload: dict[str, object]) -> MeetingMeta:
         calendar_title=str(payload.get("calendar_title") or "Recovered Recording"),
         duration_minutes=int(payload.get("duration_minutes") or 0),
         speaker_candidates=tuple(raw_candidates),
+        capture_diagnostics=(
+            CaptureDiagnostics.from_payload(payload["capture_diagnostics"])
+            if payload.get("capture_diagnostics") is not None
+            else None
+        ),
     )
 
 
@@ -255,6 +263,8 @@ def _index_payload(
         "duration_minutes": meta.duration_minutes,
         "speaker_candidates": list(meta.speaker_candidates),
     }
+    if meta.capture_diagnostics is not None:
+        payload["capture_diagnostics"] = meta.capture_diagnostics.to_payload()
     if entry is not None and all(
         value is not None
         for value in (
@@ -286,15 +296,3 @@ def _persist_pinned_index(entry: RecoveryIndexEntry) -> None:
         )
     finally:
         os.close(session_fd)
-
-
-def _source_sha256(descriptor: int, size: int) -> str:
-    digest = hashlib.sha256()
-    offset = 0
-    while offset < size:
-        chunk = os.pread(descriptor, min(1024 * 1024, size - offset), offset)
-        if not chunk:
-            break
-        digest.update(chunk)
-        offset += len(chunk)
-    return digest.hexdigest()

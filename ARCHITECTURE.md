@@ -158,7 +158,16 @@ newline-delimited lifecycle events through `repo/native_audio.py`.
   captures system audio, excludes the microphone, and leaves the selected audio
   devices unchanged.
 - The helper aligns and mixes captured streams into an incremental 16 kHz mono
-  WAV. The same helper first converts the completed WAV to M4A through
+  WAV. System and microphone presentation timestamps are rebased against
+  independent first-sample anchors plus a shared monotonic arrival clock, so a
+  difference between ScreenCaptureKit clock domains cannot trim an entire
+  source.
+- The helper emits source-health snapshots every five seconds and a mandatory
+  final snapshot. `repo/native_audio_health.py` detects missing, stalled,
+  persistently silent, or materially discarded source audio. The tray keeps a
+  warning visible for the active recording, while final evidence is retained in
+  the recovery index, `transcript.md`, and `app.log`.
+- The same helper first converts the completed WAV to M4A through
   AVFoundation. If that host does not expose an AAC encoder, the helper invokes
   its exact bundled sibling `MeetingMemoryFFmpegAudioEncoder`: a thin, static,
   source-pinned LGPL FFmpeg build with networking, autodetection, shared
@@ -191,6 +200,11 @@ These rules are enforced by `tests/test_structure.py`.
   writing in a separate process.
 - Local commit: one background worker per stopped recording or explicit recovery.
 - Optional jobs: independent per-meeting Transcription and Backup workers.
+
+The recording transition ends after the new local recovery source has closed
+and its commit worker has been launched. It does not join conversion or any
+optional job, so a new capture can start while the previous meeting is still
+being published or transcribed.
 
 Background threads must not call UI APIs directly. They emit events, and the UI
 drains those events on the main thread.

@@ -35,6 +35,7 @@ from meeting_memory.types.transcript import SpeakerReviewState
 from meeting_memory.ui.legacy_processing import launch_legacy_processing
 from meeting_memory.ui.macos import open_in_finder
 from meeting_memory.ui.recording_duration_guard import RecordingDurationGuard
+from meeting_memory.ui.recording_health import completed_capture_warning
 from meeting_memory.ui.recording_transitions import RecordingTransitions
 from meeting_memory.ui.recovery_actions import is_active_recovery, list_recoveries
 
@@ -85,9 +86,7 @@ class TrayController:
         self._duration_guard = RecordingDurationGuard(
             max_duration_minutes=self.settings.max_recording_minutes,
             event_sink=self.event_queue.put,
-            is_active=lambda token: (
-                self._recording_token is token and self.recorder.is_recording
-            ),
+            is_active=lambda token: self._recording_token is token and self.recorder.is_recording,
             stop_recording=self.stop_recording,
             thread_factory=self.timer_thread_factory,
             sleeper=self.sleeper,
@@ -117,6 +116,8 @@ class TrayController:
 
     def _recording_stopped(self, result: RecordingResult) -> None:
         self._recording_token = None
+        if warning := completed_capture_warning(result.meta.capture_diagnostics):
+            self.event_queue.put(warning)
         if result.meta.needs_title_prompt:
             self.event_queue.put(
                 RecordingTitleNeeded(result.audio_path, result.meta, result.recovery)

@@ -27,6 +27,8 @@ def test_recording_labels() -> None:
     )
     assert tray_title(is_recording=False) is None
     assert tray_title(is_recording=True, duration_seconds=65) == "01:05"
+    assert recording_label(is_recording=True, audio_warning=True).startswith("⚠︎ ")
+    assert tray_title(is_recording=True, audio_warning=True) == "⚠︎ 00:00"
 
 
 def test_recent_meeting_labels() -> None:

@@ -75,6 +75,8 @@ def test_start_and_stop_native_capture_waits_for_ready_event(
     result = capture.stop()
 
     assert result == output
+    assert capture.diagnostics is not None
+    assert capture.diagnostics.status == "healthy"
     assert process.signals == [native_audio.signal.SIGINT]
     assert calls == [
         [
@@ -221,7 +223,13 @@ def test_convert_native_audio_uses_helper_and_validates_output(
 class FakeProcess:
     def __init__(self):
         self.stdout = io.StringIO(
-            '{"event":"ready","mode":"full-meeting","microphone":"AirPods"}\n{"event":"stopped"}\n'
+            '{"event":"ready","mode":"full-meeting","microphone":"AirPods"}\n'
+            '{"event":"stopped","mode":"full-meeting","microphone":"AirPods",'
+            '"elapsed_seconds":1,"sources":{'
+            '"system":{"callbacks":1,"frames":1600,"peak":0.2,'
+            '"discarded_frames":0,"first_callback_seconds":0,"last_callback_seconds":1},'
+            '"microphone":{"callbacks":1,"frames":1600,"peak":0.3,'
+            '"discarded_frames":0,"first_callback_seconds":0,"last_callback_seconds":1}}}\n'
         )
         self.stderr = io.StringIO("")
         self.returncode: int | None = None

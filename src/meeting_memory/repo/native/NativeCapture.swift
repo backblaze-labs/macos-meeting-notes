@@ -185,32 +185,60 @@ final class TimelineMixer {
 
     private let writer: WAVWriter
     private let enabledSources: Set<Source>
-    private var anchorSeconds: Double?
+    private var arrivalAnchorSeconds: Double?
+    private var sourceAnchors: [Source: (presentation: Double, arrival: Double)] = [:]
     private var pending: [Float] = []
     private var pendingBaseFrame: Int64 = 0
     private var highWater: [Source: Int64] = [:]
+    private var capturedCallbacks: [Source: Int64] = [:]
     private var capturedFrames: [Source: Int64] = [:]
     private var capturedPeaks: [Source: Float] = [:]
+    private var discardedFrames: [Source: Int64] = [:]
+    private var firstArrivals: [Source: Double] = [:]
+    private var lastArrivals: [Source: Double] = [:]
 
     init(writer: WAVWriter, enabledSources: Set<Source>) {
         self.writer = writer
         self.enabledSources = enabledSources
     }
 
-    func add(_ samples: [Float], source: Source, presentationSeconds: Double) throws {
+    func add(
+        _ samples: [Float],
+        source: Source,
+        presentationSeconds: Double,
+        arrivalSeconds: Double
+    ) throws {
         guard enabledSources.contains(source), !samples.isEmpty else { return }
+        guard presentationSeconds.isFinite, arrivalSeconds.isFinite else {
+            throw CaptureError.invalidAudioBuffer
+        }
+        capturedCallbacks[source, default: 0] += 1
         capturedFrames[source, default: 0] += Int64(samples.count)
         let peak = samples.reduce(Float.zero) { max($0, abs($1)) }
         capturedPeaks[source] = max(capturedPeaks[source] ?? 0, peak)
-        if anchorSeconds == nil {
-            anchorSeconds = presentationSeconds
+        firstArrivals[source] = firstArrivals[source] ?? arrivalSeconds
+        lastArrivals[source] = arrivalSeconds
+        if arrivalAnchorSeconds == nil {
+            arrivalAnchorSeconds = arrivalSeconds
         }
-        guard let anchorSeconds else { return }
+        sourceAnchors[source] = sourceAnchors[source] ?? (presentationSeconds, arrivalSeconds)
+        guard let arrivalAnchorSeconds, let sourceAnchor = sourceAnchors[source] else { return }
 
-        var startFrame = Int64(((presentationSeconds - anchorSeconds) * 16_000).rounded())
+        let relativeSeconds = sourceAnchor.arrival - arrivalAnchorSeconds
+            + presentationSeconds - sourceAnchor.presentation
+        let relativeFrame = (relativeSeconds * 16_000).rounded()
+        guard
+            relativeFrame.isFinite,
+            relativeFrame >= Double(Int64.min),
+            relativeFrame <= Double(Int64.max)
+        else {
+            throw CaptureError.invalidAudioBuffer
+        }
+        var startFrame = Int64(relativeFrame)
         var values = samples
         if startFrame < pendingBaseFrame {
             let trim = min(values.count, Int(pendingBaseFrame - startFrame))
+            discardedFrames[source, default: 0] += Int64(trim)
             values.removeFirst(trim)
             startFrame += Int64(trim)
         }
@@ -237,13 +265,19 @@ final class TimelineMixer {
         try writer.close()
     }
 
-    func metrics() -> [String: Any] {
+    func metrics(startedAt: Double, now: Double) -> [String: Any] {
         var values: [String: Any] = [:]
         for source in enabledSources {
             let name = source == .system ? "system" : "microphone"
+            let first = firstArrivals[source].map { max(0, $0 - startedAt) }
+            let last = lastArrivals[source].map { max(0, min(now, $0) - startedAt) }
             values[name] = [
+                "callbacks": capturedCallbacks[source] ?? 0,
                 "frames": capturedFrames[source] ?? 0,
                 "peak": capturedPeaks[source] ?? 0,
+                "discarded_frames": discardedFrames[source] ?? 0,
+                "first_callback_seconds": first.map { $0 as Any } ?? NSNull(),
+                "last_callback_seconds": last.map { $0 as Any } ?? NSNull(),
             ]
         }
         return values
@@ -262,13 +296,4 @@ final class TimelineMixer {
         pending.removeFirst(count)
         pendingBaseFrame += Int64(count)
     }
-}
-
-func emitJSON(_ payload: [String: Any]) {
-    guard
-        JSONSerialization.isValidJSONObject(payload),
-        let data = try? JSONSerialization.data(withJSONObject: payload),
-        let line = String(data: data, encoding: .utf8)
-    else { return }
-    FileHandle.standardOutput.write(Data((line + "\n").utf8))
 }

@@ -50,7 +50,7 @@ def test_discovery_never_hashes_unfinished_capture_on_menu_thread(
     entry.source_path.write_bytes(b"unfinished capture")
     monkeypatch.setattr(
         recovery_index,
-        "_source_sha256",
+        "source_sha256",
         lambda *_args: (_ for _ in ()).throw(AssertionError("discovery hashed audio")),
     )
 

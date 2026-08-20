@@ -179,6 +179,18 @@ after one hour and every 30 minutes after that, until recording stops. After
 transcription finishes, the app writes `transcript.md`; the completion
 notification opens the meeting directory so you can review speaker aliases.
 
+Meeting Memory checks the system and microphone streams throughout each
+recording. If a source never starts, stalls, loses frames during mixing, or
+system audio remains silent long enough to be suspicious, the timer and Stop
+label gain `⚠︎` and a notification offers a Stop action. Do not rely on that
+recording until you have corrected the audio path and restarted it. Final
+source counters are saved as `capture_diagnostics` in `transcript.md` and are
+also logged in `~/Library/Logs/meeting-memory/app.log` under the meeting slug.
+
+You can stop one call and immediately start the next. Conversion, local commit,
+transcription, backup, and notes for the earlier call continue independently;
+the next recording does not wait for its transcript.
+
 If the app crashes during recording, restart it and check the tray for
 **Debugging › Interrupted Recordings**. Failed B2 uploads can be retried with
 **Debugging › Retry Pending B2 Backups**, and failed transcription states can

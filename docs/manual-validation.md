@@ -103,6 +103,27 @@ Pass criteria:
   recording.
 - If the recording maps to a calendar event with an end time, a stop reminder
   appears at the event finish time.
+- `transcript.md` contains `capture_status: healthy` and
+  `capture_diagnostics` counters for both `system` and `microphone`.
+- `~/Library/Logs/meeting-memory/app.log` contains a completion line with the
+  meeting slug and the same source counters.
+
+For live-loss detection, start another Full Meeting recording without any
+Zoom/system sound. After 45 seconds, confirm the timer and Stop label gain `⚠︎`
+and a notification offers **Stop**. Stop the test; confirm its transcript has
+`capture_status: warning` and includes `system_silent`. A missing or stalled
+source should warn at the next five-second health sample after ten seconds.
+
+For back-to-back validation:
+
+1. Stop a meeting while Transcription is enabled.
+2. Before its transcript is ready, immediately start a second meeting.
+3. Keep both microphone speech and remote/system speech active in the second
+   call, then stop it.
+
+The second timer must start without waiting for the first transcript. Both
+meetings must commit separately, both recordings must contain both sources,
+and each transcript must retain its own `capture_diagnostics`.
 
 For system-audio-only validation:
 

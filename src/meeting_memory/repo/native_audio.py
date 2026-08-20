@@ -8,7 +8,7 @@ import queue
 import signal
 import subprocess
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -18,7 +18,9 @@ from meeting_memory.repo.native_audio_build import (
     build_native_capture_helper,
     default_build_helper_path,
 )
+from meeting_memory.repo.native_audio_health import HelperStatus
 from meeting_memory.repo.native_layout import HELPER_NAME, resolve_native_capture_helper
+from meeting_memory.types.audio import CaptureDiagnostics, CaptureHealthWarning
 from meeting_memory.types.runtime_layout import RuntimeLayout
 
 __all__ = (
@@ -39,9 +41,13 @@ class NativeCaptureProcess:
     process: subprocess.Popen[str]
     output_path: Path
     reader: threading.Thread
-    status: _HelperStatus
+    status: HelperStatus
 
-    def check_health(self) -> None:
+    @property
+    def diagnostics(self) -> CaptureDiagnostics | None:
+        return self.status.final_diagnostics()
+
+    def check_health(self) -> CaptureHealthWarning | None:
         detail = self.status.failure_message()
         if detail:
             self._terminate_after_failure()
@@ -49,7 +55,7 @@ class NativeCaptureProcess:
 
         return_code = self.process.poll()
         if return_code is None:
-            return
+            return self.status.next_warning()
         self.reader.join(timeout=2)
         detail = self.status.failure_message()
         if detail:
@@ -84,6 +90,11 @@ class NativeCaptureProcess:
             raise NativeAudioCaptureError(
                 "Native audio capture produced no audio: no audio samples were written"
             )
+        if self.status.final_diagnostics() is None:
+            raise NativeAudioCaptureError(
+                "Native audio capture did not report final source diagnostics. "
+                "The local WAV was preserved for recovery."
+            )
         return self.output_path
 
     def _terminate_after_failure(self) -> None:
@@ -96,23 +107,6 @@ class NativeCaptureProcess:
             self.process.kill()
             self.process.wait(timeout=5)
         self.reader.join(timeout=2)
-
-
-@dataclass
-class _HelperStatus:
-    _failure_message: str | None = None
-    _lock: threading.Lock = field(default_factory=threading.Lock)
-
-    def observe(self, event: dict[str, Any]) -> None:
-        if event.get("event") not in {"error", "fatal"}:
-            return
-        message = str(event.get("message") or "native helper reported an error")
-        with self._lock:
-            self._failure_message = message
-
-    def failure_message(self) -> str | None:
-        with self._lock:
-            return self._failure_message
 
 
 def start_native_capture(
@@ -147,7 +141,7 @@ def start_native_capture(
         bufsize=1,
     )
     events: queue.Queue[dict[str, Any]] = queue.Queue()
-    status = _HelperStatus()
+    status = HelperStatus()
     reader = threading.Thread(
         target=_read_helper_output,
         args=(process.stdout, process.stderr, events, status),
@@ -226,7 +220,7 @@ def _read_helper_output(
     stdout: TextIO | None,
     stderr: TextIO | None,
     events: queue.Queue[dict[str, Any]],
-    status: _HelperStatus,
+    status: HelperStatus,
 ) -> None:
     if stdout is not None:
         for line in stdout:
