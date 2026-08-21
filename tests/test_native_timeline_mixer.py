@@ -103,13 +103,14 @@ def test_timeline_mixer_rebases_each_source_clock_without_dropping_it(
     ):
         command.extend(["-framework", framework])
     command.extend([*(str(source) for source in SOURCES), str(harness), "-o", str(executable)])
-    subprocess.run(
+    compilation = subprocess.run(
         command,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
         timeout=60,
     )
+    assert compilation.returncode == 0, compilation.stderr
 
     output = tmp_path / "mixed.wav"
     subprocess.run([str(executable), str(output)], check=True, timeout=10)
