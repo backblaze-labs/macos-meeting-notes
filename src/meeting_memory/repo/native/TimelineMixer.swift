@@ -92,15 +92,15 @@ final class TimelineMixer {
             let name = source == .system ? "system" : "microphone"
             let first = firstArrivals[source].map { max(0, $0 - startedAt) }
             let last = lastArrivals[source].map { max(0, min(now, $0) - startedAt) }
-            values[name] = [
-                "callbacks": capturedCallbacks[source] ?? 0,
-                "frames": capturedFrames[source] ?? 0,
-                "peak": capturedPeaks[source] ?? 0,
-                "discarded_frames": discardedFrames[source] ?? 0,
-                "largest_discarded_run": largestDiscardedRuns[source] ?? 0,
-                "first_callback_seconds": first.map { $0 as Any } ?? NSNull(),
-                "last_callback_seconds": last.map { $0 as Any } ?? NSNull(),
-            ]
+            var metrics: [String: Any] = [:]
+            metrics["callbacks"] = capturedCallbacks[source] ?? 0
+            metrics["frames"] = capturedFrames[source] ?? 0
+            metrics["peak"] = capturedPeaks[source] ?? 0
+            metrics["discarded_frames"] = discardedFrames[source] ?? 0
+            metrics["largest_discarded_run"] = largestDiscardedRuns[source] ?? 0
+            metrics["first_callback_seconds"] = first.map { $0 as Any } ?? NSNull()
+            metrics["last_callback_seconds"] = last.map { $0 as Any } ?? NSNull()
+            values[name] = metrics
         }
         return values
     }
