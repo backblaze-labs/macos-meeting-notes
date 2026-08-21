@@ -133,13 +133,16 @@ backup_uploaded_revision: null
 speaker_status: not_available
 capture_mode: full-meeting | silent-system-only | null
 capture_status: healthy | warning | unavailable
-capture_diagnostics: null | {elapsed_seconds, warnings, sources}
+capture_diagnostics: null | {elapsed_seconds, warnings, warning_history, sources}
 ```
 
 For new native recordings, `capture_diagnostics.sources` retains bounded
-callback, frame, peak, discarded-frame, and first/last callback timing evidence
-for every source expected by the selected mode. These fields are capture
-evidence, not provider state, and transcript/backup updates MUST preserve them.
+callback, frame, peak, total/largest-contiguous discarded-frame, and first/last
+callback timing evidence for every source expected by the selected mode.
+`warnings` contains only unresolved final conditions and determines
+`capture_status`; `warning_history` also retains conditions that recovered.
+These fields are capture evidence, not provider state, and transcript/backup
+updates MUST preserve them.
 
 The transcript body explains the current state without exposing raw provider
 exceptions. A meeting directory MUST NOT be considered committed while its

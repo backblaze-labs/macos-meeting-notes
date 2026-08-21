@@ -27,8 +27,8 @@ composition and durable lifecycle are defined in
 - Schema-v2 `transcript.md` metadata stub published atomically with the audio
 - `MeetingMeta` passed to the pipeline
 - Visible recording duration in the status bar and tray menu
-- Persistent live audio-health warning when an expected source is missing,
-  stalled, persistently silent, or losing frames
+- Recoverable live audio-health warning when an expected source is missing,
+  stalled, persistently silent, or losing a material share/burst of frames
 - Final per-source capture diagnostics in the recovery index, transcript
   frontmatter, and app log
 
@@ -46,13 +46,21 @@ workers and emit typed events for the tray main thread to render.
 - Full Meeting rebases the system and microphone presentation clocks
   independently against their monotonic callback arrival times. A large offset
   between ScreenCaptureKit clock domains therefore cannot discard one source.
-- The helper reports callback, frame, peak, discard, and timing counters every
-  five seconds. Missing or stalled sources warn after ten seconds; system audio
-  that arrives with no signal warns after 45 seconds. A warning adds `⚠︎` to
-  the timer and Stop label and sends a macOS notification with a Stop action.
+- The helper reports callback, frame, peak, total discard, largest contiguous
+  discard, and timing counters every five seconds. Missing or stalled sources
+  warn after ten seconds; system audio that arrives with no signal warns after
+  90 seconds so a normal quiet call start does not create a false completion
+  warning. A warning adds `⚠︎` to the timer and Stop label, sends a macOS
+  notification with a Stop action, and clears from the live UI if the source
+  recovers.
+- Distributed one-frame resampling trims do not warn. Discard health requires
+  at least 1,600 total frames plus either a one-percent ratio or a contiguous
+  1,600-frame run, preserving detection of real clock loss without treating
+  normal alignment rounding as incomplete audio.
 - Stopping requires a valid final source report. Its `healthy` or `warning`
-  result is saved under `capture_diagnostics` before local commit; a warning at
-  stop produces a final notification even if the live alert was missed.
+  result is saved under `capture_diagnostics` before local commit. Only
+  unresolved warnings produce a final notification; recovered warning codes
+  remain available as `warning_history` for debugging.
 - WAV-to-M4A conversion prefers AVFoundation. Hosts without an AudioToolbox AAC
   encoder use `MeetingMemoryFFmpegAudioEncoder`, a separate minimal LGPL
   FFmpeg build whose network support and unrelated formats are disabled. The
@@ -149,6 +157,7 @@ workers and emit typed events for the tray main thread to render.
 - `src/meeting_memory/repo/native_audio_health.py`
 - `src/meeting_memory/repo/native_audio_build.py`
 - `src/meeting_memory/repo/native/NativeCapture.swift`
+- `src/meeting_memory/repo/native/TimelineMixer.swift`
 - `src/meeting_memory/repo/native/CaptureDiagnostics.swift`
 - `src/meeting_memory/repo/native/RecordingLifetime.swift`
 - `src/meeting_memory/ui/tray.py`

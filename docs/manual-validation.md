@@ -109,10 +109,17 @@ Pass criteria:
   meeting slug and the same source counters.
 
 For live-loss detection, start another Full Meeting recording without any
-Zoom/system sound. After 45 seconds, confirm the timer and Stop label gain `⚠︎`
-and a notification offers **Stop**. Stop the test; confirm its transcript has
-`capture_status: warning` and includes `system_silent`. A missing or stalled
+Zoom/system sound. Confirm no silence warning appears during the first 89
+seconds. After 90 seconds, confirm the timer and Stop label gain `⚠︎` and a
+notification offers **Stop**. Play system audio and confirm `⚠︎` clears. Stop
+the test; confirm its transcript has `capture_status: healthy`, an empty
+`warnings` list, and `system_silent` in `warning_history`. A missing or stalled
 source should warn at the next five-second health sample after ten seconds.
+
+For discard validation, a source with at least 1,600 discarded frames warns
+only when the discard is at least one percent of captured frames or contains a
+contiguous 1,600-frame run. Distributed single-frame alignment trims remain in
+the counters without changing `capture_status`.
 
 For back-to-back validation:
 

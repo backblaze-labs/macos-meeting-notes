@@ -11,7 +11,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "src" / "meeting_memory" / "repo" / "native" / "NativeCapture.swift"
+NATIVE = ROOT / "src" / "meeting_memory" / "repo" / "native"
+SOURCES = (NATIVE / "NativeCapture.swift", NATIVE / "TimelineMixer.swift")
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="native mixer targets macOS")
@@ -47,6 +48,40 @@ def test_timeline_mixer_rebases_each_source_clock_without_dropping_it(
                     arrivalSeconds: 10.05
                 )
                 try mixer.finish()
+
+                let metricsOutput = output.deletingPathExtension()
+                    .appendingPathExtension("metrics.wav")
+                let metricsMixer = TimelineMixer(
+                    writer: try WAVWriter(url: metricsOutput),
+                    enabledSources: [.system, .microphone]
+                )
+                try metricsMixer.add(
+                    Array(repeating: 0.2, count: 1600),
+                    source: .system,
+                    presentationSeconds: 0,
+                    arrivalSeconds: 10
+                )
+                try metricsMixer.add(
+                    Array(repeating: 0.4, count: 1600),
+                    source: .microphone,
+                    presentationSeconds: 0,
+                    arrivalSeconds: 10
+                )
+                try metricsMixer.add(
+                    Array(repeating: 0.4, count: 1600),
+                    source: .microphone,
+                    presentationSeconds: 0.0999375,
+                    arrivalSeconds: 10.1
+                )
+                let metrics = metricsMixer.metrics(startedAt: 10, now: 10.1)
+                guard
+                    let microphone = metrics["microphone"] as? [String: Any],
+                    microphone["discarded_frames"] as? Int64 == 1,
+                    microphone["largest_discarded_run"] as? Int64 == 1
+                else {
+                    throw CaptureError.message("rounding trim metrics are invalid")
+                }
+                try metricsMixer.finish()
             }
         }
         """,
@@ -67,7 +102,7 @@ def test_timeline_mixer_rebases_each_source_clock_without_dropping_it(
         "ScreenCaptureKit",
     ):
         command.extend(["-framework", framework])
-    command.extend([str(SOURCE), str(harness), "-o", str(executable)])
+    command.extend([*(str(source) for source in SOURCES), str(harness), "-o", str(executable)])
     subprocess.run(
         command,
         check=True,

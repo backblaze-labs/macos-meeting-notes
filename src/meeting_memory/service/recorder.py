@@ -212,10 +212,15 @@ class RecorderService:
                 return None
             if warning is not None and not isinstance(warning, CaptureHealthWarning):
                 raise TypeError("capture warning must use the typed boundary model")
+            active_warning = getattr(capture, "active_warning", warning)
+            if callable(active_warning):
+                active_warning = active_warning()
+            if active_warning is not None and not isinstance(active_warning, CaptureHealthWarning):
+                raise TypeError("active capture warning must use the typed boundary model")
+            with self._lock:
+                if self._capture is capture and self._session is session:
+                    self._recording_warning = active_warning
             if warning is not None:
-                with self._lock:
-                    if self._capture is capture and self._session is session:
-                        self._recording_warning = warning
                 LOGGER.warning(
                     "Recording health warning slug=%s code=%s message=%s",
                     session.meta.slug,

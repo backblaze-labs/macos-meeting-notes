@@ -15,9 +15,10 @@ from meeting_memory.types.audio import (
 
 SOURCE_CALLBACK_GRACE_SECONDS = 10
 SOURCE_STALL_SECONDS = 10
-SYSTEM_SILENCE_GRACE_SECONDS = 45
+SYSTEM_SILENCE_GRACE_SECONDS = 90
 SYSTEM_SILENCE_PEAK = 0.00001
-DISCARDED_FRAME_WARNING_THRESHOLD = 1_600
+DISCARDED_FRAME_WARNING_MINIMUM = 1_600
+DISCARDED_FRAME_WARNING_RATIO = 0.01
 LOGGER = logging.getLogger(__name__)
 
 
@@ -26,6 +27,7 @@ class HelperStatus:
     _failure_message: str | None = None
     _final_diagnostics: CaptureDiagnostics | None = None
     _warning_codes: list[str] = field(default_factory=list)
+    _active_warnings: tuple[CaptureHealthWarning, ...] = ()
     _pending_warnings: list[CaptureHealthWarning] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -48,6 +50,7 @@ class HelperStatus:
             return
         warnings = diagnostic_warnings(diagnostics, final=event_name == "stopped")
         with self._lock:
+            self._active_warnings = warnings
             known = set(self._warning_codes)
             for warning in warnings:
                 if warning.code in known:
@@ -56,7 +59,10 @@ class HelperStatus:
                 self._warning_codes.append(warning.code)
                 self._pending_warnings.append(warning)
             if event_name == "stopped":
-                self._final_diagnostics = diagnostics.with_warnings(tuple(self._warning_codes))
+                self._final_diagnostics = diagnostics.with_warning_state(
+                    tuple(warning.code for warning in warnings),
+                    tuple(self._warning_codes),
+                )
 
     def failure_message(self) -> str | None:
         with self._lock:
@@ -65,6 +71,10 @@ class HelperStatus:
     def next_warning(self) -> CaptureHealthWarning | None:
         with self._lock:
             return self._pending_warnings.pop(0) if self._pending_warnings else None
+
+    def active_warning(self) -> CaptureHealthWarning | None:
+        with self._lock:
+            return self._active_warnings[0] if self._active_warnings else None
 
     def final_diagnostics(self) -> CaptureDiagnostics | None:
         with self._lock:
@@ -93,12 +103,13 @@ def diagnostic_warnings(
                     ),
                 )
             )
-        if source.discarded_frames >= DISCARDED_FRAME_WARNING_THRESHOLD:
+        if _has_material_discard(source):
             warnings.append(
                 CaptureHealthWarning(
                     code=f"{source.name}_timing_discard",
                     message=(
-                        f"{source.name.capitalize()} audio is losing frames during mixing. "
+                        f"{source.name.capitalize()} audio lost a material burst or share "
+                        "of frames during mixing. "
                         "This recording may be incomplete; stop and restart it."
                     ),
                 )
@@ -114,8 +125,9 @@ def diagnostic_warnings(
             CaptureHealthWarning(
                 code="system_silent",
                 message=(
-                    "System audio is arriving but has remained silent. "
-                    "Verify Zoom output before relying on this recording."
+                    "No system audio has been detected for 90 seconds. "
+                    "If the call is intentionally quiet, you can ignore this; "
+                    "otherwise verify Zoom output."
                 ),
             )
         )
@@ -137,4 +149,15 @@ def _source_stalled(source: CaptureSourceDiagnostics, elapsed_seconds: float) ->
     return (
         source.last_callback_seconds is not None
         and elapsed_seconds - source.last_callback_seconds >= SOURCE_STALL_SECONDS
+    )
+
+
+def _has_material_discard(source: CaptureSourceDiagnostics) -> bool:
+    if source.discarded_frames < DISCARDED_FRAME_WARNING_MINIMUM:
+        return False
+    if source.largest_discarded_run >= DISCARDED_FRAME_WARNING_MINIMUM:
+        return True
+    return (
+        source.frames > 0
+        and source.discarded_frames / source.frames >= DISCARDED_FRAME_WARNING_RATIO
     )

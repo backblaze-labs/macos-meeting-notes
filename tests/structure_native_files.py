@@ -10,4 +10,5 @@ REQUIRED_NATIVE_SOURCE_FILES = (
     "repo/native/RecordingLifetime.swift",
     "repo/native/ScreenCaptureRecorder.swift",
     "repo/native/SilentSystemRecorder.swift",
+    "repo/native/TimelineMixer.swift",
 )
