@@ -16,14 +16,25 @@ class CaptureSourceDiagnostics:
     frames: int
     peak: float
     discarded_frames: int = 0
+    largest_discarded_run: int = 0
     first_callback_seconds: float | None = None
     last_callback_seconds: float | None = None
 
     def __post_init__(self) -> None:
         if self.name not in {"system", "microphone"}:
             raise ValueError("capture source name is invalid")
-        if min(self.callbacks, self.frames, self.discarded_frames) < 0:
+        if (
+            min(
+                self.callbacks,
+                self.frames,
+                self.discarded_frames,
+                self.largest_discarded_run,
+            )
+            < 0
+        ):
             raise ValueError("capture source counters must be non-negative")
+        if self.largest_discarded_run > self.discarded_frames:
+            raise ValueError("largest discarded run cannot exceed total discarded frames")
         if not math.isfinite(self.peak) or self.peak < 0:
             raise ValueError("capture source peak must be finite and non-negative")
         for value in (self.first_callback_seconds, self.last_callback_seconds):
@@ -36,6 +47,7 @@ class CaptureSourceDiagnostics:
             "frames": self.frames,
             "peak": round(self.peak, 6),
             "discarded_frames": self.discarded_frames,
+            "largest_discarded_run": self.largest_discarded_run,
             "first_callback_seconds": _rounded(self.first_callback_seconds),
             "last_callback_seconds": _rounded(self.last_callback_seconds),
         }
@@ -50,6 +62,7 @@ class CaptureSourceDiagnostics:
             frames=_nonnegative_int(payload.get("frames")),
             peak=_nonnegative_float(payload.get("peak")),
             discarded_frames=_nonnegative_int(payload.get("discarded_frames")),
+            largest_discarded_run=_nonnegative_int(payload.get("largest_discarded_run", 0)),
             first_callback_seconds=_optional_nonnegative_float(
                 payload.get("first_callback_seconds")
             ),
@@ -66,6 +79,7 @@ class CaptureDiagnostics:
     elapsed_seconds: float
     sources: tuple[CaptureSourceDiagnostics, ...]
     warnings: tuple[str, ...] = ()
+    warning_history: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.mode not in {"full-meeting", "silent-system-only"}:
@@ -76,7 +90,8 @@ class CaptureDiagnostics:
         expected = ("system", "microphone") if self.mode == "full-meeting" else ("system",)
         if names != expected:
             raise ValueError("capture diagnostics do not match the selected mode")
-        if not all(isinstance(code, str) and code for code in self.warnings):
+        warning_codes = (*self.warnings, *self.warning_history)
+        if not all(isinstance(code, str) and code for code in warning_codes):
             raise ValueError("capture warning codes must be non-blank strings")
 
     @property
@@ -86,8 +101,16 @@ class CaptureDiagnostics:
     def source(self, name: str) -> CaptureSourceDiagnostics | None:
         return next((source for source in self.sources if source.name == name), None)
 
-    def with_warnings(self, warnings: tuple[str, ...]) -> CaptureDiagnostics:
-        return replace(self, warnings=tuple(dict.fromkeys(warnings)))
+    def with_warning_state(
+        self,
+        warnings: tuple[str, ...],
+        warning_history: tuple[str, ...],
+    ) -> CaptureDiagnostics:
+        return replace(
+            self,
+            warnings=tuple(dict.fromkeys(warnings)),
+            warning_history=tuple(dict.fromkeys(warning_history)),
+        )
 
     def to_payload(self) -> dict[str, object]:
         return {
@@ -96,6 +119,7 @@ class CaptureDiagnostics:
             "elapsed_seconds": round(self.elapsed_seconds, 3),
             "status": self.status,
             "warnings": list(self.warnings),
+            "warning_history": list(self.warning_history),
             "sources": {source.name: source.to_payload() for source in self.sources},
         }
 
@@ -111,6 +135,9 @@ class CaptureDiagnostics:
         raw_warnings = payload.get("warnings", ())
         if not isinstance(raw_warnings, list | tuple):
             raise ValueError("capture diagnostics warnings must be a list")
+        raw_warning_history = payload.get("warning_history", raw_warnings)
+        if not isinstance(raw_warning_history, list | tuple):
+            raise ValueError("capture diagnostics warning history must be a list")
         microphone = payload.get("microphone")
         return cls(
             mode=mode,
@@ -120,6 +147,7 @@ class CaptureDiagnostics:
                 CaptureSourceDiagnostics.from_payload(name, raw_sources.get(name)) for name in names
             ),
             warnings=tuple(str(code) for code in raw_warnings),
+            warning_history=tuple(str(code) for code in raw_warning_history),
         )
 
 

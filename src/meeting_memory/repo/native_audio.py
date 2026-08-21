@@ -47,6 +47,10 @@ class NativeCaptureProcess:
     def diagnostics(self) -> CaptureDiagnostics | None:
         return self.status.final_diagnostics()
 
+    @property
+    def active_warning(self) -> CaptureHealthWarning | None:
+        return self.status.active_warning()
+
     def check_health(self) -> CaptureHealthWarning | None:
         detail = self.status.failure_message()
         if detail:

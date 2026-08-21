@@ -164,9 +164,11 @@ newline-delimited lifecycle events through `repo/native_audio.py`.
   source.
 - The helper emits source-health snapshots every five seconds and a mandatory
   final snapshot. `repo/native_audio_health.py` detects missing, stalled,
-  persistently silent, or materially discarded source audio. The tray keeps a
-  warning visible for the active recording, while final evidence is retained in
-  the recovery index, `transcript.md`, and `app.log`.
+  persistently silent, or materially discarded source audio. Discard health
+  distinguishes a contiguous loss from harmless distributed resampling trims,
+  and recovered conditions clear the tray warning. Final active warnings and
+  bounded warning history are retained separately in the recovery index,
+  `transcript.md`, and `app.log`.
 - The same helper first converts the completed WAV to M4A through
   AVFoundation. If that host does not expose an AAC encoder, the helper invokes
   its exact bundled sibling `MeetingMemoryFFmpegAudioEncoder`: a thin, static,

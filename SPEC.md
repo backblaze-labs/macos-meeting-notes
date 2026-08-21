@@ -395,17 +395,22 @@ different clock domain from the other source.
 
 **REQ-F3-12** The native helper MUST report per-source capture health while a
 recording is active. If an expected source produces no callbacks for ten
-seconds, stops producing callbacks for ten seconds, or loses a material number
-of frames during mixing, the tray MUST show a persistent warning and send a
-notification with a Stop action. System audio that continues to arrive at a
-zero peak for 45 seconds MUST also warn.
+seconds, stops producing callbacks for ten seconds, or loses a material share
+or contiguous burst of frames during mixing, the tray MUST show a warning and
+send a notification with a Stop action. A discard is material only after at
+least 1,600 frames and either a one-percent captured-frame ratio or one
+contiguous 1,600-frame run; isolated resampling-rounding trims MUST NOT warn.
+System audio that continues to arrive at a zero peak for 90 seconds MUST also
+warn. A live warning MUST clear after its condition recovers.
 
 **REQ-F3-13** Every successfully stopped native recording MUST retain final
 per-source diagnostics in its recovery index and schema-v2 transcript metadata,
-including callback count, captured frames, peak level, discarded frames, and
-first/last callback timing. The application log MUST identify the meeting slug,
-capture mode, warnings, and final diagnostics without recording audio content
-or credentials.
+including callback count, captured frames, peak level, total discarded frames,
+largest contiguous discarded run, and first/last callback timing. Unresolved
+warnings MUST determine final capture status; resolved warnings MUST remain in
+bounded warning history without causing a final warning notification. The
+application log MUST identify the meeting slug, capture mode, warning state,
+history, and final diagnostics without recording audio content or credentials.
 
 **REQ-F3-14** Stopping one meeting and starting the next MUST NOT wait for the
 previous meeting's conversion, local publication, transcription, backup, or
