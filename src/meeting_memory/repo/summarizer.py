@@ -13,6 +13,7 @@ from meeting_memory.config.defaults import (
     DEFAULT_SUMMARY_PROMPT_FILE,
     DEFAULT_SUMMARY_PROMPT_TEMPLATE,
 )
+from meeting_memory.config.notes_profile_formatting import normalize_section_content
 from meeting_memory.config.notes_profiles import rendered_section_guidance
 from meeting_memory.config.notes_template import (
     NotesPromptDocument,
@@ -201,7 +202,11 @@ def profile_result_from_json(text: str, profile: NotesProfile) -> SummaryResult:
         if raw["id"] != expected.key or not isinstance(raw["content"], str):
             raise ValueError("Claude profile section IDs do not match the requested profile")
         generated.append(
-            GeneratedNotesSection(expected.key, expected.title, raw["content"].strip())
+            GeneratedNotesSection(
+                expected.key,
+                expected.title,
+                normalize_section_content(expected, raw["content"]),
+            )
         )
     return SummaryResult(summary=None, sections=tuple(generated))
 

@@ -135,7 +135,10 @@ def rendered_section_guidance(profile: NotesProfile, section: NotesProfileSectio
         NotesSectionAudience.MEETING: "Cover the meeting as a whole.",
         NotesSectionAudience.EACH_PARTICIPANT: (
             "Group the result by confirmed speaker name and keep each person's "
-            "contribution distinct."
+            "contribution distinct. For each person, use exactly this shape: "
+            "**<name>:** on its own line, followed by one or more `- ` bullets. "
+            "Put each distinct update in its own bullet; never put a person's "
+            "updates in a paragraph or on the same line as their name."
         ),
         NotesSectionAudience.ME: (
             f"Include only content that applies to {values['user_name']}; exclude other owners."

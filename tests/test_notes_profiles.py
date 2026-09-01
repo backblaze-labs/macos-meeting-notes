@@ -7,6 +7,7 @@ from datetime import datetime
 
 import pytest
 
+from meeting_memory.config.notes_profile_formatting import normalize_section_content
 from meeting_memory.config.notes_profiles import (
     classic_notes_profile,
     decode_notes_profile,
@@ -50,6 +51,30 @@ def test_personal_profile_requires_the_users_name() -> None:
     assert "Eduardo" in guidance
     assert "{{user_name}}" not in guidance
     assert "exclude other owners" in guidance
+    participant_guidance = rendered_section_guidance(profile, profile.sections[0])
+    assert "**<name>:**" in participant_guidance
+    assert "own bullet" in participant_guidance
+
+
+def test_each_participant_bullet_content_has_a_heading_and_one_bullet_per_sentence() -> None:
+    section = personal_notes_profile("Eduardo").sections[0]
+
+    rendered = normalize_section_content(
+        section,
+        "- **Gonzalo:** Fixed the SDK. Preparing the marketplace release.",
+    )
+
+    assert rendered == (
+        "**Gonzalo:**\n"
+        "- Fixed the SDK.\n"
+        "- Preparing the marketplace release."
+    )
+
+
+def test_non_participant_sections_preserve_their_content() -> None:
+    section = personal_notes_profile("Eduardo").sections[1]
+
+    assert normalize_section_content(section, "- [ ] Review the plan.") == "- [ ] Review the plan."
 
 
 def test_profile_rejects_unknown_template_variables() -> None:
