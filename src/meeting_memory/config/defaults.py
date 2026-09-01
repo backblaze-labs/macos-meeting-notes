@@ -16,7 +16,7 @@ REQUIRED_ENV_VARS = (*B2_ENV_VARS, *ASSEMBLYAI_ENV_VARS)
 
 PLACEHOLDER_MARKERS = ("replace-me", "changeme", "todo", "<", ">")
 
-DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5"
+DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5"
 DEFAULT_SUMMARY_PROMPT_FILE = "prompts/summary.md"
 NOTES_REPORT_TEMPLATE_MARKER = "<!-- meeting-memory:notes-layout -->"
 NOTES_PROFILE_MARKER = "<!-- meeting-memory:notes-profile -->"

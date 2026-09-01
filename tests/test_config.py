@@ -64,7 +64,7 @@ def test_load_settings_from_env_file(tmp_path: Path) -> None:
 
     assert settings.b2_bucket_name == "meeting-memory"
     assert settings.anthropic_api_key is None
-    assert settings.anthropic_model == "claude-haiku-4-5"
+    assert settings.anthropic_model == "claude-sonnet-5"
     assert settings.summary_prompt_file == Path("prompts/custom-summary.md")
     assert settings.google_calendar_id == "all"
     assert settings.known_speakers == (

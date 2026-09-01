@@ -37,6 +37,7 @@ def test_claude_summarizer_requests_json_and_truncates_transcript(monkeypatch) -
     assert fake_client.timeout_seconds == 60.0
     assert fake_client.kwargs["model"] == "claude-test"
     assert fake_client.kwargs["max_tokens"] == MAX_SUMMARY_OUTPUT_TOKENS
+    assert "temperature" not in fake_client.kwargs
     assert fake_client.kwargs["system"] == SUMMARY_OUTPUT_CONTRACT
     prompt = fake_client.kwargs["messages"][0]["content"]
     assert "strict JSON" not in prompt
