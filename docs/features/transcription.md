@@ -23,13 +23,15 @@ without its credential; a complete legacy environment group opts it in.
 
 - `TranscriptResult`
 - `transcript.md` with:
+  - a brief warning that AI-generated transcriptions may contain errors
   - `assemblyai_id`
   - `speaker_candidates`
   - editable `speaker_aliases`
   - `speaker_status`
   - diarized transcript lines
-- `notes.md` after confirmed speaker review starts notes generation, or after
-  `meeting-memory summarize` is run manually
+- `notes.md`, carrying the same AI-transcription warning, after confirmed
+  speaker review starts notes generation, or after `meeting-memory summarize`
+  is run manually
 
 ## Threading
 

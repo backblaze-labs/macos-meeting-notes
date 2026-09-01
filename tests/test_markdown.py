@@ -31,6 +31,10 @@ def test_render_transcript_markdown_contains_frontmatter_and_transcript_only() -
     assert 'speaker_status: "needs_review"' in markdown
     assert "summary_status" not in markdown
     assert "# Transcript" in markdown
+    assert (
+        "**Aviso:** Esta información proviene de transcripciones generadas por IA y puede "
+        "contener errores."
+    ) in markdown
     assert "## Summary" not in markdown
     assert "**Speaker A** (0:00:05): We should ship the demo." in markdown
 
@@ -60,6 +64,10 @@ def test_render_notes_markdown_contains_only_derived_sections() -> None:
     markdown = render_notes_markdown(_meta(), summary)
 
     assert "# Meeting Notes" in markdown
+    assert (
+        "**Aviso:** Esta información proviene de transcripciones generadas por IA y puede "
+        "contener errores."
+    ) in markdown
     assert "**Source:** transcript.md" in markdown
     assert "## Summary" in markdown
     assert "## Decisions" in markdown
@@ -151,6 +159,11 @@ def test_render_transcript_stub_is_exact_schema_v2_and_sanitized() -> None:
             "---",
             "",
             "# Transcript",
+            "",
+            (
+                "**Aviso:** Esta información proviene de transcripciones generadas por IA y "
+                "puede contener errores."
+            ),
             "",
             "_Audio saved locally. Transcription is pending._",
             "",
