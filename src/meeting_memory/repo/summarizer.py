@@ -122,7 +122,6 @@ class ClaudeSummarizer:
             lambda: client.messages.create(
                 model=self.model,
                 max_tokens=MAX_SUMMARY_OUTPUT_TOKENS,
-                temperature=0,
                 system=_output_contract(document.profile),
                 messages=[{"role": "user", "content": prompt}],
             ),

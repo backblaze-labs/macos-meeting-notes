@@ -110,7 +110,7 @@ mechanical structural tests, a doctor preflight, and fail-fast configuration
 ### 1.4 References
 
 - AssemblyAI Universal-2 transcription API docs
-- Anthropic Claude API (claude-haiku-4-5)
+- Anthropic Claude API (claude-sonnet-5)
 - Google Calendar API v3
 - Apple ScreenCaptureKit and Core Audio frameworks
 - RFC 2119 key words for requirement levels
@@ -271,7 +271,7 @@ processing or upload MUST require an explicit user backfill/retry action.
 
 ### 3.3 Anthropic Claude API
 
-**REQ-EXT-09** When Notes is configured and invoked, the application MUST use the `anthropic` Python SDK to call Claude, defaulting to `claude-haiku-4-5` and honoring an optional `ANTHROPIC_MODEL` override (§8).
+**REQ-EXT-09** When Notes is configured and invoked, the application MUST use the `anthropic` Python SDK to call Claude, defaulting to `claude-sonnet-5` and honoring an optional `ANTHROPIC_MODEL` override (§8). The app does not override Sonnet's adaptive-thinking effort level.
 
 **REQ-EXT-10** The summarization prompt MUST request one strict structured
 response in a single call. The built-in Classic profile requests Summary,
@@ -1103,7 +1103,7 @@ explicitly. No reachable native UI action writes `.env`.
 | `B2_BUCKET_NAME` | Backup | — | Target B2 bucket |
 | `ASSEMBLYAI_API_KEY` | Transcription | — | AssemblyAI key |
 | `ANTHROPIC_API_KEY` | Notes | — | Claude key for the `summarize` command |
-| `ANTHROPIC_MODEL` | Notes | `claude-haiku-4-5` | Summarization model override (OQ-5) |
+| `ANTHROPIC_MODEL` | Notes | `claude-sonnet-5` | Summarization model override (OQ-5) |
 | `SUMMARY_PROMPT_FILE` | Notes | `~/Library/Application Support/meeting-memory/prompts/summary.md` | Personal Notes instructions plus local Markdown layout; editable from **Configuration › Notes Customization...**. An explicit process or legacy override may select another path. |
 | `KNOWN_SPEAKERS` | Calendar | `{}` | Optional JSON object mapping speaker display names to Calendar attendee match hints; app-managed values live in the private Application Support preference document. |
 | `GOOGLE_CALENDAR_CREDENTIALS_FILE` | Calendar | `credentials.json` | Path to OAuth client secrets |
@@ -1156,4 +1156,4 @@ All v0.1 open questions are resolved as of v0.2 (section retitled from "Open Que
 | OQ-2 | Expected B2 bucket retention policy for audio? | **No lifecycle policy shipped in v1.** Retention is left to the bucket owner as an ops choice and noted in the README. |
 | OQ-3 | Watch multiple Google calendars, or one configured calendar ID? | **Watch all accessible calendars by default.** `GOOGLE_CALENDAR_ID=all` scans non-deleted calendars visible to the authenticated account; set `primary` or a specific calendar ID to narrow. |
 | OQ-4 | Preferences as a native macOS window, or terminal config editor? | **Native settings UI.** Phase 4 stores non-secret values in app-owned preferences and secrets in Keychain while retaining read-only `.env` compatibility and explicit import. |
-| OQ-5 | Is `claude-haiku-4-5` right, or should the model be configurable? | **Use `claude-haiku-4-5`** as the default, with optional `ANTHROPIC_MODEL` and `SUMMARY_PROMPT_FILE` overrides (§8, REQ-EXT-09, REQ-F5-06). Speaker label display names are handled separately by per-meeting `speaker_aliases`. |
+| OQ-5 | Is `claude-sonnet-5` right, or should the model be configurable? | **Use `claude-sonnet-5`** as the default, with optional `ANTHROPIC_MODEL` and `SUMMARY_PROMPT_FILE` overrides (§8, REQ-EXT-09, REQ-F5-06). The application leaves Sonnet's adaptive-thinking effort level at Anthropic's `high` default to prioritize complete notes. Speaker label display names are handled separately by per-meeting `speaker_aliases`. |
