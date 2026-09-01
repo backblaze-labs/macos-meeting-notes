@@ -72,6 +72,11 @@ NOTES_FRONTMATTER_FIELDS = (
     "summary_status",
 )
 
+AI_TRANSCRIPTION_WARNING = (
+    "**Aviso:** Esta información proviene de transcripciones generadas por IA y puede "
+    "contener errores."
+)
+
 
 def render_transcript_stub(
     meta: MeetingMeta,
@@ -79,10 +84,8 @@ def render_transcript_stub(
 ) -> str:
     """Render the complete schema-v2 stub without provider error details."""
 
-    transcription_status = (
-        MeetingJobState.PENDING if policy.transcription else MeetingJobState.NOT_REQUESTED
-    )
-    backup_status = MeetingJobState.PENDING if policy.backup else MeetingJobState.NOT_REQUESTED
+    status = MeetingJobState.PENDING if policy.transcription else MeetingJobState.NOT_REQUESTED
+    backup = MeetingJobState.PENDING if policy.backup else MeetingJobState.NOT_REQUESTED
     diagnostics = meta.capture_diagnostics
     values: dict[str, object] = {
         "schema_version": 2,
@@ -93,28 +96,34 @@ def render_transcript_stub(
         "calendar_title": safe_frontmatter_text(meta.calendar_title),
         "participants": [],
         "assemblyai_id": None,
-        "transcription_status": transcription_status.value,
+        "transcription_status": status.value,
         "speaker_candidates": [safe_frontmatter_text(value) for value in meta.speaker_candidates],
         "speaker_aliases": {},
         "speaker_status": "not_available",
         "b2_audio": None,
         "b2_transcript": None,
-        "backup_status": backup_status.value,
+        "backup_status": backup.value,
         "backup_uploaded_revision": None,
         "capture_mode": diagnostics.mode if diagnostics else None,
         "capture_status": diagnostics.status if diagnostics else "unavailable",
         "capture_diagnostics": diagnostics.to_payload() if diagnostics else None,
     }
-    frontmatter = dump_frontmatter(
-        values,
-        fields=TRANSCRIPT_STUB_FIELDS,
-    )
+    frontmatter = dump_frontmatter(values, fields=TRANSCRIPT_STUB_FIELDS)
     state_text = {
         MeetingJobState.NOT_REQUESTED: "Transcription has not been requested.",
         MeetingJobState.PENDING: "Transcription is pending.",
-    }[transcription_status]
+    }[status]
     return "\n".join(
-        [frontmatter, "", "# Transcript", "", f"_Audio saved locally. {state_text}_", ""]
+        [
+            frontmatter,
+            "",
+            "# Transcript",
+            "",
+            AI_TRANSCRIPTION_WARNING,
+            "",
+            f"_Audio saved locally. {state_text}_",
+            "",
+        ]
     )
 
 
@@ -182,6 +191,8 @@ def render_transcript_body(meta: MeetingMeta, transcript: TranscriptResult) -> s
             f"**Duration:** {meta.duration_minutes} minutes",
             f"**Participants:** {_participants(transcript)}",
             "",
+            AI_TRANSCRIPTION_WARNING,
+            "",
             _transcript_text(transcript),
             "",
         ]
@@ -194,6 +205,8 @@ def render_transcription_failure_body() -> str:
     return "\n".join(
         [
             "# Transcript",
+            "",
+            AI_TRANSCRIPTION_WARNING,
             "",
             "_Transcription failed. Audio remains saved locally._",
             "_Use Retry Failed Transcriptions to try again._",
@@ -223,7 +236,7 @@ def render_notes_markdown(
         fields=NOTES_FRONTMATTER_FIELDS,
     )
     body = _render_notes_report(meta, summary, source_transcript, report_template)
-    return f"{frontmatter}\n\n{body}\n"
+    return f"{frontmatter}\n\n{AI_TRANSCRIPTION_WARNING}\n\n{body}\n"
 
 
 def _render_notes_report(
