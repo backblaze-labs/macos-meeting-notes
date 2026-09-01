@@ -209,6 +209,7 @@ def test_profile_prompt_requests_only_configured_sections(tmp_path, monkeypatch)
         "participant_updates",
         "my_tasks",
     )
+    assert result.sections[0].content == "**Alex:**\n- Shipped the fix."
     assert result.summary is None
 
 
