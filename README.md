@@ -76,7 +76,25 @@ flow and enter credentials only in the app's secure form.
    and application key when they are shown; the application key is displayed
    only once. Also copy the bucket's S3 endpoint, region, and name.
 
-2. Clone and install the source checkout:
+2. Confirm you have Python 3.11 or later. **macOS ships Python 3.9**, which
+   cannot run Meeting Memory:
+
+   ```bash
+   python3 --version
+   ```
+
+   If that reports 3.9 (or the command is missing), install a supported
+   interpreter first:
+
+   ```bash
+   brew install python@3.11
+   ```
+
+   Note that this formula does **not** replace `python3`. `make setup` searches
+   for `python3.11`/`3.12`/`3.13`/`3.14` on its own; if it cannot find one, pass
+   it explicitly with `make SETUP_PYTHON=python3.11 setup`.
+
+3. Clone and install the source checkout:
 
    ```bash
    git clone https://github.com/backblaze-labs/macos-meeting-notes.git
@@ -84,23 +102,28 @@ flow and enter credentials only in the app's secure form.
    make setup
    ```
 
-   `make setup` creates `.venv`, installs dependencies, installs
-   `~/Applications/Meeting Memory.app`, and prints local diagnostics. It is
+   `make setup` creates `.venv`, installs dependencies, copies `.env.example`
+   to `.env`, compiles the Swift capture helper and a minimal FFmpeg AAC
+   encoder from source, installs `~/Applications/Meeting Memory.app`, and
+   prints local diagnostics. Budget a few minutes for the compile. It is
    normal for Backup to be `unconfigured` until the next step.
 
-3. Open the app:
+4. Open the app:
 
    ```bash
-   make PYTHON=.venv/bin/python open-macos-app
+   make open-macos-app
    ```
 
-4. From the menu bar, open **Configuration › Backup...**, select
+   Until B2 is configured the menu bar shows a reduced **Setup Required** menu
+   with no **Start Recording** item. That is expected; the next step unlocks it.
+
+5. From the menu bar, open **Configuration › Backup...**, select
    **Enabled (app-managed)**, and enter the B2 endpoint, region, bucket name,
    application key ID, and application key. Review the upload disclosure,
    save, then quit and reopen Meeting Memory. Secret fields are native secure
    controls, are stored in macOS Keychain, and reopen blank.
 
-5. Verify the required setup:
+6. Verify the required setup:
 
    ```bash
    make doctor
@@ -111,7 +134,7 @@ flow and enter credentials only in the app's secure form.
    configuration without contacting B2; the first completed recording verifies
    the real upload path.
 
-6. Choose an audio mode from the tray, start a short recording, stop it, and
+7. Choose an audio mode from the tray, start a short recording, stop it, and
    confirm the local meeting folder is created. If an upload fails, use
    **Debugging › Retry Pending B2 Backups**.
 
@@ -121,14 +144,14 @@ read [docs/setup-tutorial.md](docs/setup-tutorial.md).
 ### Local development commands
 
 ```bash
-make PYTHON=.venv/bin/python reload-macos-app
+make reload-macos-app
 ```
 
 This updates and restarts the official local app after code changes. To start
 Meeting Memory automatically at login:
 
 ```bash
-make PYTHON=.venv/bin/python install-launch-agent
+make install-launch-agent
 ```
 
 `make doctor` renders one status for Recording Core, Transcription, Backup,
@@ -145,10 +168,15 @@ The clickable app is installed at `~/Applications/Meeting Memory.app` so it can
 be launched from Finder or found with Cmd+Space by searching for
 `Meeting Memory`.
 
+That bundle is a thin wrapper that runs this checkout with absolute paths, so
+**moving, renaming, or deleting the cloned repository breaks the installed app**.
+Your recordings under `MEETINGS_DIR` are unaffected. Rerun `make setup` from the
+new location if you move the checkout.
+
 To remove the login item:
 
 ```bash
-make PYTHON=.venv/bin/python uninstall-launch-agent
+make uninstall-launch-agent
 ```
 
 ## Using the App

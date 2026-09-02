@@ -41,7 +41,8 @@ Install the system build tools once if they are not already present:
 
 ```bash
 xcode-select --install
-brew install python@3.11
+brew install python@3.11    # note: does not replace `python3`;
+                            # use `make SETUP_PYTHON=python3.11 setup` if needed
 ```
 
 ## 2. Clone and Install the Python App
