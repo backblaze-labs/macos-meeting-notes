@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Protocol
 
+from meeting_memory.ui.modal_focus import run_modal
+
 
 class Runner(Protocol):
     def __call__(self, args: list[str], **kwargs: Any) -> Any:
@@ -42,7 +44,7 @@ def show_transcript_window(path: Path) -> None:
     alert.setInformativeText_(path.name)
     alert.addButtonWithTitle_("Done")
     alert.setAccessoryView_(scroll_view)
-    alert.runModal()
+    run_modal(alert)
 
 
 def _read_markdown(path: Path) -> str:

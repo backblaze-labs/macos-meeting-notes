@@ -9,10 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from meeting_memory.types.transcript import SpeakerReviewState
-from meeting_memory.ui.transcript_view import (
-    open_markdown_in_vscode,
-    show_transcript_window,
-)
+from meeting_memory.ui.modal_focus import run_modal
+from meeting_memory.ui.transcript_view import open_markdown_in_vscode, show_transcript_window
 
 MANUAL_OPTION = "Manual..."
 KEEP_LABELS_RESPONSE = 1001
@@ -154,7 +152,7 @@ def _prompt_aliases_appkit(
         alert.addButtonWithTitle_("Open in VS Code")
         alert.addButtonWithTitle_("Full Transcript")
         alert.setAccessoryView_(scroll_view)
-        response = alert.runModal()
+        response = run_modal(alert)
         if int(response) in {1, 1000}:
             return _aliases_from_rows(rows)
         if int(response) == OPEN_MARKDOWN_RESPONSE:

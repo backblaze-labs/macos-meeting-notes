@@ -12,6 +12,7 @@ from meeting_memory.types.configuration_migration import (
     MigrationPreviewState,
 )
 from meeting_memory.ui.configuration_forms import DISCLOSURES, OK_RESPONSES
+from meeting_memory.ui.modal_focus import run_modal
 
 
 def choose_legacy_environment_file() -> Path | None:
@@ -26,7 +27,7 @@ def choose_legacy_environment_file() -> Path | None:
     panel.setCanChooseFiles_(True)
     panel.setAllowsMultipleSelection_(False)
     panel.setShowsHiddenFiles_(True)
-    if int(panel.runModal()) not in OK_RESPONSES:
+    if run_modal(panel) not in OK_RESPONSES:
         return None
     selected = Path(str(panel.URL().path()))
     return selected if selected.is_absolute() else None
@@ -63,7 +64,7 @@ def open_migration_preview(preview: MigrationPreview) -> MigrationConfirmation |
     alert.addButtonWithTitle_("Review Selection")
     alert.addButtonWithTitle_("Cancel")
     alert.setAccessoryView_(panel)
-    if int(alert.runModal()) not in OK_RESPONSES:
+    if run_modal(alert) not in OK_RESPONSES:
         return None
     selected = tuple(
         capability
@@ -87,7 +88,7 @@ def confirm_calendar_authorization() -> bool:
     )
     alert.addButtonWithTitle_("Open Browser")
     alert.addButtonWithTitle_("Cancel")
-    return int(alert.runModal()) in OK_RESPONSES
+    return run_modal(alert) in OK_RESPONSES
 
 
 def _confirm_migration(selected: tuple[Capability, ...]) -> bool:
@@ -107,7 +108,7 @@ def _confirm_migration(selected: tuple[Capability, ...]) -> bool:
     )
     alert.addButtonWithTitle_("Import Selected")
     alert.addButtonWithTitle_("Cancel")
-    return int(alert.runModal()) in OK_RESPONSES
+    return run_modal(alert) in OK_RESPONSES
 
 
 def migration_detail(candidate) -> str:

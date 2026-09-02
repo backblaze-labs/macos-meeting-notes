@@ -21,6 +21,7 @@ from meeting_memory.types.configuration_editing import (
     ConfigurationValue,
     SecretAvailability,
 )
+from meeting_memory.ui.modal_focus import run_modal
 from meeting_memory.ui.preference_forms import open_known_speakers_form
 
 OK_RESPONSES = {1, 1000}
@@ -147,7 +148,7 @@ def open_configuration_form(view: CapabilityConfiguration) -> ConfigurationChang
     alert.addButtonWithTitle_("Save")
     alert.addButtonWithTitle_("Cancel")
     alert.setAccessoryView_(panel)
-    if int(alert.runModal()) not in OK_RESPONSES:
+    if run_modal(alert) not in OK_RESPONSES:
         return None
     enabled = None if popup is None else _ENABLEMENT[int(popup.indexOfSelectedItem())]
     disclosure = not requires_disclosure(view, enabled) or confirm_disclosure(view.capability)
@@ -209,7 +210,7 @@ def confirm_disclosure(capability: Capability) -> bool:
     alert.setInformativeText_(DISCLOSURES[capability])
     alert.addButtonWithTitle_("Save & Enable")
     alert.addButtonWithTitle_("Cancel")
-    return int(alert.runModal()) in OK_RESPONSES
+    return run_modal(alert) in OK_RESPONSES
 
 
 def _secret_bundle(capability: Capability, values: Mapping[SettingKey, str]) -> SecretBundle | None:
