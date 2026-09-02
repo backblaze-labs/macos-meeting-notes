@@ -33,6 +33,7 @@ class RuntimeBackupGate:
         self._enabled = client_present
         self._lock = threading.Lock()
         self._tokens: dict[str, BackupUploadCancellation] = {}
+        self._followups: set[str] = set()
 
     @property
     def enabled(self) -> bool:
@@ -45,6 +46,7 @@ class RuntimeBackupGate:
         with self._lock:
             self._enabled = enabled and client_present
             if not self._enabled:
+                self._followups.clear()
                 for token in self._tokens.values():
                     token.cancel()
 
@@ -52,13 +54,28 @@ class RuntimeBackupGate:
         if not self._allowed():
             return None
         with self._lock:
-            if not self._enabled or meeting_slug in self._tokens:
+            if not self._enabled:
+                return None
+            if meeting_slug in self._tokens:
+                self._followups.add(meeting_slug)
                 return None
             token = BackupUploadCancellation()
             self._tokens[meeting_slug] = token
             return token
 
-    def release(self, meeting_slug: str, token: BackupUploadCancellation) -> None:
+    def release(self, meeting_slug: str, token: BackupUploadCancellation) -> bool:
+        """Release single-flight and report a request refused while uploading."""
+
+        with self._lock:
+            if self._tokens.get(meeting_slug) is token:
+                del self._tokens[meeting_slug]
+            requested = meeting_slug in self._followups
+            self._followups.discard(meeting_slug)
+            return requested
+
+    def abandon(self, meeting_slug: str, token: BackupUploadCancellation) -> None:
+        """Release a worker that never uploaded, leaving any follow-up queued."""
+
         with self._lock:
             if self._tokens.get(meeting_slug) is token:
                 del self._tokens[meeting_slug]

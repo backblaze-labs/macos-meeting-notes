@@ -47,6 +47,7 @@ class RuntimeTranscription:
         client: RuntimeTranscriptionClient,
         thread_factory: ThreadFactory,
         enabled: Callable[[], bool] = lambda: True,
+        on_transcript_committed: Callable[[RuntimeMeetingHandle], None] = lambda _handle: None,
     ) -> None:
         self._state = MeetingStateStore(meetings_dir)
         self._transcripts = TranscriptStateStore(meetings_dir)
@@ -54,6 +55,7 @@ class RuntimeTranscription:
         self._client = client
         self._thread_factory = thread_factory
         self._enabled = enabled
+        self._on_transcript_committed = on_transcript_committed
         self._lock = threading.Lock()
         self._active: set[str] = set()
 
@@ -169,7 +171,16 @@ class RuntimeTranscription:
             if self._record_failure(handle, job_id):
                 self._event_sink(TranscriptionFailed(_meeting_ref(files)))
             return
+        self._notify_transcript_committed(handle)
         self._event_sink(TranscriptReady(_meeting_ref(files)))
+
+    def _notify_transcript_committed(self, handle: RuntimeMeetingHandle) -> None:
+        """Republish the rewritten transcript without failing the finished job."""
+
+        try:
+            self._on_transcript_committed(handle)
+        except Exception:
+            LOGGER.exception("Could not start Backup after the transcript was committed")
 
     def _claim_pending(self, handle: RuntimeMeetingHandle) -> bool:
         files = handle.files

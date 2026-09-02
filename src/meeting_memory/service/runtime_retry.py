@@ -24,6 +24,9 @@ RETRYABLE = {
     MeetingJobState.RUNNING,
     MeetingJobState.FAILED,
 }
+# Automatic per-meeting Backup never resets a live upload: that worker detects the
+# changed revision and reschedules itself, while resetting it would strand the job.
+AUTOMATIC_RETRYABLE = RETRYABLE - {MeetingJobState.RUNNING}
 
 
 @dataclass(frozen=True)
@@ -70,40 +73,54 @@ def retry_v2_backups(meetings_dir: Path, jobs: RuntimeJobs) -> int:
     return attempts
 
 
+def retry_v2_backup(meetings_dir: Path, jobs: RuntimeJobs, meeting_dir: Path) -> bool:
+    """Queue Backup for exactly one meeting without scanning the backlog."""
+
+    if not jobs.backup_enabled:
+        return False
+    meeting = _runtime_meeting(meetings_dir, meeting_dir)
+    if meeting is None or meeting.backup_status not in AUTOMATIC_RETRYABLE:
+        return False
+    jobs.retry_backup(meeting.handle)
+    return True
+
+
 def _runtime_meetings(meetings_dir: Path) -> tuple[RuntimeMeeting, ...]:
     if not meetings_dir.exists():
         return ()
     meetings: list[RuntimeMeeting] = []
     for meeting_dir in sorted(meetings_dir.iterdir()):
-        artifact = inspect_meeting_artifact(meeting_dir)
-        if artifact is None or artifact.ownership is not ArtifactOwnership.V2:
-            continue
-        try:
-            with open_meeting_document(meetings_dir, meeting_dir) as document:
-                meta = _meeting_meta(document.frontmatter)
-                provider_id = _provider_id(document.frontmatter.get("assemblyai_id"))
-                directory = os.fstat(document.directory_fd)
-        except (KeyError, OSError, TypeError, UnicodeError, ValueError):
-            continue
-        meetings.append(
-            RuntimeMeeting(
-                MeetingFiles(
-                    meta,
-                    meeting_dir,
-                    meeting_dir / "recording.m4a",
-                    meeting_dir / "transcript.md",
-                    directory_identity=MeetingDirectoryIdentity(
-                        directory.st_dev,
-                        directory.st_ino,
-                    ),
-                ),
-                artifact.transcription_status,
-                artifact.backup_status,
-                provider_id,
-                MeetingDirectoryIdentity(directory.st_dev, directory.st_ino),
-            )
-        )
+        meeting = _runtime_meeting(meetings_dir, meeting_dir)
+        if meeting is not None:
+            meetings.append(meeting)
     return tuple(meetings)
+
+
+def _runtime_meeting(meetings_dir: Path, meeting_dir: Path) -> RuntimeMeeting | None:
+    artifact = inspect_meeting_artifact(meeting_dir)
+    if artifact is None or artifact.ownership is not ArtifactOwnership.V2:
+        return None
+    try:
+        with open_meeting_document(meetings_dir, meeting_dir) as document:
+            meta = _meeting_meta(document.frontmatter)
+            provider_id = _provider_id(document.frontmatter.get("assemblyai_id"))
+            directory = os.fstat(document.directory_fd)
+    except (KeyError, OSError, TypeError, UnicodeError, ValueError):
+        return None
+    identity = MeetingDirectoryIdentity(directory.st_dev, directory.st_ino)
+    return RuntimeMeeting(
+        MeetingFiles(
+            meta,
+            meeting_dir,
+            meeting_dir / "recording.m4a",
+            meeting_dir / "transcript.md",
+            directory_identity=identity,
+        ),
+        artifact.transcription_status,
+        artifact.backup_status,
+        provider_id,
+        identity,
+    )
 
 
 def _meeting_meta(frontmatter: dict[str, object]) -> MeetingMeta:

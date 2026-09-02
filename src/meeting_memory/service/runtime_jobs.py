@@ -62,6 +62,9 @@ class RuntimeJobs:
                 transcription_client,
                 thread_factory,
                 enabled=lambda: self.transcription_enabled,
+                on_transcript_committed=lambda handle: (
+                    self._start(self._run_backup, handle) if self.backup_enabled else None
+                ),
             )
             if transcription_client is not None
             else None
@@ -178,7 +181,7 @@ class RuntimeJobs:
         token = self._register_backup_token(files.meta.slug)
         if client is None or token is None:
             return
-        revision_changed = False
+        revision_changed = follow_up = False
         try:
             self._state.transition_job(
                 files.directory,
@@ -188,10 +191,10 @@ class RuntimeJobs:
                 expected_directory_identity=handle.directory_identity,
             )
         except MeetingStateConflict:
-            self._backup_gate.release(files.meta.slug, token)
+            self._backup_gate.abandon(files.meta.slug, token)
             return
         except Exception:
-            self._backup_gate.release(files.meta.slug, token)
+            self._backup_gate.abandon(files.meta.slug, token)
             LOGGER.exception("Could not claim Backup job")
             return
 
@@ -221,8 +224,8 @@ class RuntimeJobs:
         except Exception:
             self._mark_backup_failed(handle)
         finally:
-            self._backup_gate.release(files.meta.slug, token)
-        if revision_changed and allow_revision_retry and self.backup_enabled:
+            follow_up = self._backup_gate.release(files.meta.slug, token)
+        if (follow_up or revision_changed and allow_revision_retry) and self.backup_enabled:
             self._start(self._run_backup_retry, handle)
 
     def _valid_backup_files(self, handle: RuntimeMeetingHandle) -> bool:
