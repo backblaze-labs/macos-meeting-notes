@@ -32,6 +32,7 @@ from meeting_memory.service.runtime_jobs import RuntimeJobs
 from meeting_memory.service.runtime_legacy_recovery import LegacyRecoveryRuntime
 from meeting_memory.service.runtime_notes import generate_owned_notes
 from meeting_memory.service.runtime_retry import (
+    retry_v2_backup,
     retry_v2_backups,
     retry_v2_transcriptions,
 )
@@ -107,6 +108,7 @@ def run_runtime_app() -> int:
         committer=committer,
         event_queue=event_queue,
         sync_runner=(lambda: _retry_backups(settings, jobs, backup_client)),
+        backup_runner=lambda p: retry_v2_backup(settings.meetings_dir_path, jobs, p.parent),
         processing_retry_runner=lambda: _retry_transcriptions(
             settings,
             jobs,
@@ -277,13 +279,14 @@ def _retry_transcriptions(settings, jobs, client) -> None:
 def _retry_backups(settings, jobs, client) -> None:
     if client is None or not jobs.backup_enabled:
         return
-    retry_v2_backups(settings.meetings_dir_path, jobs)
-    if jobs.backup_enabled:
-        sync_pending_meetings(
-            settings.meetings_dir_path,
-            client,
-            enabled=lambda: jobs.backup_enabled,
-        )
+    try:
+        retry_v2_backups(settings.meetings_dir_path, jobs)
+        if jobs.backup_enabled:
+            sync_pending_meetings(
+                settings.meetings_dir_path, client, enabled=lambda: jobs.backup_enabled
+            )
+    except Exception:
+        LOGGER.warning("Pending Backup sweep failed", exc_info=True)
 
 
 def _run_setup_app() -> int:

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from meeting_memory.types.speakers import KnownSpeaker
+from meeting_memory.ui.modal_focus import run_modal
 
 OK_RESPONSES = {1, 1000}
 KNOWN_SPEAKERS_BLANK_ROWS = 3
@@ -44,7 +45,7 @@ def open_preferences_form(fields: tuple[PreferenceFormField, ...]) -> dict[str, 
     alert.addButtonWithTitle_("Save")
     alert.addButtonWithTitle_("Cancel")
     alert.setAccessoryView_(view)
-    if not _is_ok_response(alert.runModal()):
+    if not _is_ok_response(run_modal(alert)):
         return None
     return {key: str(value.stringValue()).strip() for key, value in rows}
 
@@ -99,7 +100,7 @@ def open_known_speakers_form(
     alert.addButtonWithTitle_("Save")
     alert.addButtonWithTitle_("Cancel")
     alert.setAccessoryView_(view)
-    if not _is_ok_response(alert.runModal()):
+    if not _is_ok_response(run_modal(alert)):
         return None
     return speakers_from_form_rows(
         (str(alias.stringValue()), str(source.stringValue())) for alias, source in rows

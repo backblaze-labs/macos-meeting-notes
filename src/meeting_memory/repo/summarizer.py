@@ -13,6 +13,7 @@ from meeting_memory.config.defaults import (
     DEFAULT_SUMMARY_PROMPT_FILE,
     DEFAULT_SUMMARY_PROMPT_TEMPLATE,
 )
+from meeting_memory.config.notes_limits import model_output_tokens
 from meeting_memory.config.notes_profile_formatting import normalize_section_content
 from meeting_memory.config.notes_profiles import rendered_section_guidance
 from meeting_memory.config.notes_template import (
@@ -32,8 +33,10 @@ from meeting_memory.types.notes_profile import NotesProfile
 from meeting_memory.types.summary import ActionItem, GeneratedNotesSection, SummaryResult
 
 MAX_TRANSCRIPT_CHARS = 60_000
-MAX_SUMMARY_OUTPUT_TOKENS = 4_096
-DEFAULT_REQUEST_TIMEOUT_SECONDS = 60.0
+MAX_SUMMARY_OUTPUT_TOKENS = 16_000
+# Must accommodate MAX_SUMMARY_OUTPUT_TOKENS on a non-streaming request:
+# a full-length notes response takes well over a minute to generate.
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 300.0
 DEFAULT_PROMPT_TEMPLATE = DEFAULT_SUMMARY_PROMPT_TEMPLATE
 SUMMARY_OUTPUT_CONTRACT = """Output contract (required and not editable):
 - Return one strict JSON object with exactly these keys: summary, decisions, action_items.
@@ -122,7 +125,7 @@ class ClaudeSummarizer:
         response = RetryPolicy(delays=self.retry_delays, sleeper=self.sleeper).call(
             lambda: client.messages.create(
                 model=self.model,
-                max_tokens=MAX_SUMMARY_OUTPUT_TOKENS,
+                max_tokens=model_output_tokens(self.model, MAX_SUMMARY_OUTPUT_TOKENS),
                 system=_output_contract(document.profile),
                 messages=[{"role": "user", "content": prompt}],
             ),

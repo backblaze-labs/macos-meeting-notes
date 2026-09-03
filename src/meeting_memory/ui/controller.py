@@ -53,6 +53,7 @@ class TrayController:
     event_queue: EventQueue = field(default_factory=queue.Queue)
     opener: Callable[[Path], None] = field(default_factory=lambda: open_in_finder)
     sync_runner: Callable[[], object] | None = None
+    backup_runner: Callable[[Path], None] = field(default_factory=lambda: lambda _p: None)
     processing_retry_runner: Callable[[], object] | None = None
     notes_generator: Callable[[Path], Path] | None = None
     notes_allowed: Callable[[], bool] = field(default_factory=lambda: lambda: True)
@@ -194,10 +195,15 @@ class TrayController:
     def confirm_speaker_aliases(
         self, path: Path, aliases: dict[str, str], *, keep_labels: bool = False
     ) -> Path:
-        return confirm_speaker_aliases(path, aliases, keep_labels=keep_labels)
+        reviewed = confirm_speaker_aliases(path, aliases, keep_labels=keep_labels)
+        try:
+            self.backup_runner(reviewed)
+        except Exception:
+            LOGGER.warning("Could not start Backup after speaker review", exc_info=True)
+        return reviewed
 
     def keep_speaker_labels(self, path: Path) -> Path:
-        return confirm_speaker_aliases(path, {}, keep_labels=True)
+        return self.confirm_speaker_aliases(path, {}, keep_labels=True)
 
     def generate_notes(self, path: Path) -> None:
         self._notes_runtime.start(path)

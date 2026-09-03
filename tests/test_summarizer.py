@@ -8,11 +8,13 @@ from types import SimpleNamespace
 import pytest
 
 from meeting_memory.config.defaults import NOTES_PROFILE_MARKER, NOTES_REPORT_TEMPLATE_MARKER
+from meeting_memory.config.notes_limits import model_output_tokens
 from meeting_memory.config.notes_profiles import personal_notes_profile
 from meeting_memory.config.notes_template import compose_notes_profile_document
 from meeting_memory.config.settings import Settings
 from meeting_memory.repo import summarizer
 from meeting_memory.repo.summarizer import (
+    DEFAULT_REQUEST_TIMEOUT_SECONDS,
     MAX_SUMMARY_OUTPUT_TOKENS,
     MAX_TRANSCRIPT_CHARS,
     SUMMARY_OUTPUT_CONTRACT,
@@ -34,7 +36,7 @@ def test_claude_summarizer_requests_json_and_truncates_transcript(monkeypatch) -
     result = ClaudeSummarizer(api_key="anthropic-key", model="claude-test").summarize(transcript)
 
     assert fake_client.api_key == "anthropic-key"
-    assert fake_client.timeout_seconds == 60.0
+    assert fake_client.timeout_seconds == DEFAULT_REQUEST_TIMEOUT_SECONDS
     assert fake_client.kwargs["model"] == "claude-test"
     assert fake_client.kwargs["max_tokens"] == MAX_SUMMARY_OUTPUT_TOKENS
     assert "temperature" not in fake_client.kwargs
@@ -286,3 +288,11 @@ class FakeAnthropicClient:
         self.api_key = api_key
         self.timeout_seconds = timeout_seconds
         return self
+
+
+def test_model_output_tokens_respects_lower_model_limits() -> None:
+    ceiling = MAX_SUMMARY_OUTPUT_TOKENS
+    assert model_output_tokens("claude-sonnet-5", ceiling) == ceiling
+    assert model_output_tokens("claude-3-haiku-20240307", ceiling) == 4_096
+    assert model_output_tokens("claude-3-opus-latest", ceiling) == 4_096
+    assert model_output_tokens(" Claude-3-5-Sonnet-20241022 ", ceiling) == 8_192
