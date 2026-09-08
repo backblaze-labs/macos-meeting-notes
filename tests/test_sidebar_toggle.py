@@ -72,21 +72,16 @@ def test_left_click_toggles_panel_exactly_once() -> None:
     assert panel.toggle_calls == 1
 
 
-def test_right_click_does_not_toggle_and_shows_only_quit() -> None:
+def test_right_click_does_not_toggle_and_shows_the_app_menu() -> None:
+    # The detached rumps menu (`ui/status_menu.py` keeps it rebuilt) is what
+    # pops up: recent meetings, Configuration, Debugging, Quit.
     toggle, rumps_app, panel, appkit, _on_quit = _make_toggle()
     toggle.install()
     appkit.right_click()
     assert panel.toggle_calls == 0
-    assert len(appkit.quit_menus_shown) == 1
-    assert appkit.quit_menus_shown[0]["status_item"] is rumps_app._nsapp.nsstatusitem
-
-
-def test_quit_item_invokes_on_quit() -> None:
-    toggle, _rumps_app, _panel, appkit, on_quit_calls = _make_toggle()
-    toggle.install()
-    appkit.right_click()
-    appkit.quit_menus_shown[0]["on_quit"]()
-    assert on_quit_calls == [None]
+    assert len(appkit.menus_shown) == 1
+    assert appkit.menus_shown[0]["status_item"] is rumps_app._nsapp.nsstatusitem
+    assert appkit.menus_shown[0]["menu"] is rumps_app.mainmenu
 
 
 @pytest.mark.parametrize(

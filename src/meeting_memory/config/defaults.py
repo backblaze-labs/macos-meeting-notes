@@ -23,7 +23,9 @@ NOTES_PROFILE_MARKER = "<!-- meeting-memory:notes-profile -->"
 DEFAULT_NOTES_INSTRUCTIONS_TEMPLATE = """Privacy rules:
 - Omit personal information that is not needed to understand the work.
 - Do not include emails, phone numbers, addresses, account IDs, or personal anecdotes.
-- Prefer speaker labels, roles, or null instead of full names when an owner is uncertain.
+- A `Calendar attendees:` line may precede the transcript. Name an owner only when the
+  transcript makes clear which attendee spoke; otherwise prefer speaker labels, roles,
+  or null instead of guessing a full name.
 - Do not quote casual/private conversation unless it directly affects a work decision.
 
 Content rules:

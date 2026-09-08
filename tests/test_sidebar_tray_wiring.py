@@ -1,20 +1,17 @@
-"""Tests for SidebarWiring — see
-docs/features/sidebar/completed/03-status-item-toggle.md (toggle) and
-docs/features/sidebar/completed/05-vertical-content.md (content)."""
+"""Tests for SidebarWiring: toggle install, compact content, tick, reveal,
+and the hide-while-recording preference."""
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from appkit_fakes import reset_fake_appkit_state
-from sidebar_view_model_fixtures import idle_view_model
-from sidebar_wiring_fakes import (
-    FakePanel,
-    _all_containers,
-    _FakeController,
-    _label_text,
-)
+from sidebar_view_model_fixtures import RecordingView, idle_view_model
+from sidebar_wiring_fakes import FakePanel, _FakeController
 from tray_fakes import FakeRumps
 
+from meeting_memory.ui.sidebar_geometry import Orientation, SnapAnchor
 from meeting_memory.ui.sidebar_tray_wiring import SidebarWiring
 
 
@@ -25,11 +22,16 @@ def _reset_appkit_state():
     reset_fake_appkit_state()
 
 
+def _buttons(root):
+    return [sub for sub in root.subviews if hasattr(sub, "_mm_image_view")]
+
+
 def test_no_panel_when_using_a_fake_rumps_module() -> None:
     # A non-None rumps_module means tests/a fake, so nothing sidebar-related
     # should touch real AppKit unless a fake panel is injected explicitly.
     wiring = SidebarWiring(FakeRumps())
     assert wiring.panel is None
+    assert wiring.is_visible is False
 
 
 def test_an_injected_panel_factory_is_used_even_with_a_fake_rumps_module() -> None:
@@ -65,84 +67,72 @@ def test_rebuild_is_a_noop_without_a_panel() -> None:
     assert wiring.panel is None
 
 
-def test_rebuild_sets_the_panel_content_view() -> None:
+def test_rebuild_sets_compact_content_with_three_buttons() -> None:
     wiring = SidebarWiring(None, panel_factory=FakePanel)
 
     wiring.rebuild(idle_view_model())
 
-    assert wiring.panel.content_view is not None
+    assert len(_buttons(wiring.panel.content_view)) == 3
 
 
-def test_rebuild_reuses_one_section_state_across_calls() -> None:
-    wiring = SidebarWiring(None, panel_factory=FakePanel)
-
-    wiring.rebuild(idle_view_model())
-    first_section_state = wiring._section_state
-    wiring.rebuild(idle_view_model())
-
-    assert wiring._section_state is first_section_state
-
-
-def test_a_section_toggle_rebuilds_against_the_same_view_model() -> None:
-    wiring = SidebarWiring(None, panel_factory=FakePanel)
-    view_model = idle_view_model()
-
-    wiring.rebuild(view_model)
-    first_content_view = wiring.panel.content_view
-    configuration_header = next(
-        sub for sub in _all_containers(first_content_view) if _label_text(sub) == "▸ Configuration"
-    )
-
-    configuration_header.mouseUp_(None)
-
-    assert wiring.panel.content_view is not first_content_view
-
-
-def test_toggle_recording_and_quit_callbacks_are_bound_at_construction() -> None:
-    recording_toggles = []
-    quits = []
+def test_callbacks_are_bound_at_construction() -> None:
+    calls: list[str] = []
     wiring = SidebarWiring(
         None,
-        on_toggle_recording=lambda: recording_toggles.append(1),
-        on_quit=lambda: quits.append(1),
+        on_toggle_recording=lambda: calls.append("record"),
+        on_screenshot=lambda: calls.append("shot"),
+        on_quit=lambda: calls.append("quit"),
         panel_factory=FakePanel,
     )
-    view_model = idle_view_model()
 
-    wiring.rebuild(view_model)
-    recording_row = next(
-        sub
-        for sub in _all_containers(wiring.panel.content_view)
-        if _label_text(sub) == "▶ Start Recording"
-    )
-    quit_row = next(
-        sub for sub in _all_containers(wiring.panel.content_view) if _label_text(sub) == "Quit"
-    )
-
-    recording_row.mouseUp_(None)
-    quit_row.mouseUp_(None)
-
-    assert recording_toggles == [1]
-    assert quits == [1]
-
-
-def test_tick_updates_the_recording_row_in_place() -> None:
-    wiring = SidebarWiring(None, panel_factory=FakePanel)
     wiring.rebuild(idle_view_model())
+    for button in _buttons(wiring.panel.content_view):
+        button.mouseUp_(None)
+
+    assert calls == ["record", "shot", "quit"]
+
+
+def test_tick_updates_the_record_button_in_place_while_recording() -> None:
+    wiring = SidebarWiring(None, panel_factory=FakePanel)
+    wiring.rebuild(replace(idle_view_model(), recording=_recording(True, 1)))
     content_before = wiring.panel.content_view
 
     wiring.tick(_FakeController(is_recording=True, duration=5))
 
     assert wiring.panel.content_view is content_before
-    recording_row = next(
-        sub for sub in _all_containers(content_before) if getattr(sub, "update", None) is not None
-    )
-    assert "0:05" in _label_text(recording_row)
+    assert _buttons(content_before)[0].tooltip == "Stop recording · 00:05"
+
+
+def test_tick_rebuilds_when_the_recording_state_flips() -> None:
+    # The timer slot changes the panel size, so a start/stop that reached
+    # the recorder without a tray refresh still resizes the panel.
+    wiring = SidebarWiring(None, panel_factory=FakePanel)
+    wiring.rebuild(idle_view_model())
+    idle_content = wiring.panel.content_view
+
+    wiring.tick(_FakeController(is_recording=True, duration=2))
+
+    assert wiring.panel.content_view is not idle_content
+    assert _buttons(wiring.panel.content_view)[0].tooltip == "Stop recording · 00:02"
 
 
 def test_tick_is_a_noop_before_the_first_rebuild() -> None:
     wiring = SidebarWiring(FakeRumps())
     wiring.tick(_FakeController())  # should not raise
+
+
+def test_orientation_change_rebuilds_against_the_last_view_model() -> None:
+    wiring = SidebarWiring(None, panel_factory=FakePanel)
+    wiring.rebuild(idle_view_model())
+    vertical = wiring.panel.content_view
+
+    wiring.panel.drag_to(SnapAnchor.RIGHT, Orientation.VERTICAL)
+    assert wiring.panel.content_view is vertical  # same orientation: nothing to do
+
+    wiring.panel.drag_to(SnapAnchor.TOP, Orientation.HORIZONTAL)
+    horizontal = wiring.panel.content_view
+    assert horizontal is not vertical
+    assert horizontal.frame().size.width > horizontal.frame().size.height
 
 
 def test_reveal_shows_the_panel() -> None:
@@ -151,6 +141,7 @@ def test_reveal_shows_the_panel() -> None:
     wiring.reveal()
 
     assert wiring.panel.show_calls == 1
+    assert wiring.is_visible is True
 
 
 def test_reveal_hides_instead_when_hide_while_recording_is_on() -> None:
@@ -164,64 +155,27 @@ def test_reveal_hides_instead_when_hide_while_recording_is_on() -> None:
     assert (wiring.panel.show_calls, wiring.panel.hide_calls) == (0, 1)
 
 
-def test_hide_while_recording_row_lives_in_configuration_and_toggles() -> None:
+def test_preference_rows_toggle_hide_while_recording_and_notify() -> None:
     from meeting_memory.ui.sidebar_prefs import hide_while_recording
 
+    changes: list[int] = []
     wiring = SidebarWiring(None, panel_factory=FakePanel)
-    wiring.rebuild(idle_view_model())
-    wiring._section_state.toggle("configuration")  # expanded so the row renders
-    wiring.rebuild(idle_view_model())
-    row = next(
-        sub
-        for sub in _all_containers(wiring.panel.content_view)
-        if _label_text(sub) == "Hide sidebar while recording"
-    )
+    (row,) = wiring.preference_rows(on_change=lambda: changes.append(1))
+    assert row.label == "Hide sidebar while recording"
 
-    row.mouseUp_(None)
+    row.action()
 
     assert hide_while_recording(wiring.panel.appkit) is True
-    assert any(
-        _label_text(sub) == "✓ Hide sidebar while recording"
-        for sub in _all_containers(wiring.panel.content_view)
-    )
+    assert changes == [1]
+    assert wiring.preference_rows(on_change=lambda: None)[0].label.startswith("✓ ")
+    assert SidebarWiring(FakeRumps()).preference_rows(on_change=lambda: None) == ()
 
 
-def test_reveal_is_a_noop_without_a_panel() -> None:
+def test_reveal_and_toggle_are_noops_without_a_panel() -> None:
     wiring = SidebarWiring(FakeRumps())
-    wiring.reveal()  # should not raise
+    wiring.reveal()
+    wiring.toggle_panel()
     assert wiring.panel is None
-
-
-def test_section_toggle_does_not_duplicate_the_preference_row() -> None:
-    # Regression: rebuild() used to store the augmented snapshot and hand it
-    # back to on_rebuild, so every header click appended another copy.
-    wiring = SidebarWiring(None, panel_factory=FakePanel)
-    wiring.rebuild(idle_view_model())
-
-    for _ in range(3):  # expand, collapse, expand — each goes through on_rebuild
-        header = next(
-            sub
-            for sub in _all_containers(wiring.panel.content_view)
-            if (_label_text(sub) or "").endswith("Configuration")
-        )
-        header.mouseUp_(None)
-
-    labels = [_label_text(sub) for sub in _all_containers(wiring.panel.content_view)]
-    assert labels.count("Hide sidebar while recording") == 1
-
-
-def test_vertical_content_is_capped_by_the_panels_max_content_height() -> None:
-    from appkit_widget_fakes import FakeNSScrollView
-
-    class ShortPanel(FakePanel):
-        def max_content_height(self) -> float:
-            return 100.0
-
-    wiring = SidebarWiring(None, panel_factory=ShortPanel)
-    wiring.rebuild(idle_view_model())
-
-    assert isinstance(wiring.panel.content_view, FakeNSScrollView)
-    assert wiring.panel.content_view.frame().size.height == 100.0
 
 
 def test_a_failed_toggle_install_is_retried_a_bounded_number_of_times() -> None:
@@ -279,3 +233,9 @@ def test_hide_while_recording_off_leaves_visibility_alone() -> None:
     wiring.tick(_FakeController(is_recording=True, duration=1))
 
     assert wiring.panel.is_visible is True
+
+
+def _recording(is_recording: bool, duration: int = 0) -> RecordingView:
+    return RecordingView(
+        is_recording=is_recording, duration_seconds=duration, audio_warning=False, label="x"
+    )

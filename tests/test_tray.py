@@ -8,12 +8,13 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sidebar_wiring_fakes import FakePanel, _all_containers, _label_text
-from tray_fakes import FakeClickAppKit, FakeRumps
+from tray_fakes import FakeClickAppKit, FakeRumps, submenu_titles
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.recorder import RecordingResult, RecordingSession
 from meeting_memory.types.events import MeetingDetected, NotifyEvent, SidebarRevealRequested
 from meeting_memory.types.meeting import MeetingMeta
+from meeting_memory.ui import menu
 from meeting_memory.ui.tray import RumpsTrayApp, TrayController
 
 
@@ -158,14 +159,14 @@ def test_rumps_tray_app_updates_recording_duration_label(tmp_path: Path) -> None
     current_time = datetime(2026, 6, 11, 9, 1, 5, tzinfo=UTC)
     app.drain_events()
 
-    # The tick updates the panel's recording row in place; the menu bar item
-    # itself never carries the timer (docs/features/sidebar.md).
-    recording_row = next(
+    # The tick updates the panel's record button (an icon, not a word) in
+    # place; the menu bar item itself never carries the timer.
+    record_button = next(
         sub
         for sub in _all_containers(app.sidebar.panel.content_view)
         if getattr(sub, "update", None) is not None
     )
-    assert _label_text(recording_row) == "■ Stop Recording · 01:05"
+    assert (record_button.tooltip, _label_text(record_button)) == ("Stop recording · 01:05", None)
     assert app.app.title is None
 
 
@@ -184,9 +185,19 @@ def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
     assert app.app.title is None
     assert app.app.icon.endswith("robot-template.png")
     assert app.app.template is True
-    # No runtime menu is built at all: quitting lives on the status item's
-    # right-click menu (ui/sidebar_toggle.py) and in the panel's Quit row.
-    assert app.app.menu.items == []
+    # The rumps menu is the status item's right-click menu (ui/status_menu.py);
+    # Record and Screenshot live only in the sidebar.
+    titles = [item.title for item in app.app.menu.items if item is not None]
+    assert titles.count(menu.QUIT_LABEL) == 1
+    assert titles.count(menu.CONFIGURATION_LABEL) == 1
+    assert titles.count(menu.DEBUGGING_LABEL) == 1
+    assert menu.SCREENSHOT_LABEL not in titles
+    assert not any("Recording" in title for title in titles)
+    assert submenu_titles(app, menu.CONFIGURATION_LABEL)[:3] == [
+        menu.AUDIO_MODE_HEADER,
+        "✓ Full Meeting",
+        "Silent System Only",
+    ]
 
 
 def _settings(tmp_path: Path) -> Settings:

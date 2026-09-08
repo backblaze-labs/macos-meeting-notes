@@ -1,17 +1,15 @@
-"""State -> view snapshot shared by the dropdown menu and (later) the
-sidebar panel. See docs/features/sidebar/completed/04-render-seam.md.
+"""State -> view snapshot shared by the status-item menu and the sidebar.
 
-Pure refactor: `rebuild_menu()` must render byte-identical menus after
-routing through this module. Any diff in rendered labels is a bug in this
-plan, not an intentional change — see the snapshot test in
-tests/test_sidebar_view_model.py.
+`ui/tray.py:refresh_sidebar` builds one immutable `SidebarViewModel` after
+every state change. The compact sidebar renders only `recording` (plus its
+own fixed screenshot and quit buttons); `ui/status_menu.py` renders the rest
+as the menu behind a right-click on the menu bar icon.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from meeting_memory.service.audio_modes import AUDIO_MODES
@@ -19,11 +17,9 @@ from meeting_memory.types.capabilities import Capability, ReadinessReport
 from meeting_memory.ui import menu
 from meeting_memory.ui.audio_modes import AudioModeMenu
 from meeting_memory.ui.controller import TrayController
-from meeting_memory.ui.processing_actions import run_processing_task
 from meeting_memory.ui.setup_readiness import readiness_menu_label, readiness_tooltip
 
 RECENT_MEETINGS_CAP = 3
-PENDING_EMPTY_TOOLTIP = "No meetings currently need review, notes, or a retry."
 RECOVERED_ROW_TOOLTIP = "Recover this recording and resume transcription."
 B2_SYNC_TOOLTIP = "Upload meetings whose B2 backup is pending or failed."
 TRANSCRIPTION_RETRY_TOOLTIP = "Re-run AssemblyAI transcription using the saved local audio."
@@ -43,8 +39,6 @@ class ConfigurationActions:
 
 @dataclass(frozen=True)
 class DebuggingActions:
-    review_speakers: Callable[[Path], None]
-    generate_notes: Callable[[Path], None]
     process_recovered_recording: Callable[[Any], None]
     scan_legacy_recoveries: Callable[[], None]
     sync_to_b2: Callable[[], None]
@@ -81,17 +75,12 @@ class SidebarViewModel:
     recording: RecordingView
     audio_modes: tuple[RowView, ...]
     recent: SectionView
-    pending: SectionView
-    recovered: SectionView  # rows empty -> section hidden, see submenus.py
+    recovered: SectionView  # rows empty -> section hidden
     readiness: tuple[RowView, ...]
     configuration: tuple[RowView, ...]
     diagnostics: tuple[RowView, ...]
     open_meetings_folder: RowView
     quit: RowView
-    # Latest lifecycle message ("Recording saved · processing queued",
-    # "Transcript ready · review speakers") — the post-stop status line the
-    # research pass found in Fireflies/Notion/tl;dv. None until one arrives.
-    status: RowView | None = None
 
 
 def build_view_model(
@@ -101,14 +90,11 @@ def build_view_model(
     audio_mode_menu: AudioModeMenu,
     configuration_actions: ConfigurationActions,
     debugging_actions: DebuggingActions,
-    status: RowView | None = None,
 ) -> SidebarViewModel:
-    recording = recording_view_for(controller)
     return SidebarViewModel(
-        recording=recording,
+        recording=recording_view_for(controller),
         audio_modes=_audio_mode_rows(audio_mode_menu),
         recent=_recent_section(controller),
-        pending=_pending_section(controller, debugging_actions),
         recovered=_recovered_section(controller, debugging_actions),
         readiness=_readiness_rows(readiness_report),
         configuration=_configuration_rows(configuration_actions),
@@ -117,15 +103,12 @@ def build_view_model(
             label=menu.OPEN_MEETINGS_LABEL, action=controller.open_meetings_folder
         ),
         quit=RowView(label=menu.QUIT_LABEL),  # real quit callback is rumps-specific; see tray.py
-        status=status,
     )
 
 
 def recording_view_for(controller: TrayController) -> RecordingView:
-    """Public so callers can recompute just this piece — e.g. `ui/tray.py`'s
-    1 Hz tick, which updates the sidebar's recording row in place rather
-    than rebuilding the whole panel content (see plan 05's "timer updates"
-    decision)."""
+    """Public so the 1 Hz tick can recompute just this piece and update the
+    sidebar's record button in place rather than rebuilding the panel."""
 
     recorder = controller.recorder
     is_recording = recorder.is_recording
@@ -165,27 +148,6 @@ def _recent_section(controller: TrayController) -> SectionView:
             for item in meetings[:RECENT_MEETINGS_CAP]
         ),
         empty_label=menu.NO_MEETINGS_LABEL if not meetings else None,
-    )
-
-
-def _pending_section(controller: TrayController, actions: DebuggingActions) -> SectionView:
-    tasks = controller.pending_processing_tasks()
-    return SectionView(
-        title=menu.processing_header_label(len(tasks)),
-        rows=tuple(
-            RowView(
-                label=menu.processing_task_label(task),
-                tooltip=menu.processing_task_tooltip(task),
-                action=lambda task=task: run_processing_task(
-                    task,
-                    review_speakers=actions.review_speakers,
-                    generate_notes=actions.generate_notes,
-                ),
-            )
-            for task in tasks
-        ),
-        # Pending's header always shows, even at zero tasks (unlike recovered).
-        empty_label=PENDING_EMPTY_TOOLTIP if not tasks else None,
     )
 
 

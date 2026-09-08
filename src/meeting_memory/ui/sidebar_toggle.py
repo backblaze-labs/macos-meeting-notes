@@ -34,7 +34,7 @@ class ClickAppKit(Protocol):
 
     def make_click_target(self, handler: Any) -> Any: ...
     def install_right_click_monitor(self, button: Any, handler: Any) -> Any: ...
-    def show_quit_menu(self, status_item: Any, on_quit: Any) -> None: ...
+    def show_menu(self, status_item: Any, menu: Any) -> None: ...
     def ensure_quit_item(self, menu: Any, on_quit: Any) -> None: ...
     def set_recording_indicator(self, button: Any, on: bool) -> None: ...
 
@@ -106,8 +106,11 @@ class SidebarToggle:
         self._panel.toggle()
 
     def _handle_right_click(self) -> None:
+        """Pop up the app's own rumps menu (`ui/status_menu.py` keeps it
+        rebuilt): recent meetings, Configuration, Debugging, and Quit."""
+
         status_item = self._rumps_app._nsapp.nsstatusitem
-        self._appkit.show_quit_menu(status_item, self._on_quit)
+        self._appkit.show_menu(status_item, self._original_menu())
 
     def _restore_menu(self, status_item: Any) -> None:
         try:
@@ -154,7 +157,6 @@ class _RealClickAppKit:
     def __init__(self) -> None:
         # Strong references: pyobjc will not retain these for us, and a
         # collected menu or target silently stops working.
-        self._quit_menu: Any = None
         self._quit_target: Any = None
 
     def make_click_target(self, handler: Any) -> Any:
@@ -180,14 +182,8 @@ class _RealClickAppKit:
             NSEventMaskRightMouseDown, monitor_handler
         )
 
-    def show_quit_menu(self, status_item: Any, on_quit: Any) -> None:
-        if self._quit_menu is None:
-            from AppKit import NSMenu
-
-            menu = NSMenu.alloc().init()
-            menu.addItem_(self._quit_item(on_quit))
-            self._quit_menu = menu
-        status_item.popUpStatusItemMenu_(self._quit_menu)
+    def show_menu(self, status_item: Any, menu: Any) -> None:
+        status_item.popUpStatusItemMenu_(menu)
 
     def ensure_quit_item(self, menu: Any, on_quit: Any) -> None:
         if menu is not None and menu.numberOfItems() == 0:

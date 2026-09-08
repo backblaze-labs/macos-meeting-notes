@@ -6,7 +6,11 @@ import pytest
 from meeting_memory.service import legacy_snapshot
 from meeting_memory.service.meeting_state import MeetingStateStore
 from meeting_memory.service.meeting_store import MeetingStore
-from meeting_memory.service.runtime_notes import generate_owned_notes, generate_v2_notes
+from meeting_memory.service.runtime_notes import (
+    generate_owned_notes,
+    generate_v2_notes,
+    notes_input_text,
+)
 from meeting_memory.service.storage import write_meeting_dir
 from meeting_memory.service.transcript_review import confirm_speaker_aliases
 from meeting_memory.service.transcript_state import TranscriptStateStore
@@ -20,8 +24,10 @@ from meeting_memory.types.transcript import TranscriptResult, TranscriptSegment
 class Summarizer:
     def __init__(self, callback=None) -> None:
         self.callback = callback
+        self.text: str | None = None
 
-    def summarize(self, _text: str) -> SummaryResult:
+    def summarize(self, text: str) -> SummaryResult:
+        self.text = text
         if self.callback:
             self.callback()
         return SummaryResult(summary="Reviewed")
@@ -93,6 +99,33 @@ def test_v2_notes_publishes_after_stable_confirmed_snapshot(tmp_path: Path) -> N
 
     assert notes.read_text(encoding="utf-8").startswith("---\n")
     assert "Reviewed" in notes.read_text(encoding="utf-8")
+
+
+def test_v2_notes_prefix_calendar_attendees_for_the_summarizer(tmp_path: Path) -> None:
+    # Attendees come from the calendar event; nobody types them in after the
+    # meeting. The summarizer sees them ahead of the (label-only) transcript.
+    meetings, files, state = _confirmed_meeting(tmp_path)
+    state.merge_fields(
+        files.directory,
+        ArtifactFieldOwner.SPEAKERS,
+        {"speaker_candidates": ["Alex Doe", "Sam Roe", "Alex Doe"]},
+    )
+    summarizer = Summarizer()
+
+    generate_v2_notes(meetings, files.directory, summarizer)
+
+    assert summarizer.text is not None
+    assert summarizer.text.startswith("Calendar attendees: Alex Doe, Sam Roe\n\n")
+    assert "Hello" in summarizer.text
+
+
+def test_notes_input_text_without_attendees_is_the_bare_body() -> None:
+    assert notes_input_text({}, "body") == "body"
+    assert notes_input_text({"speaker_candidates": []}, "body") == "body"
+    assert notes_input_text({"speaker_candidates": "Alex"}, "body") == "body"
+    assert notes_input_text({"speaker_candidates": [" Alex ", ""]}, "body") == (
+        "Calendar attendees: Alex\n\nbody"
+    )
 
 
 def test_v2_notes_publishes_with_custom_report_layout(tmp_path: Path) -> None:

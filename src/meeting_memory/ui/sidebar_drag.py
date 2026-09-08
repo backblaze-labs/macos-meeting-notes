@@ -13,7 +13,7 @@ from typing import Any
 
 from meeting_memory.ui.sidebar_theme import header_view, on_header_color
 
-CORNER_RADIUS = 12.0
+CORNER_RADIUS = 14.0
 
 _drag_handle_view_classes: dict[int, type] = {}
 
@@ -121,9 +121,13 @@ def position_drag_indicator(
         strip.setFrame_(appkit.NSMakeRect(0.0, 0.0, 0.0, 0.0))
         return
     strip.setFrame_(appkit.NSMakeRect(0.0, height - handle_height, width, handle_height))
+    grabber_width = min(60.0, width - 8.0)  # the compact panel is only 44 pt wide
     indicator.setFrame_(
         appkit.NSMakeRect(
-            (width - 60.0) / 2, height - handle_height + 1.0, 60.0, handle_height - 2.0
+            (width - grabber_width) / 2,
+            height - handle_height + 1.0,
+            grabber_width,
+            handle_height - 2.0,
         )
     )
 

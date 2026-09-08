@@ -46,20 +46,18 @@ def real_appkit() -> Any:
         NSApplicationDidChangeScreenParametersNotification = (
             AppKit.NSApplicationDidChangeScreenParametersNotification
         )
-        # Vertical content: sidebar_widgets.py / sidebar_vertical.py (plan 05)
+        # Content views: sidebar_widgets.py / sidebar_compact.py
         NSView = AppKit.NSView
         NSTextField = AppKit.NSTextField
         NSColor = AppKit.NSColor
         NSScrollView = AppKit.NSScrollView
         NSLineBreakByTruncatingTail = AppKit.NSLineBreakByTruncatingTail
-        # Horizontal bar + overflow popover: sidebar_horizontal.py (plan 06)
-        NSObject = Foundation.NSObject
-        NSPopUpButton = AppKit.NSPopUpButton
-        NSViewController = AppKit.NSViewController
-        NSPopover = AppKit.NSPopover
-        NSPopoverBehaviorTransient = AppKit.NSPopoverBehaviorTransient
-        NSMaxYEdge = AppKit.NSMaxYEdge
-        NSMinYEdge = AppKit.NSMinYEdge
+        # Compact icon buttons: sidebar_compact.py
+        NSImage = AppKit.NSImage
+        NSImageView = AppKit.NSImageView
+        NSImageSymbolConfiguration = AppKit.NSImageSymbolConfiguration
+        NSImageScaleProportionallyDown = AppKit.NSImageScaleProportionallyDown
+        NSFontWeightRegular = AppKit.NSFontWeightRegular
         # Theme: sidebar_theme.py
         NSFont = AppKit.NSFont
         NSFontWeightSemibold = AppKit.NSFontWeightSemibold

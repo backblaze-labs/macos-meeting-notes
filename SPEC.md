@@ -359,13 +359,13 @@ fields contain at least one of:
 
 ### F3: Recording Control
 
-**REQ-F3-01** The sidebar (F8) MUST expose a **Start Recording** row when no recording is active, and a **Stop Recording** row (with a live recording duration) when a session is active. The menu bar item itself carries no title or timer.
+**REQ-F3-01** The sidebar (F8) MUST expose a record button when no recording is active, and a stop button (with a live recording duration beside it) when a session is active. The menu bar item itself carries no title or timer.
 
 **REQ-F3-02** The application MUST NOT allow more than one recording session to be active at a time. If **Start Recording** is triggered while a session is active, it MUST be ignored.
 
-**REQ-F3-03** The app MUST make recording state visible: starting a recording MUST force the sidebar visible (REQ-F8-14), and the sidebar's **Stop Recording** row MUST carry the live timer and the audio warning glyph.
+**REQ-F3-03** The app MUST make recording state visible: starting a recording MUST force the sidebar visible (REQ-F8-14), and the sidebar's stop button MUST carry the live timer and, on an audio warning, the orange warning tint plus a `⚠︎` tooltip.
 
-**REQ-F3-04** The application MUST accept start-recording input from two sources: (a) the sidebar's recording row, (b) the "Record" action in a pre-meeting notification. It MUST accept stop-recording input from the sidebar and from a "Stop" notification action.
+**REQ-F3-04** The application MUST accept start-recording input from two sources: (a) the sidebar's record button, (b) the "Record" action in a pre-meeting notification. It MUST accept stop-recording input from the sidebar and from a "Stop" notification action.
 
 **REQ-F3-05** When recording starts, the application MUST resolve a title from the matched calendar event within ±5 minutes when available. If no matching event is available, manual tray starts SHOULD prompt for an ad-hoc title before falling back to `"Untitled"`.
 
@@ -438,12 +438,15 @@ completion.
 ### F5: Summarization
 
 **REQ-F5-01** When Notes is `ready`, summarization MUST start automatically
-after UI speaker review confirms `speaker_status`, whether the user assigns
-names or explicitly keeps the detected labels. When Notes is unavailable,
-the reviewed transcript MUST remain complete and the Notes state MUST offer
-setup/retry without blocking it. `meeting-memory summarize <meeting-folder>`
-MUST remain available as a manual backfill/retry command for confirmed
-transcripts.
+as soon as transcription succeeds, with no manual speaker-review step: the
+tray confirms the diarized labels as-is (`speaker_status: confirmed`,
+`speaker_aliases` empty) and the summarizer receives the meeting's Calendar
+attendees (`speaker_candidates`) ahead of the transcript so it can name owners
+where the conversation makes the mapping clear. When Notes is unavailable,
+the transcript MUST remain complete and Notes MUST be retryable with
+`meeting-memory summarize <meeting-folder>`, which MUST remain available as a
+manual backfill/retry command. `meeting-memory relabel` remains the
+deterministic local way to apply explicit `speaker_aliases` afterwards.
 
 **REQ-F5-02** The Claude prompt MUST instruct the model to produce output in a
 strict format parseable into the exact sections selected by the effective
@@ -565,18 +568,18 @@ snapshot records its result subject to REQ-F7-09; a partial snapshot returns to
 
 ### F8: Tray Menu and Sidebar
 
-> As of the sidebar cutover (`docs/features/sidebar.md`), the runtime tray
-> builds no dropdown menu. REQ-F8-01 and REQ-F8-12 describe the **content**
-> that MUST remain reachable; it is rendered by the sidebar panel
-> (REQ-F8-13 – REQ-F8-17) rather than a native menu. The setup tray shown
+> As of the sidebar cutover (`docs/features/sidebar.md`), the runtime
+> surface is split in two: the compact sidebar panel holds only the record,
+> screenshot, and quit buttons (REQ-F8-13 – REQ-F8-17); the menu below is the
+> native menu behind a right-click on the menu bar icon. The setup tray shown
 > before Recording Core is configured keeps its plain dropdown unchanged.
 
-**REQ-F8-01** The runtime surface MUST contain the following items (originally the dropdown order; the sidebar renders the same rows as sections):
+**REQ-F8-01** The right-click menu MUST contain the following items, in order:
 
 ```
 ● Meeting Memory                  (app title, non-interactive)
 ─────────────────
-▶ Start Recording                 (or ■ Stop Recording · <HH:MM> while active)
+Show Sidebar                      (or Hide Sidebar while the panel is visible)
 ─────────────────
 Recent Meetings                   (section header, non-interactive)
   <date> · <title>  ×3           (one item per recent meeting, most recent first)
@@ -593,15 +596,20 @@ Configuration                      (hover submenu)
   Notes Customization…
   Authorize Google Calendar…
   Import Legacy Configuration…
+  Hide sidebar while recording
 Debugging                          (hover submenu)
-  Pending Meeting Tasks (<count>)
+  <capability>: <state>  ×5       (after a readiness check)
   Interrupted Recordings (<count>)  (when present)
+  Find Legacy Recordings…
   Retry Pending B2 Backups
   Retry Failed Transcriptions
   Check Setup & Dependencies
   Test macOS Notifications
 Quit
 ```
+
+The sidebar panel (REQ-F8-13) MUST contain exactly three icon buttons with
+tooltips and no text labels: record/stop, screenshot (REQ-F12), and quit.
 
 **REQ-F8-02** Clicking a **Recent Meetings** item MUST open the corresponding meeting directory in Finder (not the `transcript.md` file directly, so the user can see all artifacts).
 
@@ -635,15 +643,15 @@ preview without showing app-owned storage markers. The workspace MUST allow
 restoring Classic, reject incomplete required fields or empty guidance, and
 show the file updated after saving.
 
-**REQ-F8-12** **Configuration** and **Diagnostics** (formerly *Debugging*) MUST be collapsible sections of the sidebar. User-editable settings MUST live under **Configuration**; the audio mode selector sits directly under the recording row. Pending meeting tasks and interrupted recordings are their own sections; backup/transcription retry, setup checks, and test notifications MUST live under **Diagnostics**. Diagnostic actions MUST use explicit labels and native hover help that describes their scope.
+**REQ-F8-12** **Configuration** and **Debugging** MUST be native hover submenus of the right-click menu. Audio modes and user-editable settings MUST live under **Configuration**; readiness results, interrupted recordings, backup/transcription retry, setup checks, and test notifications MUST live under **Debugging**, not at the menu root. Debugging actions MUST use explicit labels and native hover help that describes their scope.
 
-**REQ-F8-13** The runtime menu bar item MUST be icon-only apart from a red dot shown while a recording is active: no title, no timer, no warning glyph. A left-click MUST toggle the sidebar panel; a right-click MUST open a one-item **Quit** menu.
+**REQ-F8-13** The runtime menu bar item MUST be icon-only apart from a red dot shown while a recording is active: no title, no timer, no warning glyph. A left-click MUST toggle the sidebar panel; a right-click MUST open the REQ-F8-01 menu. The panel MUST be as small as its three buttons allow (44 × 130 pt vertical, 140 × 44 pt horizontal, plus a timer slot while recording) with rounded 14 pt corners.
 
-**REQ-F8-18** The sidebar MUST show the latest recording-lifecycle message as a status row (saved, transcript ready, transcription failed, meeting ending); when the message refers to a meeting, clicking the row MUST perform the message's action (reveal or review speakers). The pre-meeting notification's **Record** action MUST also open the meeting link.
+**REQ-F8-18** The pre-meeting notification's **Record** action MUST also open the meeting link. Recording-lifecycle messages (saved, transcript ready, notes generated, transcription failed, meeting ending) are delivered as macOS notifications with their actions; the sidebar shows no status text.
 
 **REQ-F8-14** Starting a recording from any source (sidebar, notification action, recovery) MUST force the sidebar visible, unless the user has enabled **Hide sidebar while recording** in the panel's Configuration section, in which case it MUST hide the sidebar instead and keep it hidden for the duration of the recording, in either orientation; an explicit click on the menu bar icon MAY show it until the recording ends. Stopping MUST NOT change visibility.
 
-**REQ-F8-15** The panel MUST be draggable and MUST snap to the left-center, right-center, top-center, or bottom-center of the screen when one of the panel's edges is released within 64 pt of the matching screen edge, free-floating otherwise. A snapped panel MUST stay snapped unless released more than 160 pt clear of its edge. Left/right anchors render the vertical layout; top/bottom anchors render the horizontal control bar with an overflow popover that opens away from the screen edge.
+**REQ-F8-15** The panel MUST be draggable and MUST snap to the left-center, right-center, top-center, or bottom-center of the screen when one of the panel's edges is released within 64 pt of the matching screen edge, free-floating otherwise. A snapped panel MUST stay snapped unless released more than 160 pt clear of its edge. Left/right anchors render the vertical button stack; top/bottom anchors (and free-floating) render the horizontal button row.
 
 **REQ-F8-16** Panel position and anchor MUST persist across launches via `NSUserDefaults`; visibility MUST NOT — the panel starts hidden on every launch.
 
@@ -655,8 +663,9 @@ show the file updated after saving.
 application MUST enqueue a typed transcript-ready event and the tray main
 thread MUST send this separate macOS notification:
 - Title: `"Transcript ready"`
-- Body: `"<meeting-title> · review speakers"`
-- Action button: `"Review Speakers"` — opens the speaker-review flow
+- Body: `"<meeting-title> · generating notes"`
+- Action button: `"Open"` — reveals the meeting directory; Notes start
+  automatically (REQ-F5-01) and announce `"Notes generated"` when done
 
 **REQ-F9-02** Both the required recording-saved notification and any later
 transcript-ready notification MUST be independent of Backup state or completion.
@@ -705,6 +714,27 @@ provider work starts until the user explicitly chooses recovery. Source temp
 data is removed only after the atomic local commit succeeds.
 
 ---
+
+### F12: Screenshots
+
+**REQ-F12-01** While a recording is active, the sidebar's camera button and
+the global shortcut **⌥⇧S** MUST capture the main display as a PNG and file it
+with that recording. Without an active recording the app MUST notify
+`"No active recording"` and capture nothing.
+
+**REQ-F12-02** Screenshots taken before the meeting directory exists MUST be
+staged under `$MEETINGS_DIR/.meeting-memory-staging/screenshots/` on the same
+filesystem and moved into the meeting directory when its local commit
+publishes it (also for a recovered recording committed later).
+
+**REQ-F12-03** A meeting with exactly one screenshot MUST hold it directly in
+the meeting directory; a meeting with two or more MUST hold them in a
+`screenshots/` subfolder. File names MUST carry the capture index and the
+offset into the recording (`screenshot-01-at-05m12s.png`).
+
+**REQ-F12-04** The shortcut MUST be registered through the Carbon hot-key API
+so it needs no Accessibility or Input Monitoring grant; registration failure
+MUST be logged and MUST NOT disable the sidebar button.
 
 ## 5. Non-Functional Requirements
 
@@ -868,11 +898,18 @@ $MEETINGS_DIR/            (default: ~/Meetings)
     recording.m4a
     transcript.md
     notes.md              (optional, after summarize)
+    screenshot-01-at-05m12s.png   (when exactly one screenshot was taken)
   <slug-2>/
     recording.m4a
     transcript.md
+    screenshots/          (when two or more were taken)
+      screenshot-01-at-02m30s.png
+      screenshot-02-at-14m07s.png
   …
 ```
+
+Screenshots are staged under `.meeting-memory-staging/screenshots/` until the
+meeting directory is published (F12).
 
 ---
 

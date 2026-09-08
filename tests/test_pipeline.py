@@ -41,9 +41,9 @@ def test_pipeline_happy_path_writes_files_emits_event_and_updates_b2(tmp_path: P
     assert events == [
         NotifyEvent(
             title="Meeting ready",
-            body="Product Sync · transcript ready · review speakers",
-            action_label="Review Speakers",
-            action="review_speakers",
+            body="Product Sync · transcript ready",
+            action_label="Open",
+            action="open_meeting",
             meeting_directory=result.files.directory,
         )
     ]
@@ -71,7 +71,7 @@ def test_pipeline_does_not_summarize_after_recording_stop(tmp_path: Path) -> Non
 
     assert result.summary.status == "skipped"
     assert result.b2_uploaded is False
-    assert events[0].body == "Product Sync · transcript ready · review speakers"
+    assert events[0].body == "Product Sync · transcript ready"
     assert frontmatter["speaker_status"] == "needs_review"
     assert frontmatter["b2_status"] == "pending"
     assert "## Summary" not in markdown

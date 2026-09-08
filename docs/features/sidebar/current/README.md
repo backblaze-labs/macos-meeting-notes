@@ -11,7 +11,7 @@ warning glyph — everything moves into the panel.
 | Question | Decision |
 |---|---|
 | Menu bar item | Icon only. Left-click toggles the sidebar. |
-| Quit safety hatch | Right-click opens a 1-item Quit menu. |
+| Quit safety hatch | Right-click opens a 1-item Quit menu. *(Superseded 2026-09-08: the right-click menu now holds everything but record/screenshot/quit, and the panel is three icon buttons — see `../../sidebar.md`.)* |
 | Recording visibility | Starting a recording forces the sidebar visible. |
 | Setup tray | Unchanged — keeps its plain dropdown menu. |
 | Orientation | Reorients: horizontal on top/bottom snap, vertical on left/right. |

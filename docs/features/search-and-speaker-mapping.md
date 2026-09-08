@@ -24,11 +24,13 @@ processed.
 - Search only reads directories identified as Meeting Memory output.
 - `speaker_aliases` in `transcript.md` is the preferred per-meeting source for
   confirmed names.
-- Calendar attendees populate `speaker_candidates` as hints. Attendees are
-  shown by Calendar full name, except aliases explicitly configured in
-  `KNOWN_SPEAKERS` when the attendee name or email matches.
+- Calendar attendees populate `speaker_candidates`. Attendees are shown by
+  Calendar full name, except aliases explicitly configured in
+  `KNOWN_SPEAKERS` when the attendee name or email matches. The tray no longer
+  asks for a review after each meeting: Notes run automatically with those
+  names (`transcription.md`).
 - Relabeling is local deterministic code; it does not infer names from audio or
-  use an LLM.
+  use an LLM. It is the CLI path for renaming speakers after the fact.
 
 ## Related Files
 

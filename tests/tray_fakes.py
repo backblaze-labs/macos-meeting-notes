@@ -94,7 +94,7 @@ class FakeClickAppKit:
     def __init__(self, raise_on: str | None = None):
         self._raise_on = raise_on
         self.monitored_button: object = None
-        self.quit_menus_shown: list[object] = []
+        self.menus_shown: list[object] = []
         self.indicator_states: list[bool] = []
         self._right_click_handler = None
 
@@ -108,8 +108,8 @@ class FakeClickAppKit:
         self._right_click_handler = handler
         return "fake-monitor"
 
-    def show_quit_menu(self, status_item, on_quit) -> None:
-        self.quit_menus_shown.append({"status_item": status_item, "on_quit": on_quit})
+    def show_menu(self, status_item, menu) -> None:
+        self.menus_shown.append({"status_item": status_item, "menu": menu})
 
     def ensure_quit_item(self, menu, on_quit) -> None:
         if not menu.items:
@@ -171,3 +171,8 @@ class FakeRumps:
 
     def quit_application(self, _sender=None) -> None:
         pass
+
+
+def submenu_titles(app, title: str) -> list[str]:
+    submenu = next(item for item in app.app.menu.items if item and item.title == title)
+    return [item.title for item in submenu.items if item is not None]

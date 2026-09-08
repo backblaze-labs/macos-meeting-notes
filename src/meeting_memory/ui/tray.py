@@ -1,9 +1,10 @@
 """macOS tray integration.
 
-The status item is an icon-only toggle for the floating sidebar panel
-(`docs/features/sidebar.md`); nothing is rendered in the menu bar itself and
-the runtime app owns no `NSMenu`. Every state change funnels through
-`refresh_sidebar()`, which rebuilds the panel from one immutable
+The status item is an icon-only toggle for the compact floating sidebar
+(`docs/features/sidebar.md`): left-click shows or hides the three-button
+panel (record/stop, screenshot, quit); right-click pops up the app menu with
+everything else (`ui/status_menu.py`). Every state change funnels through
+`refresh_sidebar()`, which rebuilds both from one immutable
 `SidebarViewModel` snapshot.
 """
 
@@ -24,6 +25,7 @@ from meeting_memory.types.events import (
     ReadinessChecked,
     RecordingTitleNeeded,
     SidebarRevealRequested,
+    TranscriptReady,
 )
 from meeting_memory.ui import load_rumps
 from meeting_memory.ui.audio_modes import AudioModeMenu
@@ -51,11 +53,10 @@ from meeting_memory.ui.setup_readiness import readiness_check_for, readiness_not
 from meeting_memory.ui.sidebar_tray_wiring import SidebarWiring
 from meeting_memory.ui.sidebar_view_model import (
     DebuggingActions,
-    RowView,
     SidebarViewModel,
     build_view_model,
 )
-from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
+from meeting_memory.ui.status_menu import rebuild_status_menu, sidebar_toggle_label
 from meeting_memory.ui.submenus import configuration_surface_actions
 from meeting_memory.ui.title_prompt import ask_recording_title
 
@@ -101,12 +102,13 @@ class RumpsTrayApp:
         self.sidebar = SidebarWiring(
             rumps_module,
             on_toggle_recording=self.toggle_recording,
+            on_screenshot=self.take_screenshot,
             on_quit=self.rumps.quit_application,
             panel_factory=sidebar_panel_factory,
             click_appkit=sidebar_click_appkit,
         )
         self.view_model: SidebarViewModel | None = None
-        self.last_status: NotifyEvent | None = None  # rendered as the sidebar's status row
+        self.sidebar_menu_item: Any = None
         self.open_url = webbrowser.open  # swapped out by tests
         self.recording_health = RecordingHealthMonitor(controller.recorder, controller.event_queue)
         self.audio_mode_menu = AudioModeMenu(
@@ -127,16 +129,16 @@ class RumpsTrayApp:
         if self.screenshot_hotkey is not None:
             self.screenshot_hotkey.install()
         self.timer.start()
-        # The setup tray and the right-click Quit menu still track menus.
+        # The setup tray and the right-click menu still track menus.
         keep_timer_running_during_menu_tracking(self.timer, LOGGER)
         self.app.run()
 
     def refresh_sidebar(self, _sender=None) -> None:
-        """Rebuild the panel from a fresh snapshot of app state.
+        """Rebuild the panel and the status-item menu from a fresh snapshot.
 
         The only render path. Called after every state change the tray
-        knows about; the 1 Hz timer label update goes through
-        `SidebarWiring.tick` instead, without a rebuild.
+        knows about; the 1 Hz timer update goes through `SidebarWiring.tick`
+        instead, without a rebuild.
         """
 
         self.view_model = build_view_model(
@@ -145,8 +147,6 @@ class RumpsTrayApp:
             audio_mode_menu=self.audio_mode_menu,
             configuration_actions=configuration_surface_actions(self.configuration_ui),
             debugging_actions=DebuggingActions(
-                review_speakers=self.open_speaker_review,
-                generate_notes=self.controller.generate_notes,
                 process_recovered_recording=self.controller.process_recovered_recording,
                 scan_legacy_recoveries=self.controller.scan_legacy_recoveries,
                 sync_to_b2=self.controller.sync_to_b2,
@@ -154,31 +154,16 @@ class RumpsTrayApp:
                 run_diagnostics=self.run_diagnostics,
                 send_test_notification=self.send_test_notification,
             ),
-            status=self._status_row(),
         )
         self.sidebar.rebuild(self.view_model)
-
-    def _status_row(self) -> RowView | None:
-        """The latest lifecycle message as a row: clickable when it points at
-        a meeting (Reveal / Review Speakers), otherwise a plain caption."""
-
-        event = self.last_status
-        if event is None:
-            return None
-        directory = event.meeting_directory
-        action = None
-        if directory is not None:
-            if event.action == "review_speakers":
-                action = lambda: self.open_speaker_review(directory)  # noqa: E731
-            else:
-                action = lambda: self.controller.opener(directory)  # noqa: E731
-        return RowView(
-            label=f"{event.title} · {event.body}",
-            tooltip=f"{event.body}. Click to {event.action_label.lower()}."
-            if action is not None and event.action_label
-            else event.body,
-            enabled=action is not None,
-            action=action,
+        self.sidebar_menu_item = rebuild_status_menu(
+            self.app.menu,
+            self.rumps,
+            self.view_model,
+            sidebar_visible=self.sidebar.is_visible,
+            on_toggle_sidebar=self.sidebar.toggle_panel,
+            on_quit=self.rumps.quit_application,
+            sidebar_rows=self.sidebar.preference_rows(on_change=self.refresh_sidebar),
         )
 
     def toggle_recording(self, _sender=None) -> None:
@@ -190,19 +175,6 @@ class RumpsTrayApp:
 
     def take_screenshot(self, _sender=None) -> None:
         self.screenshots.take()
-
-    def open_speaker_review(self, meeting_path: Path) -> None:
-        open_speaker_review_window(
-            meeting_path,
-            SpeakerReviewActions(
-                load_review=self.controller.load_speaker_review,
-                confirm_aliases=self.controller.confirm_speaker_aliases,
-                keep_labels=self.controller.keep_speaker_labels,
-                generate_notes=self.controller.generate_notes,
-            ),
-            rumps_module=self.rumps,
-        )
-        self.refresh_sidebar()
 
     def run_diagnostics(self, _sender=None) -> None:
         if self.readiness_check.start() is not None:
@@ -218,6 +190,15 @@ class RumpsTrayApp:
         for event in self.controller.drain_events():
             self.handle_event(event)
         self.sidebar.tick(self.controller)
+        self._sync_sidebar_menu_item()
+
+    def _sync_sidebar_menu_item(self) -> None:
+        """Keep Show/Hide Sidebar honest after an icon click toggled the panel."""
+
+        item = self.sidebar_menu_item
+        label = sidebar_toggle_label(self.sidebar.is_visible)
+        if item is not None and item.title != label:
+            item.title = label
 
     def handle_event(self, event: object) -> None:
         if self.configuration_ui.handle_event(event):
@@ -237,12 +218,13 @@ class RumpsTrayApp:
             return
         runtime_event = runtime_notification(event)
         if runtime_event is not None:
-            self.last_status = runtime_event
+            if isinstance(event, TranscriptReady):
+                # Calendar attendees ride along in the transcript; no review step.
+                self.controller.auto_generate_notes(event.meeting.directory)
             self.notify_event(runtime_event)
             self.refresh_sidebar()
             return
         if isinstance(event, NotifyEvent):
-            self.last_status = event
             if event.show_notification:
                 self.notify_event(event)
             self.refresh_sidebar()
@@ -285,10 +267,6 @@ class RumpsTrayApp:
             directory = data.get("meeting_directory")
             if directory:
                 self.controller.opener(Path(str(directory)))
-        elif data.get("action") == "review_speakers":
-            directory = data.get("meeting_directory")
-            if directory:
-                self.open_speaker_review(Path(str(directory)))
 
     def _send_notification(self, title: str, subtitle: str, message: str, **kwargs) -> None:
         send_notification(self.rumps, title, subtitle, message, LOGGER, **kwargs)

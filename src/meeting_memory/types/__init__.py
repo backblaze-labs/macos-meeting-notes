@@ -67,7 +67,6 @@ from meeting_memory.types.meeting import (
     slugify_title,
     validate_meeting_slug,
 )
-from meeting_memory.types.processing import ProcessingTask
 from meeting_memory.types.speakers import KnownSpeaker
 from meeting_memory.types.summary import ActionItem, GeneratedNotesSection, SummaryResult
 from meeting_memory.types.transcript import SpeakerReviewState, TranscriptResult, TranscriptSegment
@@ -102,7 +101,6 @@ __all__ = [
     "MeetingJobState",
     "MeetingJob",
     "NotifyEvent",
-    "ProcessingTask",
     "RecentMeeting",
     "RecordingContext",
     "ReadinessChecked",

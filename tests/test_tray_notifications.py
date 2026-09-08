@@ -1,4 +1,4 @@
-"""Tests for tray notification actions and recent-meeting refresh."""
+"""Tests for tray notification actions and the status-menu refresh."""
 
 from __future__ import annotations
 
@@ -7,11 +7,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sidebar_view_model_test_fixtures import flatten_view_model
+from tray_fakes import FakeRumps, submenu_titles
 
-from meeting_memory.types.events import MeetingDetected, NotifyEvent
-from meeting_memory.types.meeting import RecentMeeting
-from meeting_memory.types.processing import ProcessingTask
+from meeting_memory.types.events import MeetingDetected, NotifyEvent, TranscriptReady
+from meeting_memory.types.meeting import MeetingRef, RecentMeeting
 from meeting_memory.ui import menu
 from meeting_memory.ui.tray import RumpsTrayApp
 
@@ -79,58 +78,53 @@ def test_stop_notification_uses_stop_action(tmp_path: Path) -> None:
     assert fake_rumps.notification_options[0]["data"] == {"action": "stop_recording"}
 
 
-def test_completion_notification_uses_review_speakers_action(tmp_path: Path) -> None:
+def test_transcript_ready_starts_notes_and_offers_open(tmp_path: Path) -> None:
+    # No speaker-review step: the transcript's calendar attendees feed Notes.
     fake_rumps = FakeRumps()
     controller = FakeController(tmp_path)
     app = RumpsTrayApp(controller, rumps_module=fake_rumps)
+    meeting = MeetingRef("2026-06-11_09-00_product-sync", "Product Sync", tmp_path)
 
-    app.handle_event(
-        NotifyEvent(
-            "Meeting ready",
-            "Product Sync · transcript ready · review speakers",
-            action_label="Review Speakers",
-            action="review_speakers",
-            meeting_directory=tmp_path,
-        )
-    )
+    app.handle_event(TranscriptReady(meeting))
 
-    assert fake_rumps.notification_options[0]["action_button"] == "Review Speakers"
+    assert controller.auto_notes == [tmp_path]
+    assert fake_rumps.notifications[0][:2] == ("Transcript ready", "")
+    assert fake_rumps.notifications[0][2] == "Product Sync · generating notes"
+    assert fake_rumps.notification_options[0]["action_button"] == "Open"
     assert fake_rumps.notification_options[0]["data"] == {
-        "action": "review_speakers",
+        "action": "open_meeting",
         "meeting_directory": str(tmp_path),
     }
 
 
-def test_continue_processing_menu_lists_pending_tasks(tmp_path: Path) -> None:
-    fake_rumps = FakeRumps()
+def test_open_meeting_notification_reveals_the_directory(tmp_path: Path) -> None:
     controller = FakeController(tmp_path)
-    controller.pending = [
-        ProcessingTask(
-            meeting=_recent(tmp_path),
-            stage="notes",
-            action="generate_notes",
-            status="waiting",
-            label="Generate notes",
-        )
+    app = RumpsTrayApp(controller, rumps_module=FakeRumps())
+    opened: list[Path] = []
+    controller.opener = opened.append
+
+    app.handle_notification({"action": "open_meeting", "meeting_directory": str(tmp_path)})
+    app.handle_notification({"action": "review_speakers", "meeting_directory": str(tmp_path)})
+
+    assert opened == [tmp_path]  # the retired review action is ignored
+
+
+def test_debugging_submenu_has_no_pending_task_section(tmp_path: Path) -> None:
+    app = RumpsTrayApp(FakeController(tmp_path), rumps_module=FakeRumps())
+
+    debugging_titles = submenu_titles(app, menu.DEBUGGING_LABEL)
+
+    assert debugging_titles == [
+        menu.LEGACY_RECOVERY_SCAN_LABEL,
+        menu.SYNC_LABEL,
+        menu.RETRY_PROCESSING_LABEL,
+        menu.RUN_DIAGNOSTICS_LABEL,
+        menu.TEST_NOTIFICATION_LABEL,
     ]
-
-    app = RumpsTrayApp(controller, rumps_module=fake_rumps)
-
-    titles = _menu_titles(app)
-    debugging_titles = _submenu_titles(app, menu.DEBUGGING_LABEL)
-    assert menu.PROCESSING_HEADER not in titles
-    assert menu.processing_header_label(1) in debugging_titles
-    assert menu.processing_task_label(controller.pending[0]) in debugging_titles
 
 
 def _menu_titles(app: RumpsTrayApp) -> list[str]:
-    # Every label the sidebar renders (the runtime tray builds no menu).
-    return flatten_view_model(app.view_model)
-
-
-def _submenu_titles(app: RumpsTrayApp, title: str) -> list[str]:
-    del title  # the panel has no submenus; sections are flattened in order
-    return flatten_view_model(app.view_model)
+    return [item.title for item in app.app.menu.items if item is not None]
 
 
 def _recent(tmp_path: Path) -> RecentMeeting:
@@ -159,16 +153,14 @@ class FakeController:
     started_title: str | None = None
     started_candidates: tuple[str, ...] = ()
     remembered: list[MeetingDetected] = field(default_factory=list)
-    pending: list[ProcessingTask] = field(default_factory=list)
+    auto_notes: list[Path] = field(default_factory=list)
+    opener: object = None
 
     def recent_meetings(self) -> list[RecentMeeting]:
         return self.recent
 
     def recovered_recordings(self) -> list[object]:
         return []
-
-    def pending_processing_tasks(self) -> list[ProcessingTask]:
-        return self.pending
 
     def recording_duration_seconds(self) -> int:
         return 0
@@ -185,100 +177,27 @@ class FakeController:
     def retry_failed_processing(self) -> None:
         pass
 
-    def load_speaker_review(self, path: Path):
-        raise AssertionError(f"unexpected speaker review load: {path}")
+    def auto_generate_notes(self, path: Path) -> None:
+        self.auto_notes.append(path)
 
-    def confirm_speaker_aliases(
-        self, path: Path, aliases: dict[str, str], *, keep_labels: bool = False
-    ) -> Path:
-        del aliases
-        del keep_labels
-        return path / "transcript.md"
-
-    def keep_speaker_labels(self, path: Path) -> Path:
-        return path / "transcript.md"
-
-    def generate_notes(self, path: Path) -> None:
-        del path
-
-    def process_recovered_recording(self, recording) -> None:
+    def process_recovered_recording(self, recording: object) -> None:
         pass
 
     def scan_legacy_recoveries(self) -> None:
         pass
 
-    def start_recording(
-        self,
-        calendar_title: str = "Untitled",
-        *,
-        ends_at=None,
-        speaker_candidates: tuple[str, ...] = (),
-    ) -> None:
-        del ends_at
+    def start_recording(self, calendar_title: str, *, ends_at=None, speaker_candidates=()) -> None:
         self.started_title = calendar_title
         self.started_candidates = speaker_candidates
 
     def stop_recording(self) -> None:
         pass
 
-    def recording_context(self):
-        return None
-
     def remember_meeting(self, event: MeetingDetected) -> None:
         self.remembered.append(event)
 
     def drain_events(self) -> list[object]:
-        return []
-
-
-class FakeMenu:
-    def __init__(self):
-        self.items = []
-
-    def clear(self) -> None:
-        self.items.clear()
-
-    def add(self, item) -> None:
-        self.items.append(item)
-
-
-class FakeRumps:
-    def __init__(self):
-        self.notifications = []
-        self.notification_options = []
-
-    class MenuItem:
-        def __init__(self, title, callback=None):
-            self.title = title
-            self.callback = callback
-            self.items = []
-
-        def add(self, item) -> None:
-            self.items.append(item)
-
-    class Timer:
-        def __init__(self, callback, interval):
-            self.callback = callback
-            self.interval = interval
-
-        def start(self) -> None:
-            pass
-
-    class App:
-        def __init__(self, name, title=None, icon=None, template=None, quit_button="Quit"):
-            self.name = name
-            self.title = title
-            self.icon = icon
-            self.template = template
-            self.quit_button = quit_button
-            self.menu = FakeMenu()
-
-        def run(self) -> None:
-            pass
-
-    def notification(self, title, subtitle, message, **kwargs) -> None:
-        self.notifications.append((title, subtitle, message))
-        self.notification_options.append(kwargs)
-
-    def quit_application(self, _sender=None) -> None:
-        pass
+        events: list[object] = []
+        while not self.event_queue.empty():
+            events.append(self.event_queue.get_nowait())
+        return events

@@ -33,9 +33,8 @@ REQUIRED_UI_SOURCE_FILES = (
     "ui/sidebar_tray_wiring.py",
     "ui/sidebar_view_model.py",
     "ui/sidebar_widgets.py",
-    "ui/sidebar_sections.py",
-    "ui/sidebar_vertical.py",
-    "ui/sidebar_horizontal.py",
+    "ui/sidebar_compact.py",
+    "ui/status_menu.py",
     "ui/screenshot_actions.py",
     "ui/screenshot_hotkey.py",
 )

@@ -111,6 +111,63 @@ class FakeNSTextField:
     def setToolTip_(self, tooltip: str | None) -> None:
         self.tooltip = tooltip
 
+    def setHidden_(self, hidden: bool) -> None:
+        self.hidden = hidden
+
+    def isHidden(self) -> bool:
+        return getattr(self, "hidden", False)
+
+
+class FakeNSImage:
+    """Stands in for an SF Symbol image; `name` is the symbol name."""
+
+    available = True  # tests flip this to simulate pre-Big Sur AppKit
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.point_size: float | None = None
+
+    @classmethod
+    def imageWithSystemSymbolName_accessibilityDescription_(cls, name, description):
+        del description
+        return cls(name) if cls.available else None
+
+    def imageWithSymbolConfiguration_(self, configuration: Any) -> FakeNSImage:
+        image = FakeNSImage(self.name)
+        image.point_size = configuration.point_size
+        return image
+
+
+class FakeNSImageSymbolConfiguration:
+    def __init__(self, point_size: float, weight: Any) -> None:
+        self.point_size = point_size
+        self.weight = weight
+
+    @classmethod
+    def configurationWithPointSize_weight_(cls, point_size, weight):
+        return cls(point_size, weight)
+
+
+class FakeNSImageView(FakeNSView):
+    def __init__(self, frame: FakeRect | None = None) -> None:
+        super().__init__(frame)
+        self.image: Any = None
+        self.tint: Any = None
+        self.scaling: Any = None
+
+    def initWithFrame_(self, frame: FakeRect) -> FakeNSImageView:
+        FakeNSImageView.__init__(self, frame)
+        return self
+
+    def setImage_(self, image: Any) -> None:
+        self.image = image
+
+    def setContentTintColor_(self, color: Any) -> None:
+        self.tint = color
+
+    def setImageScaling_(self, scaling: Any) -> None:
+        self.scaling = scaling
+
 
 class FakeNSColor:
     @classmethod
@@ -124,6 +181,10 @@ class FakeNSColor:
     @classmethod
     def systemOrangeColor(cls) -> str:
         return "systemOrange"
+
+    @classmethod
+    def systemRedColor(cls) -> str:
+        return "systemRed"
 
     @classmethod
     def controlAccentColor(cls) -> str:
@@ -142,6 +203,10 @@ class FakeNSFont:
     @classmethod
     def systemFontOfSize_weight_(cls, size: float, weight: Any) -> str:
         return f"system:{size}:{weight}"
+
+    @classmethod
+    def monospacedDigitSystemFontOfSize_weight_(cls, size: float, weight: Any) -> str:
+        return f"monospaced:{size}:{weight}"
 
 
 class FakeNSScrollView(FakeNSView):

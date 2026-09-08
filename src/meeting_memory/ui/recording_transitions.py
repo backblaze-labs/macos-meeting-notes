@@ -93,10 +93,7 @@ class RecordingTransitions:
                 self._event_queue.put(
                     NotifyEvent(
                         title="Recording setup failed",
-                        body=(
-                            f"{str(exc).strip() or exc.__class__.__name__}. "
-                            "Stopping safely."
-                        ),
+                        body=(f"{str(exc).strip() or exc.__class__.__name__}. Stopping safely."),
                     )
                 )
                 self._stop_after_setup_failure()
@@ -112,9 +109,7 @@ class RecordingTransitions:
             if self._active != kind:
                 return False
             self._active = None
-            should_stop = (
-                kind == "start" and self._stop_after_start and self._start_has_recording
-            )
+            should_stop = kind == "start" and self._stop_after_start and self._start_has_recording
             if kind == "start":
                 self._stop_after_start = False
                 self._start_has_recording = False
@@ -134,9 +129,7 @@ class RecordingTransitions:
         reminder_end = ends_at or (context.ends_at if context else None)
         candidates = speaker_candidates or (context.speaker_candidates if context else ())
         session = self._recorder.start(calendar_title=title, speaker_candidates=candidates)
-        has_recording = session is not None or bool(
-            getattr(self._recorder, "is_recording", False)
-        )
+        has_recording = session is not None or bool(getattr(self._recorder, "is_recording", False))
         if has_recording:
             with self._lock:
                 self._start_has_recording = True

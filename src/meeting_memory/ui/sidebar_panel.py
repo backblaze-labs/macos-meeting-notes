@@ -1,6 +1,6 @@
 """Floating sidebar panel: a borderless, non-activating `NSPanel` shell.
 
-Carries no content of its own — plans 05/06 call `set_content_view`. This
+Carries no content of its own — `sidebar_tray_wiring.py` calls `set_content_view`. This
 module owns the window mechanics only: show/hide, drag-to-snap, orientation
 swap, position/anchor persistence, and re-clamping on screen changes.
 """
@@ -31,8 +31,8 @@ from meeting_memory.ui.sidebar_geometry import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_VERTICAL = (240.0, 460.0)
-DEFAULT_HORIZONTAL = (620.0, 56.0)
+DEFAULT_VERTICAL = (44.0, 130.0)
+DEFAULT_HORIZONTAL = (140.0, 44.0)
 AUTOSAVE_NAME = "MeetingMemorySidebar"
 ANCHOR_DEFAULTS_KEY = "MeetingMemorySidebarAnchor"
 SNAP_ANIMATION_DURATION = 0.18

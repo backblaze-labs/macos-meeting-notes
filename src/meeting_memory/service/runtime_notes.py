@@ -1,4 +1,10 @@
-"""Pinned schema-v2 Notes generation after speaker confirmation."""
+"""Pinned schema-v2 Notes generation for a speaker-confirmed transcript.
+
+Calendar attendees (`speaker_candidates`) are prepended to the text the
+summarizer sees, so owners can be named from the calendar without a manual
+speaker-review step. Speaker labels in the body are left as AssemblyAI wrote
+them; naming an owner is the model's call, guided by the notes instructions.
+"""
 
 from __future__ import annotations
 
@@ -53,8 +59,8 @@ def generate_v2_notes(
 ) -> Path:
     """Summarize a stable confirmed snapshot, then publish only if still current."""
 
-    snapshot, body, meta, identity = _confirmed_snapshot(meetings_dir, meeting_dir)
-    summary = summarizer.summarize(body)
+    snapshot, body, meta, identity, frontmatter = _confirmed_snapshot(meetings_dir, meeting_dir)
+    summary = summarizer.summarize(notes_input_text(frontmatter, body))
     rendered = render_notes_markdown(
         meta,
         summary,
@@ -81,7 +87,7 @@ def _generate_legacy_notes(
         if snapshot.frontmatter.get("speaker_status") != "confirmed":
             raise ValueError("speaker review must be confirmed before generating notes")
         _, body = split_frontmatter(snapshot.metadata_text)
-        summary = summarizer.summarize(body)
+        summary = summarizer.summarize(notes_input_text(snapshot.frontmatter, body))
         rendered = render_notes_markdown(
             snapshot.meta,
             summary,
@@ -95,7 +101,7 @@ def _generate_legacy_notes(
 def _confirmed_snapshot(
     meetings_dir: Path,
     meeting_dir: Path,
-) -> tuple[str, str, MeetingMeta, tuple[int, int]]:
+) -> tuple[str, str, MeetingMeta, tuple[int, int], dict[str, object]]:
     with open_meeting_document(meetings_dir, meeting_dir) as document:
         if document.frontmatter.get("speaker_status") != "confirmed":
             raise ValueError("speaker review must be confirmed before generating notes")
@@ -106,7 +112,20 @@ def _confirmed_snapshot(
             body,
             _meta(document.frontmatter),
             (info.st_dev, info.st_ino),
+            dict(document.frontmatter),
         )
+
+
+def notes_input_text(frontmatter: dict[str, object], body: str) -> str:
+    """Prefix the transcript with the calendar attendee list when one exists."""
+
+    raw = frontmatter.get("speaker_candidates")
+    if not isinstance(raw, list):
+        return body
+    names = [str(item).strip() for item in raw if str(item).strip()]
+    if not names:
+        return body
+    return f"Calendar attendees: {', '.join(dict.fromkeys(names))}\n\n{body}"
 
 
 def _reject_unsafe_notes(directory_fd: int) -> None:

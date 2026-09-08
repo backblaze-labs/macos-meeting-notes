@@ -19,7 +19,7 @@ types <- config <- repo <- service <- ui
 | config | `config/` | Capability-scoped settings, typed schema, pure precedence resolution, and isolated legacy validation. |
 | repo | `repo/` | External service, hardware, and Keychain adapters. |
 | service | `service/` | Local behavior, orchestration, and private app-owned filesystem stores. |
-| ui | `ui/` | `rumps` status item plus the AppKit sidebar panel that replaced the runtime dropdown menu (`docs/features/sidebar.md`). `ui/sidebar_toggle.py` is the only sidebar module that reaches into rumps internals (`ui/macos.py` also does, for notifications and app identity); the setup tray still composes a plain `rumps` menu. |
+| ui | `ui/` | `rumps` status item plus the compact AppKit sidebar (record, screenshot, quit) and the right-click `rumps` menu that holds everything else (`docs/features/sidebar.md`). `ui/sidebar_toggle.py` is the only sidebar module that reaches into rumps internals (`ui/macos.py` also does, for notifications and app identity); `ui/screenshot_hotkey.py` calls Carbon through `ctypes` for the global screenshot shortcut. |
 
 Cross-cutting modules live directly under `meeting_memory`: `__main__.py`,
 `doctor.py`, and `logging_config.py`.

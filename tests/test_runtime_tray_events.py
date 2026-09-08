@@ -35,20 +35,20 @@ def test_runtime_events_map_to_exact_local_first_copy_and_actions(tmp_path: Path
             "Recording cleanup pending",
             "Product Sync · retry recovery before cloud processing",
         ),
-        ("Transcript ready", "Product Sync · review speakers"),
+        ("Transcript ready", "Product Sync · generating notes"),
         ("Transcription failed", "Product Sync · audio saved locally"),
     ]
     assert [event.action_label for event in mapped if event is not None] == [
         "Reveal",
         "Reveal",
         "Reveal",
-        "Review Speakers",
+        "Open",
         "Open",
     ]
     assert [notify_event_kwargs(event)["data"]["action"] for event in mapped if event] == [
         "open_meeting",
         "open_meeting",
         "open_meeting",
-        "review_speakers",
+        "open_meeting",
         "open_meeting",
     ]

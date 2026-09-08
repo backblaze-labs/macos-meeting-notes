@@ -86,7 +86,7 @@ def test_reorientation_resizes_before_computing_origin():
     panel, _ = make_panel()
     # Top edge 20 pt under the screen top while still vertically sized —
     # forces a reorientation.
-    set_frame(panel, 400.0, 420.0, *DEFAULT_VERTICAL)
+    set_frame(panel, 400.0, 900.0 - 20.0 - DEFAULT_VERTICAL[1], *DEFAULT_VERTICAL)
 
     panel._handle_drag_end()
 
@@ -232,7 +232,7 @@ def test_reorientation_animates_to_the_rebuilt_content_size_not_the_default():
 
     panel, _ = make_panel(on_anchor_changed=rebuild_tall_content)
     holder["panel"] = panel
-    set_frame(panel, 400.0, 440.0, *DEFAULT_VERTICAL)  # top edge flush with the screen top
+    set_frame(panel, 400.0, 900.0 - DEFAULT_VERTICAL[1], *DEFAULT_VERTICAL)  # top edge flush
     panel._handle_drag_end()  # -> TOP, horizontal
     assert panel.orientation is Orientation.HORIZONTAL
 

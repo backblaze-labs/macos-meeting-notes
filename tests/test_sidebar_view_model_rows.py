@@ -14,7 +14,6 @@ from sidebar_view_model_test_fixtures import (
     build,
     controller,
     no_op_actions,
-    processing_task,
     recent_meeting,
     recovery_entry,
 )
@@ -62,15 +61,6 @@ def test_recent_section_capped_at_three(tmp_path: Path) -> None:
     assert view.recent.empty_label is None
 
 
-def test_pending_section_header_shows_zero_and_still_renders_when_empty(tmp_path: Path) -> None:
-    ctrl = controller(tmp_path)
-    ctrl.pending_processing_tasks = lambda: []
-    view = build(ctrl)
-    assert view.pending.title == menu.processing_header_label(0)
-    assert view.pending.rows == ()
-    assert view.pending.empty_label is not None
-
-
 def test_recovered_section_marked_hidden_when_empty(tmp_path: Path) -> None:
     ctrl = controller(tmp_path)
     ctrl.recovered_recordings = lambda: []
@@ -94,34 +84,6 @@ def test_recent_row_action_invokes_controller_open_meeting(tmp_path: Path) -> No
     assert opened == [meeting]
 
 
-def test_pending_row_action_invokes_generate_notes(tmp_path: Path) -> None:
-    ctrl = controller(tmp_path)
-    task = processing_task(tmp_path, 1)
-    ctrl.pending_processing_tasks = lambda: [task]
-    generated = []
-    audio_mode_menu = AudioModeMenu(FakeRumps(), ctrl, on_change=lambda: None)
-    configuration_actions, _ = no_op_actions()
-    debugging_actions = DebuggingActions(
-        review_speakers=lambda _path: None,
-        generate_notes=lambda path: generated.append(path),
-        process_recovered_recording=lambda _recording: None,
-        scan_legacy_recoveries=lambda: None,
-        sync_to_b2=lambda: None,
-        retry_failed_processing=lambda: None,
-        run_diagnostics=lambda _sender=None: None,
-        send_test_notification=lambda _sender=None: None,
-    )
-    view = build_view_model(
-        ctrl,
-        readiness_report=None,
-        audio_mode_menu=audio_mode_menu,
-        configuration_actions=configuration_actions,
-        debugging_actions=debugging_actions,
-    )
-    view.pending.rows[0].action()
-    assert generated == [task.meeting.directory]
-
-
 def test_recovered_row_action_invokes_process_recovered_recording(tmp_path: Path) -> None:
     ctrl = controller(tmp_path)
     entry = recovery_entry(tmp_path, 1)
@@ -130,8 +92,6 @@ def test_recovered_row_action_invokes_process_recovered_recording(tmp_path: Path
     configuration_actions, _ = no_op_actions()
     processed = []
     debugging_actions = DebuggingActions(
-        review_speakers=lambda _path: None,
-        generate_notes=lambda _path: None,
         process_recovered_recording=lambda recording: processed.append(recording),
         scan_legacy_recoveries=lambda: None,
         sync_to_b2=lambda: None,

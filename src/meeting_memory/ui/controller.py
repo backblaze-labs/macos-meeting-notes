@@ -15,13 +15,12 @@ from meeting_memory.config.runtime import RuntimeSettings
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.local_commit import LocalRecordingCommitter
 from meeting_memory.service.pipeline import Pipeline
-from meeting_memory.service.processing_state import list_pending_processing_tasks
 from meeting_memory.service.recorder import RecorderService, RecordingResult
 from meeting_memory.service.recording_context import context_from_meetings
 from meeting_memory.service.runtime_legacy_recovery import LegacyRecoveryRuntime
 from meeting_memory.service.runtime_notes_gate import RuntimeNotesGate
 from meeting_memory.service.storage import list_recent_meetings
-from meeting_memory.service.transcript_review import confirm_speaker_aliases, load_speaker_review
+from meeting_memory.service.transcript_review import confirm_speaker_aliases
 from meeting_memory.types.events import (
     MeetingDetected,
     NotifyEvent,
@@ -34,9 +33,7 @@ from meeting_memory.types.meeting import (
     RecentMeeting,
     RecordingContext,
 )
-from meeting_memory.types.processing import ProcessingTask
 from meeting_memory.types.recovery import RecoveryIndexEntry, RecoveryOrigin
-from meeting_memory.types.transcript import SpeakerReviewState
 from meeting_memory.ui.legacy_processing import launch_legacy_processing
 from meeting_memory.ui.macos import open_in_finder
 from meeting_memory.ui.recording_duration_guard import RecordingDurationGuard
@@ -185,12 +182,6 @@ class TrayController:
     def recent_meetings(self) -> list[RecentMeeting]:
         return list_recent_meetings(self.settings.meetings_dir_path)
 
-    def pending_processing_tasks(self) -> list[ProcessingTask]:
-        return list_pending_processing_tasks(self.settings.meetings_dir_path)
-
-    def load_speaker_review(self, path: Path) -> SpeakerReviewState:
-        return load_speaker_review(path)
-
     def confirm_speaker_aliases(
         self, path: Path, aliases: dict[str, str], *, keep_labels: bool = False
     ) -> Path:
@@ -201,16 +192,25 @@ class TrayController:
             LOGGER.warning("Could not start Backup after speaker review", exc_info=True)
         return reviewed
 
-    def keep_speaker_labels(self, path: Path) -> Path:
-        return self.confirm_speaker_aliases(path, {}, keep_labels=True)
-
     def generate_notes(self, path: Path) -> None:
         self._notes_runtime.start(path)
 
-    def set_notes_enabled(self, enabled: bool) -> None:
-        """Stop new Notes generations without interrupting one already in flight."""
+    def auto_generate_notes(self, path: Path) -> None:
+        """Keep the diarized labels (off the UI thread), then start Notes: the
+        calendar attendees reach the summarizer, so no manual review step."""
+        self.thread_factory(target=self._confirm_then_summarize, args=(path,), daemon=True).start()
 
-        self._notes_runtime.set_enabled(enabled)
+    def _confirm_then_summarize(self, path: Path) -> None:
+        try:
+            self.confirm_speaker_aliases(path, {}, keep_labels=True)
+        except Exception:
+            LOGGER.warning("Transcript could not be confirmed for Notes", exc_info=True)
+            self.event_queue.put(NotifyEvent("Notes skipped", "No speaker labels in transcript."))
+            return
+        self._notes_runtime.start(path)
+
+    def set_notes_enabled(self, enabled: bool) -> None:
+        self._notes_runtime.set_enabled(enabled)  # in-flight generations finish
 
     def recovered_recordings(self) -> list[RecoveryIndexEntry]:
         return list_recoveries(self.recorder, self.legacy_recovery)

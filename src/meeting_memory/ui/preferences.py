@@ -28,9 +28,7 @@ PREFERENCE_LABELS = {
 PREFERENCE_GUIDANCE = {
     "MEETINGS_DIR": "Where recordings, transcripts, and notes are saved.",
     "NOTIFY_MINUTES_BEFORE": "How early to remind you before Calendar meetings.",
-    "MAX_RECORDING_MINUTES": (
-        "Maximum recording length before the app stops automatically."
-    ),
+    "MAX_RECORDING_MINUTES": ("Maximum recording length before the app stops automatically."),
 }
 KNOWN_SPEAKERS_GUIDANCE = (
     "This cleans up Calendar speaker suggestions. "

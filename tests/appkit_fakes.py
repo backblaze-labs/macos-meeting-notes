@@ -17,6 +17,9 @@ from appkit_panel_fakes import FakeAnimationContext, FakePanel
 from appkit_widget_fakes import (
     FakeNSColor,
     FakeNSFont,
+    FakeNSImage,
+    FakeNSImageSymbolConfiguration,
+    FakeNSImageView,
     FakeNSScrollView,
     FakeNSTextField,
     FakeNSView,
@@ -212,6 +215,11 @@ class FakeAppKit:
     NSLineBreakByTruncatingTail: int = 4
     NSFont: type = FakeNSFont
     NSFontWeightSemibold: float = 0.3
+    NSFontWeightRegular: float = 0.0
+    NSImage: type = FakeNSImage
+    NSImageView: type = FakeNSImageView
+    NSImageSymbolConfiguration: type = FakeNSImageSymbolConfiguration
+    NSImageScaleProportionallyDown: int = 1
 
 
 def reset_fake_appkit_state() -> None:
@@ -223,3 +231,4 @@ def reset_fake_appkit_state() -> None:
     FakeNSScreen.screens_list = []
     FakeNSWorkspace.reduce_motion = False
     FakeAnimationContext.ran = False
+    FakeNSImage.available = True

@@ -102,9 +102,9 @@ class Pipeline:
             action_label = "Open"
             action = None
         else:
-            body = f"{files.meta.calendar_title} · transcript ready · review speakers"
-            action_label = "Review Speakers"
-            action = "review_speakers"
+            body = f"{files.meta.calendar_title} · transcript ready"
+            action_label = "Open"
+            action = "open_meeting"
         self.event_sink(
             NotifyEvent(
                 title="Meeting ready",

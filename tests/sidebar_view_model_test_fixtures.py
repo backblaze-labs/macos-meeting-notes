@@ -23,11 +23,9 @@ from meeting_memory.types.capabilities import (
     ReadinessReport,
 )
 from meeting_memory.types.meeting import RecentMeeting
-from meeting_memory.types.processing import ProcessingTask
 from meeting_memory.types.recovery import RecoveryIndexEntry, RecoveryOrigin
 from meeting_memory.ui import menu
 from meeting_memory.ui.audio_modes import AudioModeMenu
-from meeting_memory.ui.sidebar_vertical import DIAGNOSTICS_TITLE
 from meeting_memory.ui.sidebar_view_model import (
     ConfigurationActions,
     DebuggingActions,
@@ -37,29 +35,24 @@ from meeting_memory.ui.tray import TrayController
 
 
 def flatten_view_model(view) -> list[str]:
-    """Every label the sidebar renders, in the vertical panel's order —
-    the plan-07 successor of the menu-title snapshot, so the retired
-    dropdown's rows can be checked off against the panel one by one."""
+    """Every label the status-item menu and sidebar render, in menu order —
+    the successor of the dropdown-title snapshot, so nothing the old menu
+    showed is lost by accident."""
 
     labels = [view.recording.label]
-    if view.status is not None:
-        labels.append(view.status.label)
-    labels.append(menu.AUDIO_MODE_HEADER)
-    labels += [row.label for row in view.audio_modes]
     labels.append(view.recent.title)
     labels += [row.label for row in view.recent.rows] or [view.recent.empty_label]
     labels.append(view.open_meetings_folder.label)
-    labels.append(view.pending.title)
-    labels += [row.label for row in view.pending.rows]
+    labels.append(menu.CONFIGURATION_LABEL)
+    labels.append(menu.AUDIO_MODE_HEADER)
+    labels += [row.label for row in view.audio_modes]
+    labels += [row.label for row in view.configuration]
+    labels.append(menu.DEBUGGING_LABEL)
+    labels += [row.label for row in view.readiness]
     if view.recovered.rows:
         labels.append(view.recovered.title)
         labels += [row.label for row in view.recovered.rows]
-    labels.append(menu.CONFIGURATION_LABEL)
-    labels += [row.label for row in view.configuration]
-    labels.append(DIAGNOSTICS_TITLE)
-    labels += [row.label for row in view.diagnostics[:3]]
-    labels += [row.label for row in view.readiness]
-    labels += [row.label for row in view.diagnostics[3:]]
+    labels += [row.label for row in view.diagnostics]
     labels.append(view.quit.label)
     return labels
 
@@ -72,16 +65,6 @@ def recent_meeting(tmp_path: Path, n: int, title: str) -> RecentMeeting:
         started_at=datetime(2026, 6, 10 + n, 9, 0, tzinfo=UTC),
         directory=directory,
         markdown_path=directory / "notes.md",
-    )
-
-
-def processing_task(tmp_path: Path, n: int, *, status: str = "waiting") -> ProcessingTask:
-    return ProcessingTask(
-        meeting=recent_meeting(tmp_path, n, f"Pending {n}"),
-        stage="notes",
-        action="generate_notes",
-        status=status,
-        label="Generate notes",
     )
 
 
@@ -139,8 +122,6 @@ def no_op_actions() -> tuple[ConfigurationActions, DebuggingActions]:
             open_notes_prompt=lambda: None,
         ),
         DebuggingActions(
-            review_speakers=lambda _path: None,
-            generate_notes=lambda _path: None,
             process_recovered_recording=lambda _recording: None,
             scan_legacy_recoveries=lambda: None,
             sync_to_b2=lambda: None,

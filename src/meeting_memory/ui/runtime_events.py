@@ -38,9 +38,9 @@ def runtime_notification(event: object) -> NotifyEvent | None:
     if isinstance(event, TranscriptReady):
         return NotifyEvent(
             "Transcript ready",
-            f"{event.meeting.calendar_title} · review speakers",
-            action_label="Review Speakers",
-            action="review_speakers",
+            f"{event.meeting.calendar_title} · generating notes",
+            action_label="Open",
+            action="open_meeting",
             meeting_directory=event.meeting.directory,
         )
     if isinstance(event, TranscriptionFailed):
