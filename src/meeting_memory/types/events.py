@@ -48,6 +48,18 @@ class RecordingStateChanged:
 
 
 @dataclass(frozen=True)
+class SidebarRevealRequested:
+    """Ask the UI to force the floating sidebar visible.
+
+    Emitted from a worker-thread callback (`controller._recording_started`),
+    so it must stay a pure event the main thread drains — never a direct UI
+    call, per the threading model in ARCHITECTURE.md. Carried by the queue
+    like every other event. See docs/features/sidebar/completed/07-cutover.md
+    (auto-show on record start).
+    """
+
+
+@dataclass(frozen=True)
 class RecordingCommitted:
     """A complete local meeting directory was atomically published."""
 

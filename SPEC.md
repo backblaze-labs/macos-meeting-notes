@@ -359,13 +359,13 @@ fields contain at least one of:
 
 ### F3: Recording Control
 
-**REQ-F3-01** The tray menu MUST expose a **Start Recording** item when no recording is active, and a **Stop Recording** item (with recording duration) when a session is active. While recording, the status-bar title MUST show a live duration timer.
+**REQ-F3-01** The sidebar (F8) MUST expose a **Start Recording** row when no recording is active, and a **Stop Recording** row (with a live recording duration) when a session is active. The menu bar item itself carries no title or timer.
 
 **REQ-F3-02** The application MUST NOT allow more than one recording session to be active at a time. If **Start Recording** is triggered while a session is active, it MUST be ignored.
 
-**REQ-F3-03** The tray MUST expose visible recording state through the status-bar timer and the **Stop Recording** menu label.
+**REQ-F3-03** The app MUST make recording state visible: starting a recording MUST force the sidebar visible (REQ-F8-14), and the sidebar's **Stop Recording** row MUST carry the live timer and the audio warning glyph.
 
-**REQ-F3-04** The application MUST accept start-recording input from two sources: (a) the tray menu item, (b) the "Record" action in a pre-meeting notification. It MUST accept stop-recording input from the tray menu and from a "Stop" notification action.
+**REQ-F3-04** The application MUST accept start-recording input from two sources: (a) the sidebar's recording row, (b) the "Record" action in a pre-meeting notification. It MUST accept stop-recording input from the sidebar and from a "Stop" notification action.
 
 **REQ-F3-05** When recording starts, the application MUST resolve a title from the matched calendar event within ±5 minutes when available. If no matching event is available, manual tray starts SHOULD prompt for an ad-hoc title before falling back to `"Untitled"`.
 
@@ -563,9 +563,15 @@ retries. An in-flight request MAY finish to the next safe boundary. A complete
 snapshot records its result subject to REQ-F7-09; a partial snapshot returns to
 `pending`. Disabling Backup MUST NOT delete remote objects.
 
-### F8: Tray Menu
+### F8: Tray Menu and Sidebar
 
-**REQ-F8-01** The tray menu MUST contain the following items, in order:
+> As of the sidebar cutover (`docs/features/sidebar.md`), the runtime tray
+> builds no dropdown menu. REQ-F8-01 and REQ-F8-12 describe the **content**
+> that MUST remain reachable; it is rendered by the sidebar panel
+> (REQ-F8-13 – REQ-F8-17) rather than a native menu. The setup tray shown
+> before Recording Core is configured keeps its plain dropdown unchanged.
+
+**REQ-F8-01** The runtime surface MUST contain the following items (originally the dropdown order; the sidebar renders the same rows as sections):
 
 ```
 ● Meeting Memory                  (app title, non-interactive)
@@ -629,7 +635,19 @@ preview without showing app-owned storage markers. The workspace MUST allow
 restoring Classic, reject incomplete required fields or empty guidance, and
 show the file updated after saving.
 
-**REQ-F8-12** **Configuration** and **Debugging** MUST be native hover submenus. Audio modes and user-editable settings MUST live under **Configuration**. Pending meeting tasks, interrupted recordings, backup/transcription retry, setup checks, and test notifications MUST live under **Debugging**, not at the tray root. Debugging actions MUST use explicit labels and native hover help that describes their scope.
+**REQ-F8-12** **Configuration** and **Diagnostics** (formerly *Debugging*) MUST be collapsible sections of the sidebar. User-editable settings MUST live under **Configuration**; the audio mode selector sits directly under the recording row. Pending meeting tasks and interrupted recordings are their own sections; backup/transcription retry, setup checks, and test notifications MUST live under **Diagnostics**. Diagnostic actions MUST use explicit labels and native hover help that describes their scope.
+
+**REQ-F8-13** The runtime menu bar item MUST be icon-only apart from a red dot shown while a recording is active: no title, no timer, no warning glyph. A left-click MUST toggle the sidebar panel; a right-click MUST open a one-item **Quit** menu.
+
+**REQ-F8-18** The sidebar MUST show the latest recording-lifecycle message as a status row (saved, transcript ready, transcription failed, meeting ending); when the message refers to a meeting, clicking the row MUST perform the message's action (reveal or review speakers). The pre-meeting notification's **Record** action MUST also open the meeting link.
+
+**REQ-F8-14** Starting a recording from any source (sidebar, notification action, recovery) MUST force the sidebar visible, unless the user has enabled **Hide sidebar while recording** in the panel's Configuration section, in which case it MUST hide the sidebar instead and keep it hidden for the duration of the recording, in either orientation; an explicit click on the menu bar icon MAY show it until the recording ends. Stopping MUST NOT change visibility.
+
+**REQ-F8-15** The panel MUST be draggable and MUST snap to the left-center, right-center, top-center, or bottom-center of the screen when one of the panel's edges is released within 64 pt of the matching screen edge, free-floating otherwise. A snapped panel MUST stay snapped unless released more than 160 pt clear of its edge. Left/right anchors render the vertical layout; top/bottom anchors render the horizontal control bar with an overflow popover that opens away from the screen edge.
+
+**REQ-F8-16** Panel position and anchor MUST persist across launches via `NSUserDefaults`; visibility MUST NOT — the panel starts hidden on every launch.
+
+**REQ-F8-17** The panel MUST float above other windows on every Space and full-screen app without activating Meeting Memory, and MUST be excluded from screen capture and screen sharing.
 
 ### F9: Completion Notification
 

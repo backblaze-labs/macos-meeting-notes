@@ -181,13 +181,14 @@ make uninstall-launch-agent
 
 ## Using the App
 
-Meeting Memory runs as a menu-bar app. Use `Start Recording` for ad-hoc calls,
+Meeting Memory runs as a menu-bar app. Click the menu bar icon to show or hide
+the sidebar panel (right-click it to quit). Use `Start Recording` for ad-hoc calls,
 or click `Record` from a pre-meeting notification when the calendar watcher
 detects an upcoming Meet or Zoom event. Manual start uses only watcher-cached
 Calendar context; without one, the app records under a provisional title and
 asks for the final title after stop.
 
-Choose the audio mode for the next recording from the tray:
+Choose the audio mode for the next recording from the sidebar:
 
 - **Full Meeting** records system audio plus the current macOS microphone. Your
   current output, including AirPods, keeps playing normally.
@@ -200,8 +201,9 @@ Aggregate Devices, or per-device configuration. The durable capture is first a
 16 kHz mono WAV; conversion prefers AVFoundation and uses the separately
 bundled, offline minimal LGPL encoder only when the host lacks AAC encoding.
 
-While recording, the status bar shows a live timer and the tray menu switches to
-`Stop Recording`. When a calendar-backed recording reaches the event end time,
+When a recording starts the sidebar appears on its own; its recording row
+switches to `Stop Recording` with a live timer. Drag the panel by its `⠿` strip
+to snap it to any screen edge — top and bottom turn it into a compact bar. When a calendar-backed recording reaches the event end time,
 the app sends a `Stop` reminder action. Long recordings also send a reminder
 after one hour and every 30 minutes after that, until recording stops. After
 transcription finishes, the app writes `transcript.md`; the completion

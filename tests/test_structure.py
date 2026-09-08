@@ -168,12 +168,8 @@ REQUIRED_REPO_FILES = (
 )
 
 
-def python_files() -> list[Path]:
-    return sorted([*SRC_ROOT.rglob("*.py"), *TESTS_ROOT.rglob("*.py")])
-
-
 def source_files() -> list[Path]:
-    return sorted([*python_files(), *SRC_ROOT.rglob("*.swift")])
+    return sorted([*SRC_ROOT.rglob("*.py"), *TESTS_ROOT.rglob("*.py"), *SRC_ROOT.rglob("*.swift")])
 
 
 def parse(path: Path) -> ast.Module:
@@ -200,16 +196,11 @@ def import_from_modules(node: ast.ImportFrom, path: Path) -> list[str]:
     if node.level == 0:
         return [node.module] if node.module else []
 
-    package = current_package(path)
+    package = ["meeting_memory", *path.relative_to(SRC_ROOT).parts[:-1]]
     base = package[: len(package) - node.level + 1]
     if node.module:
         return [".".join([*base, *node.module.split(".")])]
     return [".".join([*base, alias.name]) for alias in node.names]
-
-
-def current_package(path: Path) -> list[str]:
-    relative = path.relative_to(SRC_ROOT)
-    return ["meeting_memory", *relative.parts[:-1]]
 
 
 def imported_layer(module_name: str) -> str | None:

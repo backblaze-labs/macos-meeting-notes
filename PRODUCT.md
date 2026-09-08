@@ -47,6 +47,11 @@ that competes with the user's meeting.
 - Keep the meeting, not the app, at the center of attention.
 - Make recording and processing state unmistakable at a glance.
 - Prefer familiar macOS controls and language over custom interaction patterns.
+  The one deliberate exception is the floating sidebar panel that replaced the
+  runtime dropdown (`docs/features/sidebar.md`): a draggable, edge-snapping
+  panel is not a stock menu-bar idiom. Its mitigation is auto-show — starting
+  a recording always brings the panel on screen, so recording state is never
+  hidden — plus a right-click Quit on the menu bar icon as a safety hatch.
 - Preserve user control over private data, speaker identity, and AI behavior.
 - Explain failures with a concrete recovery action.
 - Let provider failures, including B2 upload failures after setup, preserve and

@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from sidebar_view_model_test_fixtures import flatten_view_model
+
 from meeting_memory.types.events import MeetingDetected, NotifyEvent
 from meeting_memory.types.meeting import RecentMeeting
 from meeting_memory.types.processing import ProcessingTask
@@ -122,12 +124,13 @@ def test_continue_processing_menu_lists_pending_tasks(tmp_path: Path) -> None:
 
 
 def _menu_titles(app: RumpsTrayApp) -> list[str]:
-    return [item.title for item in app.app.menu.items if item is not None]
+    # Every label the sidebar renders (the runtime tray builds no menu).
+    return flatten_view_model(app.view_model)
 
 
 def _submenu_titles(app: RumpsTrayApp, title: str) -> list[str]:
-    submenu = next(item for item in app.app.menu.items if item and item.title == title)
-    return [item.title for item in submenu.items if item is not None]
+    del title  # the panel has no submenus; sections are flattened in order
+    return flatten_view_model(app.view_model)
 
 
 def _recent(tmp_path: Path) -> RecentMeeting:

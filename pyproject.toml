@@ -32,7 +32,10 @@ dependencies = [
   "pydantic>=2.9",
   "pydantic-settings>=2.6",
   "python-dotenv>=1.0",
-  "rumps>=0.4",
+  # Pinned exact: sidebar_toggle.py depends on rumps 0.4.0's internal
+  # nsstatusitem/button() shape (docs/features/sidebar/completed/03-status-item-toggle.md).
+  # An unpinned minor bump can silently break the toggle.
+  "rumps==0.4.0",
 ]
 
 [project.optional-dependencies]

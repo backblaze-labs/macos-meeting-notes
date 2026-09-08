@@ -13,7 +13,6 @@ from meeting_memory.service.recorder import RecordingSession
 from meeting_memory.service.screenshots import ScreenshotStore
 from meeting_memory.types.events import NotifyEvent, RecordingCommitted, TranscriptReady
 from meeting_memory.types.meeting import MeetingMeta, MeetingRef
-from meeting_memory.ui import menu
 from meeting_memory.ui.screenshot_actions import (
     CAPTURE_FAILED_TITLE,
     NO_RECORDING_TITLE,
@@ -79,21 +78,16 @@ def test_committed_meeting_receives_its_staged_screenshots(tmp_path: Path) -> No
     assert attached == (meeting.directory / "screenshot-01-at-01m05s.png",)
 
 
-def test_tray_menu_exposes_the_screenshot_button_and_attaches_on_commit(tmp_path: Path) -> None:
+def test_tray_take_screenshot_stages_and_commit_attaches(tmp_path: Path) -> None:
     controller, store = _controller(tmp_path, recording=True)
     fake_rumps = FakeRumps()
     app = RumpsTrayApp(controller, rumps_module=fake_rumps, screenshot_store=store)
-    titles = [item.title for item in app.app.menu.items if item is not None]
-    button = next(
-        item for item in app.app.menu.items if item and item.title == menu.SCREENSHOT_LABEL
-    )
 
-    button.callback(button)
-    button.callback(button)
+    app.take_screenshot()
+    app.take_screenshot()
     meeting = _publish(controller.settings.meetings_dir_path, SLUG)
     app.handle_event(RecordingCommitted(meeting))
 
-    assert titles.index(menu.SCREENSHOT_LABEL) == titles.index(app.recording_item.title) + 1
     assert app.screenshot_hotkey is None
     assert sorted(path.name for path in (meeting.directory / "screenshots").iterdir()) == [
         "screenshot-01-at-01m05s.png",

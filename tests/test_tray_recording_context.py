@@ -9,7 +9,7 @@ from pathlib import Path
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.recorder import RecordingResult, RecordingSession
-from meeting_memory.types.events import NotifyEvent
+from meeting_memory.types.events import NotifyEvent, SidebarRevealRequested
 from meeting_memory.types.meeting import MeetingMeta, RecordingContext, build_meeting_slug
 from meeting_memory.ui.tray import RumpsTrayApp, TrayController
 
@@ -32,12 +32,13 @@ def test_tray_controller_reminds_to_stop_at_calendar_end(tmp_path: Path) -> None
 
     assert sleeps == [1800]
     assert controller.drain_events() == [
+        SidebarRevealRequested(),  # auto-show fires on start (07-cutover.md)
         NotifyEvent(
             title="Meeting ending",
             body="Product Sync is ending now. Stop recording?",
             action_label="Stop",
             action="stop_recording",
-        )
+        ),
     ]
 
 
@@ -61,9 +62,11 @@ def test_tray_controller_auto_stops_at_recording_limit(tmp_path: Path) -> None:
     assert sleeps == [60]
     assert recorder.is_recording is False
     assert pipeline.calls == [(recorder.result.audio_path, recorder.result.meta)]
-    assert controller.drain_events()[0] == NotifyEvent(
-        title="Recording limit reached",
-        body="Long Meeting reached 1 min.",
+    # Auto-show (07-cutover.md) fires on start, so the limit notice is no
+    # longer index 0 — assert its presence rather than its position.
+    assert (
+        NotifyEvent(title="Recording limit reached", body="Long Meeting reached 1 min.")
+        in controller.drain_events()
     )
 
 

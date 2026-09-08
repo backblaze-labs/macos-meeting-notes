@@ -22,7 +22,12 @@ from meeting_memory.service.runtime_legacy_recovery import LegacyRecoveryRuntime
 from meeting_memory.service.runtime_notes_gate import RuntimeNotesGate
 from meeting_memory.service.storage import list_recent_meetings
 from meeting_memory.service.transcript_review import confirm_speaker_aliases, load_speaker_review
-from meeting_memory.types.events import MeetingDetected, NotifyEvent, RecordingTitleNeeded
+from meeting_memory.types.events import (
+    MeetingDetected,
+    NotifyEvent,
+    RecordingTitleNeeded,
+    SidebarRevealRequested,
+)
 from meeting_memory.types.meeting import (
     CalendarMeeting,
     MeetingMeta,
@@ -71,10 +76,7 @@ class TrayController:
 
     def __post_init__(self) -> None:
         self._notes_runtime = RuntimeNotesGate(
-            self.notes_generator,
-            self.event_queue.put,
-            self.thread_factory,
-            self.notes_allowed,
+            self.notes_generator, self.event_queue.put, self.thread_factory, self.notes_allowed
         )
         self._transitions = RecordingTransitions(
             self.recorder,
@@ -101,15 +103,16 @@ class TrayController:
         speaker_candidates: tuple[str, ...] = (),
     ) -> None:
         self._transitions.request_start(
-            calendar_title,
-            ends_at=ends_at,
-            speaker_candidates=speaker_candidates,
+            calendar_title, ends_at=ends_at, speaker_candidates=speaker_candidates
         )
 
     def stop_recording(self) -> None:
         self._transitions.request_stop()
 
     def _recording_started(self, title: str, reminder_end: datetime | None) -> None:
+        # Auto-show (docs/features/sidebar.md): queued, never a direct UI
+        # call, and first — before any reminder the same start may queue.
+        self.event_queue.put(SidebarRevealRequested())
         self._recording_token = object()
         token = self._recording_token
         self._duration_guard.start(title, token)
@@ -150,11 +153,7 @@ class TrayController:
             )
             return
         launch_legacy_processing(
-            self.pipeline,
-            self.thread_factory,
-            self.event_queue.put,
-            audio_path,
-            meta,
+            self.pipeline, self.thread_factory, self.event_queue.put, audio_path, meta
         )
 
     def run_local_commit(self, recovery: RecoveryIndexEntry, meta: MeetingMeta) -> bool:

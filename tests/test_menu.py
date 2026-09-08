@@ -15,7 +15,6 @@ from meeting_memory.ui.menu import (
     recent_meeting_labels,
     recording_label,
     review_speakers_label,
-    tray_title,
 )
 
 
@@ -25,23 +24,20 @@ def test_recording_labels() -> None:
     assert (
         recording_label(is_recording=True, duration_seconds=3661) == "■ Stop Recording · 01:01:01"
     )
-    assert tray_title(is_recording=False) is None
-    assert tray_title(is_recording=True, duration_seconds=65) == "01:05"
     assert recording_label(is_recording=True, audio_warning=True).startswith("⚠︎ ")
-    assert tray_title(is_recording=True, audio_warning=True) == "⚠︎ 00:00"
 
 
 def test_recent_meeting_labels() -> None:
     meetings = [
-            RecentMeeting(
-                slug=f"slug-{index}",
-                calendar_title=f"Product Sync {index}",
-                started_at=datetime(2026, 6, 11, 9, index, tzinfo=UTC),
-                directory=Path(f"/tmp/meeting-{index}"),
-                markdown_path=Path(f"/tmp/meeting-{index}/meeting.md"),
-            )
-            for index in range(4)
-        ]
+        RecentMeeting(
+            slug=f"slug-{index}",
+            calendar_title=f"Product Sync {index}",
+            started_at=datetime(2026, 6, 11, 9, index, tzinfo=UTC),
+            directory=Path(f"/tmp/meeting-{index}"),
+            markdown_path=Path(f"/tmp/meeting-{index}/meeting.md"),
+        )
+        for index in range(4)
+    ]
     labels = recent_meeting_labels(meetings)
 
     assert labels == [

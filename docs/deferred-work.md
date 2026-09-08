@@ -259,3 +259,79 @@ Notifications: `when mirroring or sharing the display`. Then verify the app was
 launched through the official `Meeting Memory.app`, Google Calendar auth is
 valid, `GOOGLE_CALENDAR_ID=all` unless intentionally narrowed, and the calendar
 event has a Meet/Zoom URL within the notification window.
+
+## 2026-09-05 Sidebar Cutover
+
+Request: replace the runtime dropdown menu with a draggable, edge-snapping
+sidebar panel (`docs/features/sidebar.md`, plans in
+`docs/features/sidebar/completed/`).
+
+Outcome: shipped. Decisions that were considered and deliberately not taken,
+so they are not re-litigated by accident:
+
+- **Vertical-only was rejected** in favor of reorientation: a bar snapped to
+  the top or bottom edge is horizontal, with the section stack behind an
+  overflow popover. Without plan 06 the panel would still snap to all four
+  edges in one shape; the owner chose the reorienting version.
+- **The setup tray is intentionally not converted.** First run is a poor
+  moment for a novel control, and keeping the plain menu halves the surface.
+  `ui/submenus.py` now exists only for it.
+- **Toggle visibility is intentionally not persisted** across launches; the
+  panel starts hidden every time. Position and anchor are persisted.
+- **Auto-show fires on every recording start**, including notification- and
+  recovery-initiated ones (plan 07 gotcha 4). Not scoped to user-initiated
+  starts: the point is that recording state is never invisible.
+
+Deferred from the manual pass:
+
+- The baseline `00-menu-*.png` screenshots of the retired dropdown were never
+  captured (no accessibility access to click the status item from the agent
+  shell). The substitute record is the label snapshot in
+  `tests/test_sidebar_view_model.py`, which lists every row the dropdown
+  showed and asserts the sidebar view model still renders each one.
+- The real-mouse drag gesture, the setup-tray walk-through, VoiceOver, and
+  the light/dark check were not exercised by hand. The drag path was verified
+  in-process instead: `hitTest_` over the whole `⠿` strip resolves to the
+  drag view, and the demo harness drives `SidebarPanel._handle_drag_end`
+  through the real reorientation and popover code.
+
+First thing to check if this comes up again: launch the installed bundle,
+left-click the icon, drag the panel by the `⠿` strip to the top edge, and
+confirm it becomes the horizontal bar with `⋯` opening a popover downward.
+If the status item does nothing, check `ui/sidebar_toggle.py`'s install log
+line first — it restores the rumps menu on failure.
+
+## 2026-09-06 Sidebar Refinements From Competitor Research
+
+Request: research comparable macOS meeting recorders (Granola, Krisp, Otter,
+Fireflies, Fathom, Notion AI Meeting Notes, MacWhisper, Superwhisper, Cleft,
+tl;dv, Apple Notes/FaceTime) and improve the sidebar accordingly.
+
+Implemented (see `docs/features/sidebar.md`):
+
+- A red dot on the menu bar icon while recording (Superwhisper/Granola-style
+  quiet indicator; also closes the "no indicator when hidden" gap the code
+  review raised). No timer in the menu bar — that decision stands.
+- A post-stop status row (Fireflies "instant summary" / Notion auto-generate
+  pattern): the latest lifecycle message with a click-through to reveal the
+  meeting or review speakers.
+- The pre-meeting notification's **Record** action also opens the meeting
+  link (Granola's one-click join + record).
+
+Deliberately not implemented yet, in value order:
+
+- **Global start/stop hotkey** (Superwhisper, MacWhisper, Cleft). Needs a
+  Carbon `RegisterEventHotKey` binding or an `NSEvent` global monitor; the
+  latter requires Input Monitoring permission. Worth a small plan of its own.
+- **Meeting-app detection** ("Zoom call detected — Record", Notion/Granola/
+  MacWhisper). Needs mic-in-use polling; belongs with the calendar watcher in
+  `service/`, not the sidebar.
+- **Pause/Resume** (Otter, Apple Notes). The recorder has no pause; backend.
+- **Live transcript peek** and a **collapsed timer pill** for the
+  hide-while-recording mode. Both UI-only but medium-sized; the red dot
+  covers the indicator need for now.
+
+First thing to check if this comes up again: the status row is driven by
+`RumpsTrayApp.last_status` (every `NotifyEvent`, including runtime-mapped
+ones); if a message is missing from the row, check that the event reaches
+`handle_event` rather than only `handle_notification`.

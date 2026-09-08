@@ -1,33 +1,23 @@
-"""Native configuration and debugging tray submenus."""
+"""Native configuration submenu for the setup tray.
+
+The runtime tray no longer builds menus (docs/features/sidebar.md); only
+`ui/setup_tray.py` still composes one, and this is what it needs.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
-from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
-from meeting_memory.types.capabilities import Capability, ReadinessReport
-from meeting_memory.types.processing import ProcessingTask
+from meeting_memory.types.capabilities import Capability
 from meeting_memory.ui import menu
-from meeting_memory.ui.audio_modes import AudioModeMenu
-from meeting_memory.ui.processing_actions import run_processing_task
-from meeting_memory.ui.setup_readiness import readiness_menu_label, readiness_tooltip
+from meeting_memory.ui.sidebar_view_model import ConfigurationActions
 
-B2_SYNC_TOOLTIP = "Upload meetings whose B2 backup is pending or failed."
-TRANSCRIPTION_RETRY_TOOLTIP = "Re-run AssemblyAI transcription using the saved local audio."
-DIAGNOSTICS_TOOLTIP = (
-    "Check all five capabilities without making optional services block recording."
-)
-TEST_NOTIFICATION_TOOLTIP = "Send a local notification to verify macOS notification permissions."
-
-
-@dataclass(frozen=True)
-class ConfigurationActions:
-    open_capability: Callable[[Capability], None]
-    import_legacy: Callable[[], None]
-    authorize_calendar: Callable[[], None]
-    open_notes_prompt: Callable[[], None]
+__all__ = [
+    "ConfigurationActions",
+    "configuration_submenu",
+    "configuration_surface_actions",
+]
 
 
 def configuration_surface_actions(surface: Any) -> ConfigurationActions:
@@ -39,29 +29,13 @@ def configuration_surface_actions(surface: Any) -> ConfigurationActions:
     )
 
 
-@dataclass(frozen=True)
-class DebuggingActions:
-    review_speakers: Callable[[Path], None]
-    generate_notes: Callable[[Path], None]
-    process_recovered_recording: Callable[[Any], None]
-    scan_legacy_recoveries: Callable[[], None]
-    sync_to_b2: Callable[[], None]
-    retry_failed_processing: Callable[[], None]
-    run_diagnostics: Callable[..., None]
-    send_test_notification: Callable[..., None]
-
-
 def configuration_submenu(
     rumps: Any,
-    audio_mode_menu: AudioModeMenu | None,
     actions: ConfigurationActions,
     *,
     notes_prompt_available: bool = True,
 ) -> Any:
     submenu = rumps.MenuItem(menu.CONFIGURATION_LABEL)
-    if audio_mode_menu is not None:
-        audio_mode_menu.add_items(submenu)
-        submenu.add(None)
     for capability in Capability:
         submenu.add(
             rumps.MenuItem(
@@ -90,128 +64,6 @@ def configuration_submenu(
     )
     submenu.add(rumps.MenuItem(menu.IMPORT_LEGACY_LABEL, lambda _sender: actions.import_legacy()))
     return submenu
-
-
-def debugging_submenu(
-    rumps: Any,
-    *,
-    processing_tasks: Sequence[ProcessingTask],
-    recovered_recordings: Sequence[Any],
-    readiness_report: ReadinessReport | None,
-    actions: DebuggingActions,
-) -> Any:
-    submenu = rumps.MenuItem(menu.DEBUGGING_LABEL)
-    _add_processing_tasks(rumps, submenu, processing_tasks, actions)
-    _add_recovered_recordings(rumps, submenu, recovered_recordings, actions)
-    submenu.add(
-        _menu_item(
-            rumps,
-            menu.LEGACY_RECOVERY_SCAN_LABEL,
-            lambda _sender: actions.scan_legacy_recoveries(),
-            tooltip="Explicitly scan the old macOS temp location once.",
-        )
-    )
-    submenu.add(
-        _menu_item(
-            rumps,
-            menu.SYNC_LABEL,
-            lambda _sender: actions.sync_to_b2(),
-            tooltip=B2_SYNC_TOOLTIP,
-        )
-    )
-    submenu.add(
-        _menu_item(
-            rumps,
-            menu.RETRY_PROCESSING_LABEL,
-            lambda _sender: actions.retry_failed_processing(),
-            tooltip=TRANSCRIPTION_RETRY_TOOLTIP,
-        )
-    )
-    submenu.add(None)
-    if readiness_report is not None:
-        for status in readiness_report.statuses:
-            submenu.add(
-                _menu_item(
-                    rumps,
-                    readiness_menu_label(status),
-                    tooltip=readiness_tooltip(status),
-                )
-            )
-    submenu.add(
-        _menu_item(
-            rumps,
-            menu.RUN_DIAGNOSTICS_LABEL,
-            actions.run_diagnostics,
-            tooltip=DIAGNOSTICS_TOOLTIP,
-        )
-    )
-    submenu.add(
-        _menu_item(
-            rumps,
-            menu.TEST_NOTIFICATION_LABEL,
-            actions.send_test_notification,
-            tooltip=TEST_NOTIFICATION_TOOLTIP,
-        )
-    )
-    return submenu
-
-
-def _add_processing_tasks(
-    rumps: Any,
-    submenu: Any,
-    tasks: Sequence[ProcessingTask],
-    actions: DebuggingActions,
-) -> None:
-    count = len(tasks)
-    empty_tooltip = "No meetings currently need review, notes, or a retry."
-    submenu.add(
-        _menu_item(
-            rumps,
-            menu.processing_header_label(count),
-            tooltip=empty_tooltip if not tasks else "Meetings that still need your attention.",
-        )
-    )
-    for task in tasks:
-        submenu.add(
-            _menu_item(
-                rumps,
-                menu.processing_task_label(task),
-                callback=lambda _sender, item=task: run_processing_task(
-                    item,
-                    review_speakers=actions.review_speakers,
-                    generate_notes=actions.generate_notes,
-                ),
-                tooltip=menu.processing_task_tooltip(task),
-            )
-        )
-    submenu.add(None)
-
-
-def _add_recovered_recordings(
-    rumps: Any,
-    submenu: Any,
-    recordings: Sequence[Any],
-    actions: DebuggingActions,
-) -> None:
-    if not recordings:
-        return
-    submenu.add(
-        _menu_item(
-            rumps,
-            menu.recovered_header_label(len(recordings)),
-            tooltip="Recordings saved after an interruption or unexpected app exit.",
-        )
-    )
-    for recording in recordings:
-        submenu.add(
-            _menu_item(
-                rumps,
-                menu.recovered_recording_label(recording.meta.slug),
-                callback=lambda _sender, item=recording: actions.process_recovered_recording(item),
-                tooltip="Recover this recording and resume transcription.",
-            )
-        )
-    submenu.add(None)
 
 
 def _menu_item(

@@ -1,9 +1,18 @@
-"""macOS tray integration."""
+"""macOS tray integration.
+
+The status item is an icon-only toggle for the floating sidebar panel
+(`docs/features/sidebar.md`); nothing is rendered in the menu bar itself and
+the runtime app owns no `NSMenu`. Every state change funnels through
+`refresh_sidebar()`, which rebuilds the panel from one immutable
+`SidebarViewModel` snapshot.
+"""
 
 from __future__ import annotations
 
 import logging
+import webbrowser
 from pathlib import Path
+from typing import Any
 
 from meeting_memory.service.configuration_surface import ConfigurationSurfaceCoordinator
 from meeting_memory.service.readiness import checking_readiness_report
@@ -14,8 +23,9 @@ from meeting_memory.types.events import (
     NotifyEvent,
     ReadinessChecked,
     RecordingTitleNeeded,
+    SidebarRevealRequested,
 )
-from meeting_memory.ui import load_rumps, menu
+from meeting_memory.ui import load_rumps
 from meeting_memory.ui.audio_modes import AudioModeMenu
 from meeting_memory.ui.configuration_surface import ConfigurationSurfaceUI
 from meeting_memory.ui.controller import TrayController
@@ -38,13 +48,15 @@ from meeting_memory.ui.runtime_events import runtime_notification
 from meeting_memory.ui.screenshot_actions import ScreenshotActions
 from meeting_memory.ui.screenshot_hotkey import GlobalHotkey
 from meeting_memory.ui.setup_readiness import readiness_check_for, readiness_notification_body
-from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
-from meeting_memory.ui.submenus import (
+from meeting_memory.ui.sidebar_tray_wiring import SidebarWiring
+from meeting_memory.ui.sidebar_view_model import (
     DebuggingActions,
-    configuration_submenu,
-    configuration_surface_actions,
-    debugging_submenu,
+    RowView,
+    SidebarViewModel,
+    build_view_model,
 )
+from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
+from meeting_memory.ui.submenus import configuration_surface_actions
 from meeting_memory.ui.title_prompt import ask_recording_title
 
 LOGGER = logging.getLogger(__name__)
@@ -58,6 +70,8 @@ class RumpsTrayApp:
         readiness_report: ReadinessReport | None = None,
         rumps_module=None,
         configuration_surface: ConfigurationSurfaceCoordinator | None = None,
+        sidebar_panel_factory: Any = None,
+        sidebar_click_appkit: Any = None,
         screenshot_store: ScreenshotStore | None = None,
     ) -> None:
         self.rumps = rumps_module or load_rumps()
@@ -68,24 +82,36 @@ class RumpsTrayApp:
             configure_background_app_identity(LOGGER)
             allow_foreground_notifications(LOGGER)
             configure_modern_notifications(self.handle_notification, LOGGER)
-        if callable(register := getattr(self.rumps, "notifications", None)):
+        register = getattr(self.rumps, "notifications", None)
+        if callable(register):
             register(self.handle_notification)
+        # title=None: the menu bar item carries no state — no timer, no
+        # warning glyph. Recording state lives in the sidebar, which
+        # `SidebarRevealRequested` forces visible when a recording starts.
         self.app = self.rumps.App(
             "Meeting Memory",
-            title=self._tray_title(),
+            title=None,
             icon=tray_icon_path(),
             template=True,
             quit_button=None,
         )
         self.timer = self.rumps.Timer(self.drain_events, 1)
-        self.recording_item = None
-        self.recording_label = ""
-        self.recording_health = RecordingHealthMonitor(controller.recorder, controller.event_queue)
         self.screenshots = ScreenshotActions(controller, screenshot_store)
         self.screenshot_hotkey = None if rumps_module else GlobalHotkey(self.take_screenshot)
+        self.sidebar = SidebarWiring(
+            rumps_module,
+            on_toggle_recording=self.toggle_recording,
+            on_quit=self.rumps.quit_application,
+            panel_factory=sidebar_panel_factory,
+            click_appkit=sidebar_click_appkit,
+        )
+        self.view_model: SidebarViewModel | None = None
+        self.last_status: NotifyEvent | None = None  # rendered as the sidebar's status row
+        self.open_url = webbrowser.open  # swapped out by tests
+        self.recording_health = RecordingHealthMonitor(controller.recorder, controller.event_queue)
         self.audio_mode_menu = AudioModeMenu(
-            self.rumps, self.controller, rebuild_menu=self.rebuild_menu
-        )  # noqa: E501
+            self.rumps, self.controller, on_change=self.refresh_sidebar
+        )
         if configuration_surface is None:
             configuration_surface = ConfigurationSurfaceCoordinator(
                 controller.event_queue.put, prompt_settings=controller.settings
@@ -93,64 +119,32 @@ class RumpsTrayApp:
         self.configuration_ui = ConfigurationSurfaceUI(
             configuration_surface,
             self.rumps,
-            rebuild_menu=self.rebuild_menu,
+            rebuild_menu=self.refresh_sidebar,
         )
-        self.rebuild_menu()
+        self.refresh_sidebar()
 
     def run(self) -> None:
         if self.screenshot_hotkey is not None:
             self.screenshot_hotkey.install()
         self.timer.start()
+        # The setup tray and the right-click Quit menu still track menus.
         keep_timer_running_during_menu_tracking(self.timer, LOGGER)
         self.app.run()
 
-    def rebuild_menu(self, _sender=None) -> None:
-        self.app.menu.clear()
-        self.app.menu.add(self.rumps.MenuItem(menu.APP_TITLE, callback=None))
-        self.app.menu.add(None)
-        self.recording_item = self.rumps.MenuItem(
-            self.current_recording_label(), self.toggle_recording
-        )  # noqa: E501
-        self.recording_label = self.recording_item.title
-        self.app.menu.add(self.recording_item)
-        self.app.menu.add(self.rumps.MenuItem(menu.SCREENSHOT_LABEL, self.take_screenshot))
-        self.app.menu.add(None)
-        self.app.menu.add(self.rumps.MenuItem(menu.RECENT_HEADER, callback=None))
-        recent_meetings = self.controller.recent_meetings()
-        for recent in recent_meetings:
-            self.app.menu.add(
-                self.rumps.MenuItem(
-                    menu.recent_meeting_label(recent),
-                    callback=lambda _sender, item=recent: self.controller.open_meeting(item),
-                )
-            )
-        if not recent_meetings:
-            self.app.menu.add(self.rumps.MenuItem(menu.NO_MEETINGS_LABEL, callback=None))
-        self.app.menu.add(None)
-        self.app.menu.add(
-            self.rumps.MenuItem(
-                menu.OPEN_MEETINGS_LABEL,
-                lambda _sender: self.controller.open_meetings_folder(),
-            )
-        )
-        self.app.menu.add(None)
-        self.app.menu.add(
-            configuration_submenu(
-                self.rumps,
-                self.audio_mode_menu,
-                configuration_surface_actions(self.configuration_ui),
-            )
-        )
-        self.app.menu.add(self._debugging_submenu())
-        self.app.menu.add(self.rumps.MenuItem(menu.QUIT_LABEL, self.rumps.quit_application))
+    def refresh_sidebar(self, _sender=None) -> None:
+        """Rebuild the panel from a fresh snapshot of app state.
 
-    def _debugging_submenu(self):
-        return debugging_submenu(
-            self.rumps,
-            processing_tasks=self.controller.pending_processing_tasks(),
-            recovered_recordings=self.controller.recovered_recordings(),
+        The only render path. Called after every state change the tray
+        knows about; the 1 Hz timer label update goes through
+        `SidebarWiring.tick` instead, without a rebuild.
+        """
+
+        self.view_model = build_view_model(
+            self.controller,
             readiness_report=self.readiness_report,
-            actions=DebuggingActions(
+            audio_mode_menu=self.audio_mode_menu,
+            configuration_actions=configuration_surface_actions(self.configuration_ui),
+            debugging_actions=DebuggingActions(
                 review_speakers=self.open_speaker_review,
                 generate_notes=self.controller.generate_notes,
                 process_recovered_recording=self.controller.process_recovered_recording,
@@ -160,6 +154,31 @@ class RumpsTrayApp:
                 run_diagnostics=self.run_diagnostics,
                 send_test_notification=self.send_test_notification,
             ),
+            status=self._status_row(),
+        )
+        self.sidebar.rebuild(self.view_model)
+
+    def _status_row(self) -> RowView | None:
+        """The latest lifecycle message as a row: clickable when it points at
+        a meeting (Reveal / Review Speakers), otherwise a plain caption."""
+
+        event = self.last_status
+        if event is None:
+            return None
+        directory = event.meeting_directory
+        action = None
+        if directory is not None:
+            if event.action == "review_speakers":
+                action = lambda: self.open_speaker_review(directory)  # noqa: E731
+            else:
+                action = lambda: self.controller.opener(directory)  # noqa: E731
+        return RowView(
+            label=f"{event.title} · {event.body}",
+            tooltip=f"{event.body}. Click to {event.action_label.lower()}."
+            if action is not None and event.action_label
+            else event.body,
+            enabled=action is not None,
+            action=action,
         )
 
     def toggle_recording(self, _sender=None) -> None:
@@ -167,7 +186,7 @@ class RumpsTrayApp:
             self.controller.stop_recording()
         else:
             self.controller.start_recording()
-        self.rebuild_menu()
+        self.refresh_sidebar()
 
     def take_screenshot(self, _sender=None) -> None:
         self.screenshots.take()
@@ -183,57 +202,30 @@ class RumpsTrayApp:
             ),
             rumps_module=self.rumps,
         )
-        self.rebuild_menu()
+        self.refresh_sidebar()
 
     def run_diagnostics(self, _sender=None) -> None:
         if self.readiness_check.start() is not None:
             self.readiness_report = checking_readiness_report()
-            self.rebuild_menu()
+            self.refresh_sidebar()
 
     def send_test_notification(self, _sender=None) -> None:
         self._send_notification("Meeting Memory test", "", "Notifications are working.")
 
     def drain_events(self, _timer=None) -> None:
+        self.sidebar.install_once(self.app, self.rumps)
         self.recording_health.poll()
         for event in self.controller.drain_events():
             self.handle_event(event)
-        self.update_tray_title()
-        self.update_recording_label()
-
-    def _tray_title(self) -> str | None:
-        return menu.tray_title(
-            is_recording=self.controller.recorder.is_recording,
-            duration_seconds=self.controller.recording_duration_seconds(),
-            audio_warning=bool(getattr(self.controller.recorder, "recording_warning", None)),
-        )
-
-    def update_tray_title(self) -> None:
-        title = self._tray_title()
-        if self.app.title != title:
-            self.app.title = title
-
-    def current_recording_label(self) -> str:
-        return menu.recording_label(
-            is_recording=self.controller.recorder.is_recording,
-            duration_seconds=self.controller.recording_duration_seconds(),
-            audio_warning=bool(getattr(self.controller.recorder, "recording_warning", None)),
-        )
-
-    def update_recording_label(self) -> None:
-        if self.recording_item is None:
-            return
-
-        label = self.current_recording_label()
-        if label == self.recording_label:
-            return
-
-        self.recording_item.title = label
-        self.recording_label = label
+        self.sidebar.tick(self.controller)
 
     def handle_event(self, event: object) -> None:
         if self.configuration_ui.handle_event(event):
             return
         self.screenshots.handle_event(event)
+        if isinstance(event, SidebarRevealRequested):
+            self.sidebar.reveal()
+            return
         if isinstance(event, ReadinessChecked) and self.readiness_check.acknowledge(
             event.operation_id
         ):
@@ -241,18 +233,19 @@ class RumpsTrayApp:
             self._send_notification(
                 "Meeting Memory setup", "", readiness_notification_body(event.report)
             )
-            self.rebuild_menu()
+            self.refresh_sidebar()
             return
         runtime_event = runtime_notification(event)
         if runtime_event is not None:
+            self.last_status = runtime_event
             self.notify_event(runtime_event)
-            self.rebuild_menu()
+            self.refresh_sidebar()
             return
         if isinstance(event, NotifyEvent):
+            self.last_status = event
             if event.show_notification:
                 self.notify_event(event)
-            if event.meeting_directory is not None or event.rebuild_menu:
-                self.rebuild_menu()
+            self.refresh_sidebar()
         elif isinstance(event, RecordingTitleNeeded):
             self.prompt_for_recording_title(event)
         elif isinstance(event, MeetingDetected):
@@ -268,8 +261,8 @@ class RumpsTrayApp:
         self._send_notification(event.title, "", event.body, **notify_event_kwargs(event))
 
     def notify_meeting_detected(self, event: MeetingDetected) -> None:
-        title, body, kwargs = meeting_detected_notification(event)
-        self._send_notification(title, "", body, **kwargs)
+        title, message, kwargs = meeting_detected_notification(event)
+        self._send_notification(title, "", message, **kwargs)
 
     def handle_notification(self, data) -> None:
         if not isinstance(data, dict):
@@ -280,10 +273,14 @@ class RumpsTrayApp:
                 ends_at=parse_notification_datetime(data.get("ends_at")),
                 speaker_candidates=parse_notification_candidates(data.get("speaker_candidates")),
             )
-            self.rebuild_menu()
+            # One click does both, Granola-style: start recording *and* join.
+            meeting_url = str(data.get("meeting_url") or "")
+            if meeting_url:
+                self.open_url(meeting_url)
+            self.refresh_sidebar()
         elif data.get("action") == "stop_recording":
             self.controller.stop_recording()
-            self.rebuild_menu()
+            self.refresh_sidebar()
         elif data.get("action") == "open_meeting":
             directory = data.get("meeting_directory")
             if directory:

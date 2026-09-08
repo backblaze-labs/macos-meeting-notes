@@ -19,7 +19,7 @@ types <- config <- repo <- service <- ui
 | config | `config/` | Capability-scoped settings, typed schema, pure precedence resolution, and isolated legacy validation. |
 | repo | `repo/` | External service, hardware, and Keychain adapters. |
 | service | `service/` | Local behavior, orchestration, and private app-owned filesystem stores. |
-| ui | `ui/` | `rumps` tray UI and menu handling. |
+| ui | `ui/` | `rumps` status item plus the AppKit sidebar panel that replaced the runtime dropdown menu (`docs/features/sidebar.md`). `ui/sidebar_toggle.py` is the only sidebar module that reaches into rumps internals (`ui/macos.py` also does, for notifications and app identity); the setup tray still composes a plain `rumps` menu. |
 
 Cross-cutting modules live directly under `meeting_memory`: `__main__.py`,
 `doctor.py`, and `logging_config.py`.
@@ -187,7 +187,10 @@ source archive, and verified as a bundle resource.
 
 - Modules may import from their own layer or a lower layer only.
 - External SDK imports are contained to `repo/`.
-- `rumps` imports are contained to `ui/`.
+- `rumps` imports are contained to `ui/`. Sidebar layout/panel modules take an
+  injected AppKit namespace (`ui/sidebar_appkit.py`) rather than importing
+  AppKit; `ui/sidebar_toggle.py` is the exception and wraps its own AppKit
+  needs behind its `ClickAppKit` seam.
 - Background workers communicate with the UI through `types/events.py` objects
   and a thread-safe queue.
 - Python and Swift source files stay at or below 300 lines.
