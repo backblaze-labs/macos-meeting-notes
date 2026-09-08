@@ -32,7 +32,7 @@ Four snap anchors: left-center, right-center, top-center, bottom-center.
 Anywhere else the panel free-floats. Left/right show the **vertical** layout
 (44 × 130 pt: the top `⠿` strip, then record, screenshot, quit stacked; the
 timer slot adds 14 pt while recording). Top/bottom and free-floating show the
-**horizontal** layout (140 × 44 pt: a gradient `⠿` grip block, then the three
+**horizontal** layout (134 × 44 pt: a gradient `⠿` grip block, then the three
 buttons in a row; the timer adds 46 pt while recording). Snapping under the
 menu bar respects the display's visible frame.
 

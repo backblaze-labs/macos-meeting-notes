@@ -645,7 +645,7 @@ show the file updated after saving.
 
 **REQ-F8-12** **Configuration** and **Debugging** MUST be native hover submenus of the right-click menu. Audio modes and user-editable settings MUST live under **Configuration**; readiness results, interrupted recordings, backup/transcription retry, setup checks, and test notifications MUST live under **Debugging**, not at the menu root. Debugging actions MUST use explicit labels and native hover help that describes their scope.
 
-**REQ-F8-13** The runtime menu bar item MUST be icon-only apart from a red dot shown while a recording is active: no title, no timer, no warning glyph. A left-click MUST toggle the sidebar panel; a right-click MUST open the REQ-F8-01 menu. The panel MUST be as small as its three buttons allow (44 × 130 pt vertical, 140 × 44 pt horizontal, plus a timer slot while recording) with rounded 14 pt corners.
+**REQ-F8-13** The runtime menu bar item MUST be icon-only apart from a red dot shown while a recording is active: no title, no timer, no warning glyph. A left-click MUST toggle the sidebar panel; a right-click MUST open the REQ-F8-01 menu. The panel MUST be as small as its three buttons allow (44 × 130 pt vertical, 134 × 44 pt horizontal, plus a timer slot while recording) with rounded 14 pt corners.
 
 **REQ-F8-18** The pre-meeting notification's **Record** action MUST also open the meeting link. Recording-lifecycle messages (saved, transcript ready, notes generated, transcription failed, meeting ending) are delivered as macOS notifications with their actions; the sidebar shows no status text.
 
