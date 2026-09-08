@@ -281,6 +281,9 @@ class SidebarPanel:
             | appkit.NSWindowCollectionBehaviorFullScreenAuxiliary
         )
         panel.setOpaque_(False)
+        # Clear, or the window paints its default background outside the
+        # content view's rounded mask and the corners show as white edges.
+        panel.setBackgroundColor_(appkit.NSColor.clearColor())
         panel.setHasShadow_(True)
         panel.setReleasedWhenClosed_(False)
         # `setSharingType_(NSWindowSharingNone)` used to be set here to hide

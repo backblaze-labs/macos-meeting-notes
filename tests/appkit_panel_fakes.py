@@ -69,6 +69,9 @@ class FakePanel:
     def setCollectionBehavior_(self, behavior: Any) -> None:
         self.collection_behavior = behavior
 
+    def setBackgroundColor_(self, color: Any) -> None:
+        self.background_color = color
+
     def setOpaque_(self, value: bool) -> None:
         self.opaque = value
 

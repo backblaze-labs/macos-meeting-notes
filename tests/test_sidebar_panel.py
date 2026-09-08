@@ -242,3 +242,8 @@ def test_reorientation_animates_to_the_rebuilt_content_size_not_the_default():
     frame = panel._panel.frame()
     assert frame.size.height == 800.0 + DRAG_HANDLE_HEIGHT
     assert frame.origin.x == 0.0
+
+
+def test_panel_background_is_clear_so_rounded_corners_show_no_white_edges():
+    panel, _ = make_panel()
+    assert panel._panel.background_color == "clear"

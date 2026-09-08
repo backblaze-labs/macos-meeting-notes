@@ -187,6 +187,10 @@ class FakeNSColor:
         return "systemRed"
 
     @classmethod
+    def clearColor(cls) -> str:
+        return "clear"
+
+    @classmethod
     def controlAccentColor(cls) -> str:
         return "controlAccent"
 
