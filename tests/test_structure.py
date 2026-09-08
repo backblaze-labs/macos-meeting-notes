@@ -8,6 +8,7 @@ from pathlib import Path
 import structure_distribution_files as distribution
 from structure_d2_files import REQUIRED_D2_SOURCE_FILES
 from structure_native_files import REQUIRED_NATIVE_SOURCE_FILES
+from structure_ui_files import REQUIRED_UI_SOURCE_FILES
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = ROOT / "src" / "meeting_memory"
@@ -71,6 +72,7 @@ REQUIRED_SOURCE_FILES = (
     "repo/google_http.py",
     "repo/native_audio.py",
     "repo/native_audio_validation.py",
+    "repo/screen_capture.py",
     "service/__init__.py",
     "service/storage.py",
     "service/stage_integrity.py",
@@ -141,23 +143,8 @@ REQUIRED_SOURCE_FILES = (
     "service/calendar_watcher.py",
     "service/calendar_authorization.py",
     "service/sync.py",
-    "ui/__init__.py",
-    "ui/tray.py",
-    "ui/menu.py",
-    "ui/audio_modes.py",
-    "ui/notes_prompt.py",
-    "ui/processing_launch.py",
-    "ui/legacy_processing.py",
-    "ui/recovery_actions.py",
-    "ui/runtime_events.py",
-    "ui/setup_readiness.py",
-    "ui/runtime_app.py",
-    "ui/recording_health.py",
-    "ui/recording_duration_guard.py",
-    "ui/recording_transitions.py",
-    "ui/submenus.py",
-    "ui/preferences.py",
-    "ui/preference_forms.py",
+    "service/screenshots.py",
+    *REQUIRED_UI_SOURCE_FILES,
 )
 
 REQUIRED_REPO_FILES = (

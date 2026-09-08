@@ -6,6 +6,8 @@ from meeting_memory.types.meeting import RecentMeeting
 from meeting_memory.types.processing import ProcessingTask
 
 APP_TITLE = "● Meeting Memory"
+SCREENSHOT_SHORTCUT = "⌥⇧S"
+SCREENSHOT_LABEL = f"📷 Take Screenshot ({SCREENSHOT_SHORTCUT})"
 RECENT_HEADER = "Recent Meetings"
 AUDIO_MODE_HEADER = "Audio Mode"
 CONFIGURATION_LABEL = "Configuration"

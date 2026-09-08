@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from pathlib import Path
 
 from meeting_memory.service.configuration_surface import ConfigurationSurfaceCoordinator
 from meeting_memory.service.readiness import checking_readiness_report
+from meeting_memory.service.screenshots import ScreenshotStore
 from meeting_memory.types.capabilities import ReadinessReport
 from meeting_memory.types.events import (
     MeetingDetected,
@@ -27,6 +27,7 @@ from meeting_memory.ui.macos import (
     keep_timer_running_during_menu_tracking,
 )
 from meeting_memory.ui.notifications import (
+    meeting_detected_notification,
     notify_event_kwargs,
     parse_notification_candidates,
     parse_notification_datetime,
@@ -34,6 +35,8 @@ from meeting_memory.ui.notifications import (
 )
 from meeting_memory.ui.recording_health import RecordingHealthMonitor
 from meeting_memory.ui.runtime_events import runtime_notification
+from meeting_memory.ui.screenshot_actions import ScreenshotActions
+from meeting_memory.ui.screenshot_hotkey import GlobalHotkey
 from meeting_memory.ui.setup_readiness import readiness_check_for, readiness_notification_body
 from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
 from meeting_memory.ui.submenus import (
@@ -55,6 +58,7 @@ class RumpsTrayApp:
         readiness_report: ReadinessReport | None = None,
         rumps_module=None,
         configuration_surface: ConfigurationSurfaceCoordinator | None = None,
+        screenshot_store: ScreenshotStore | None = None,
     ) -> None:
         self.rumps = rumps_module or load_rumps()
         self.controller = controller
@@ -64,7 +68,8 @@ class RumpsTrayApp:
             configure_background_app_identity(LOGGER)
             allow_foreground_notifications(LOGGER)
             configure_modern_notifications(self.handle_notification, LOGGER)
-        self._register_notification_handler()
+        if callable(register := getattr(self.rumps, "notifications", None)):
+            register(self.handle_notification)
         self.app = self.rumps.App(
             "Meeting Memory",
             title=self._tray_title(),
@@ -76,7 +81,11 @@ class RumpsTrayApp:
         self.recording_item = None
         self.recording_label = ""
         self.recording_health = RecordingHealthMonitor(controller.recorder, controller.event_queue)
-        self.audio_mode_menu = AudioModeMenu(self.rumps, self.controller, rebuild_menu=self.rebuild_menu)  # noqa: E501
+        self.screenshots = ScreenshotActions(controller, screenshot_store)
+        self.screenshot_hotkey = None if rumps_module else GlobalHotkey(self.take_screenshot)
+        self.audio_mode_menu = AudioModeMenu(
+            self.rumps, self.controller, rebuild_menu=self.rebuild_menu
+        )  # noqa: E501
         if configuration_surface is None:
             configuration_surface = ConfigurationSurfaceCoordinator(
                 controller.event_queue.put, prompt_settings=controller.settings
@@ -89,6 +98,8 @@ class RumpsTrayApp:
         self.rebuild_menu()
 
     def run(self) -> None:
+        if self.screenshot_hotkey is not None:
+            self.screenshot_hotkey.install()
         self.timer.start()
         keep_timer_running_during_menu_tracking(self.timer, LOGGER)
         self.app.run()
@@ -102,6 +113,7 @@ class RumpsTrayApp:
         )  # noqa: E501
         self.recording_label = self.recording_item.title
         self.app.menu.add(self.recording_item)
+        self.app.menu.add(self.rumps.MenuItem(menu.SCREENSHOT_LABEL, self.take_screenshot))
         self.app.menu.add(None)
         self.app.menu.add(self.rumps.MenuItem(menu.RECENT_HEADER, callback=None))
         recent_meetings = self.controller.recent_meetings()
@@ -156,6 +168,9 @@ class RumpsTrayApp:
         else:
             self.controller.start_recording()
         self.rebuild_menu()
+
+    def take_screenshot(self, _sender=None) -> None:
+        self.screenshots.take()
 
     def open_speaker_review(self, meeting_path: Path) -> None:
         open_speaker_review_window(
@@ -218,6 +233,7 @@ class RumpsTrayApp:
     def handle_event(self, event: object) -> None:
         if self.configuration_ui.handle_event(event):
             return
+        self.screenshots.handle_event(event)
         if isinstance(event, ReadinessChecked) and self.readiness_check.acknowledge(
             event.operation_id
         ):
@@ -252,22 +268,8 @@ class RumpsTrayApp:
         self._send_notification(event.title, "", event.body, **notify_event_kwargs(event))
 
     def notify_meeting_detected(self, event: MeetingDetected) -> None:
-        minutes = max(
-            0,
-            round((event.starts_at - datetime.now().astimezone()).total_seconds() / 60),
-        )
-        self._send_notification(
-            "Meeting starting soon",
-            "",
-            f"{event.calendar_title} starts in {minutes} minutes",
-            action_button="Record",
-            data={
-                "action": "start_recording",
-                "calendar_title": event.calendar_title,
-                "ends_at": event.ends_at.isoformat() if event.ends_at is not None else "",
-                "speaker_candidates": ",".join(event.speaker_candidates),
-            },
-        )
+        title, body, kwargs = meeting_detected_notification(event)
+        self._send_notification(title, "", body, **kwargs)
 
     def handle_notification(self, data) -> None:
         if not isinstance(data, dict):
@@ -290,11 +292,6 @@ class RumpsTrayApp:
             directory = data.get("meeting_directory")
             if directory:
                 self.open_speaker_review(Path(str(directory)))
-
-    def _register_notification_handler(self) -> None:
-        register = getattr(self.rumps, "notifications", None)
-        if callable(register):
-            register(self.handle_notification)
 
     def _send_notification(self, title: str, subtitle: str, message: str, **kwargs) -> None:
         send_notification(self.rumps, title, subtitle, message, LOGGER, **kwargs)
