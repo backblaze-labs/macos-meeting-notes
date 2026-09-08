@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from meeting_memory.types.events import NotifyEvent
+from meeting_memory.types.events import MeetingDetected, NotifyEvent
 from meeting_memory.ui.macos import deliver_notification, display_notification
 
 
@@ -44,6 +44,22 @@ def notify_event_kwargs(event: NotifyEvent) -> dict[str, object]:
     if data:
         kwargs["data"] = data
     return kwargs
+
+
+def meeting_detected_notification(event: MeetingDetected) -> tuple[str, str, dict[str, object]]:
+    minutes = max(0, round((event.starts_at - datetime.now().astimezone()).total_seconds() / 60))
+    message = f"{event.calendar_title} starts in {minutes} minutes"
+    kwargs: dict[str, object] = {
+        "action_button": "Record",
+        "data": {
+            "action": "start_recording",
+            "calendar_title": event.calendar_title,
+            "ends_at": event.ends_at.isoformat() if event.ends_at is not None else "",
+            "speaker_candidates": ",".join(event.speaker_candidates),
+            "meeting_url": event.meeting_url,
+        },
+    }
+    return "Meeting starting soon", message, kwargs
 
 
 def parse_notification_datetime(value: object) -> datetime | None:

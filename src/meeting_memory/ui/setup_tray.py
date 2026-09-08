@@ -81,7 +81,6 @@ class RumpsSetupApp:
         self.app.menu.add(
             configuration_submenu(
                 self.rumps,
-                None,
                 configuration_surface_actions(self.configuration_ui),
                 notes_prompt_available=False,
             )

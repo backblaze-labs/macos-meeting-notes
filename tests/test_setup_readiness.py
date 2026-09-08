@@ -15,7 +15,7 @@ from meeting_memory.types.capabilities import (
     ReadinessReport,
 )
 from meeting_memory.types.events import ReadinessChecked
-from meeting_memory.ui import menu, setup_readiness
+from meeting_memory.ui import setup_readiness
 from meeting_memory.ui.setup_readiness import ReadinessCheck
 from meeting_memory.ui.tray import RumpsTrayApp
 
@@ -79,10 +79,7 @@ def test_exact_background_report_is_the_one_rendered_by_the_tray() -> None:
     app.handle_event(events[0])
 
     assert app.readiness_report is report
-    debugging = next(
-        item for item in app.app.menu.items if item and item.title == menu.DEBUGGING_LABEL
-    )
-    titles = [item.title for item in debugging.items if item is not None]
+    titles = [row.label for row in app.view_model.readiness]
     assert [f"{capability.label}: Ready" for capability in Capability] == [
         title for title in titles if title.endswith(": Ready")
     ]

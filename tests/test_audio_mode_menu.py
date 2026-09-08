@@ -1,10 +1,10 @@
-"""Tests for native audio mode tray actions."""
+"""Tests for audio mode selection from the sidebar."""
 
 from __future__ import annotations
 
 import queue
 
-from tray_fakes import FakeMenu, FakeRumps
+from tray_fakes import FakeRumps
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.audio_modes import SILENT_SYSTEM_ONLY
@@ -18,14 +18,14 @@ def test_audio_mode_menu_applies_mode_and_rebuilds(tmp_path) -> None:
     controller = FakeController(_settings(tmp_path), recorder, event_queue)
     rebuilds = 0
 
-    def rebuild_menu() -> None:
+    def on_change() -> None:
         nonlocal rebuilds
         rebuilds += 1
 
     menu = AudioModeMenu(
         FakeRumps(),
         controller,
-        rebuild_menu=rebuild_menu,
+        on_change=on_change,
         applier=lambda mode, item: setattr(item, "capture_mode", mode.key),
     )
 
@@ -35,25 +35,8 @@ def test_audio_mode_menu_applies_mode_and_rebuilds(tmp_path) -> None:
     assert rebuilds == 1
     assert event_queue.get_nowait() == NotifyEvent(
         "Audio mode changed",
-        (
-            "Silent System Only: record system audio with microphone off "
-            "and playback muted."
-        ),
+        ("Silent System Only: record system audio with microphone off and playback muted."),
     )
-
-
-def test_audio_mode_menu_renders_active_mode(tmp_path) -> None:
-    fake_menu = FakeMenu()
-    mode_menu = AudioModeMenu(
-        FakeRumps(),
-        FakeController(_settings(tmp_path), FakeRecorder(), queue.Queue()),
-        rebuild_menu=lambda: None,
-    )
-
-    mode_menu.add_items(fake_menu)
-
-    titles = [item.title for item in fake_menu.items if item is not None]
-    assert titles == ["Audio Mode", "✓ Full Meeting", "Silent System Only"]
 
 
 class FakeController:

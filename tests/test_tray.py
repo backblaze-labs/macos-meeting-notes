@@ -7,14 +7,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from tray_fakes import FakeRumps, submenu_titles
+from sidebar_wiring_fakes import FakePanel, _all_containers, _label_text
+from tray_fakes import FakeClickAppKit, FakeRumps
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.recorder import RecordingResult, RecordingSession
-from meeting_memory.types.capabilities import Capability
-from meeting_memory.types.events import MeetingDetected, NotifyEvent
+from meeting_memory.types.events import MeetingDetected, NotifyEvent, SidebarRevealRequested
 from meeting_memory.types.meeting import MeetingMeta
-from meeting_memory.ui import menu
 from meeting_memory.ui.tray import RumpsTrayApp, TrayController
 
 
@@ -37,7 +36,8 @@ def test_tray_controller_runs_pipeline_after_stop(tmp_path: Path) -> None:
     assert recorder.started_candidates == ()
     assert pipeline.calls == [(recorder.result.audio_path, recorder.result.meta)]
     assert controller.drain_events() == [
-        NotifyEvent("Recording saved", "Product Sync · processing queued", show_notification=False)
+        SidebarRevealRequested(),
+        NotifyEvent("Recording saved", "Product Sync · processing queued", show_notification=False),
     ]
 
 
@@ -148,13 +148,25 @@ def test_rumps_tray_app_updates_recording_duration_label(tmp_path: Path) -> None
         event_queue=queue.Queue(),
         now=lambda: current_time,
     )
-    app = RumpsTrayApp(controller, rumps_module=FakeRumps())
+    app = RumpsTrayApp(
+        controller,
+        rumps_module=FakeRumps(),
+        sidebar_panel_factory=FakePanel,
+        sidebar_click_appkit=FakeClickAppKit(),  # keep install_once off real AppKit
+    )
 
     current_time = datetime(2026, 6, 11, 9, 1, 5, tzinfo=UTC)
     app.drain_events()
 
-    assert app.recording_item.title == "■ Stop Recording · 01:05"
-    assert app.app.title == "01:05"
+    # The tick updates the panel's recording row in place; the menu bar item
+    # itself never carries the timer (docs/features/sidebar.md).
+    recording_row = next(
+        sub
+        for sub in _all_containers(app.sidebar.panel.content_view)
+        if getattr(sub, "update", None) is not None
+    )
+    assert _label_text(recording_row) == "■ Stop Recording · 01:05"
+    assert app.app.title is None
 
 
 def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
@@ -172,30 +184,9 @@ def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
     assert app.app.title is None
     assert app.app.icon.endswith("robot-template.png")
     assert app.app.template is True
-    titles = [item.title for item in app.app.menu.items if item is not None]
-    configuration_titles = submenu_titles(app, menu.CONFIGURATION_LABEL)
-    debugging_titles = submenu_titles(app, menu.DEBUGGING_LABEL)
-    assert titles.count(menu.QUIT_LABEL) == 1
-    assert titles.count(menu.CONFIGURATION_LABEL) == 1
-    assert titles.count(menu.DEBUGGING_LABEL) == 1
-    assert menu.AUDIO_MODE_HEADER not in titles
-    assert configuration_titles == [
-        menu.AUDIO_MODE_HEADER,
-        "✓ Full Meeting",
-        "Silent System Only",
-        *(f"{capability.label}..." for capability in Capability),
-        menu.NOTES_PROMPT_LABEL,
-        menu.AUTHORIZE_CALENDAR_LABEL,
-        menu.IMPORT_LEGACY_LABEL,
-    ]
-    assert debugging_titles == [
-        menu.processing_header_label(0),
-        menu.LEGACY_RECOVERY_SCAN_LABEL,
-        menu.SYNC_LABEL,
-        menu.RETRY_PROCESSING_LABEL,
-        menu.RUN_DIAGNOSTICS_LABEL,
-        menu.TEST_NOTIFICATION_LABEL,
-    ]
+    # No runtime menu is built at all: quitting lives on the status item's
+    # right-click menu (ui/sidebar_toggle.py) and in the panel's Quit row.
+    assert app.app.menu.items == []
 
 
 def _settings(tmp_path: Path) -> Settings:
