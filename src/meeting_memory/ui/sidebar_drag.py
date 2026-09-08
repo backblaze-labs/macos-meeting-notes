@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from meeting_memory.ui.sidebar_theme import header_view, on_header_color
+from meeting_memory.ui.sidebar_theme import header_view
 
 CORNER_RADIUS = 14.0
 
@@ -98,16 +98,16 @@ def make_drag_indicator(appkit: Any) -> Any:
     """
 
     indicator = _grabber_label_class(appkit).labelWithString_("⠿")
-    indicator.setTextColor_(on_header_color(appkit, 0.7))
+    indicator.setTextColor_(appkit.NSColor.secondaryLabelColor())
     indicator.setAlignment_(1)  # NSTextAlignmentCenter
     return indicator
 
 
 def make_drag_strip(appkit: Any) -> Any:
-    """Solid navy backing for the strip, so it reads as the top of the
-    header block rather than a bare margin. Pass-through like the grabber."""
+    """Transparent pass-through backing for the strip: the compact panel is
+    one flat rounded surface with no bands or borders inside it."""
 
-    return header_view(appkit, appkit.NSMakeRect(0.0, 0.0, 0.0, 0.0), solid=True)
+    return header_view(appkit, appkit.NSMakeRect(0.0, 0.0, 0.0, 0.0), clear=True)
 
 
 def position_drag_indicator(

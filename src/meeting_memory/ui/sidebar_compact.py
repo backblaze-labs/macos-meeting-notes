@@ -20,7 +20,7 @@ from typing import Any
 
 from meeting_memory.ui import menu
 from meeting_memory.ui.sidebar_geometry import Orientation
-from meeting_memory.ui.sidebar_theme import accent_color, control_font, header_view, on_header_color
+from meeting_memory.ui.sidebar_theme import accent_color, control_font, header_view
 from meeting_memory.ui.sidebar_widgets import clickable_view
 
 BUTTON = 32.0
@@ -216,13 +216,13 @@ def _timer_label(appkit: Any, frame: tuple[float, float, float, float]) -> Any:
 
 
 def _grip(appkit: Any, height: float) -> Any:
-    """Gradient block with the `⠿` grip; `header_view` passes hit-testing
-    through, so pressing it drags the bar."""
+    """Transparent block with the `⠿` grip — no band, so the bar stays one flat
+    surface; `header_view` passes hit-testing through, so pressing it drags."""
 
-    block = header_view(appkit, appkit.NSMakeRect(0.0, 0.0, GRIP_WIDTH, height))
+    block = header_view(appkit, appkit.NSMakeRect(0.0, 0.0, GRIP_WIDTH, height), clear=True)
     grip = appkit.NSTextField.labelWithString_("⠿")
     grip.setFrame_(appkit.NSMakeRect(0.0, (height - 22.0) / 2, GRIP_WIDTH, 22.0))
-    grip.setTextColor_(on_header_color(appkit, 0.85))
+    grip.setTextColor_(appkit.NSColor.secondaryLabelColor())
     grip.setFont_(control_font(appkit))
     grip.setAlignment_(1)
     block.addSubview_(grip)

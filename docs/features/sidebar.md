@@ -32,7 +32,7 @@ Four snap anchors: left-center, right-center, top-center, bottom-center.
 Anywhere else the panel free-floats. Left/right show the **vertical** layout
 (44 × 130 pt: the top `⠿` strip, then record, screenshot, quit stacked; the
 timer slot adds 14 pt while recording). Top/bottom and free-floating show the
-**horizontal** layout (134 × 44 pt: a gradient `⠿` grip block, then the three
+**horizontal** layout (134 × 44 pt: a transparent `⠿` grip area, then the three
 buttons in a row; the timer adds 46 pt while recording). Snapping under the
 menu bar respects the display's visible frame.
 
@@ -88,9 +88,10 @@ compact layout falls back to text glyphs.
 
 ## Look
 
-The `⠿` grip (the top strip in the vertical layout, the left block in the
-horizontal one) is the app icon's navy→teal gradient from `ui/sidebar_theme.py`;
-the idle record button uses the teal as an accent. Buttons stay system-tinted
+The `⠿` grip (the top strip in the vertical layout, the left area in the
+horizontal one) is transparent — a secondary-colored glyph on the same
+surface, so nothing inside the panel reads as a band or border. The idle
+record button uses the icon's teal (`ui/sidebar_theme.py`) as an accent. Buttons stay system-tinted
 on the vibrancy material so light/dark mode and accessibility settings keep
 working. The whole panel is a rounded pill: 14 pt corners, no title bar, no
 text.

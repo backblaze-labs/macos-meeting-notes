@@ -43,8 +43,9 @@ def control_font(appkit: Any) -> Any:
     return appkit.NSFont.systemFontOfSize_weight_(13.0, appkit.NSFontWeightSemibold)
 
 
-def header_view(appkit: Any, frame: Any, *, solid: bool = False) -> Any:
-    """A navy→teal gradient block (or solid navy when `solid`).
+def header_view(appkit: Any, frame: Any, *, solid: bool = False, clear: bool = False) -> Any:
+    """A navy→teal gradient block (solid navy when `solid`; nothing drawn when
+    `clear`, for a grab area that must not read as a border).
 
     Passes hit-testing through (`hitTest_` returns None) so a press on the
     header reaches the drag view underneath and moves the panel — the
@@ -52,7 +53,7 @@ def header_view(appkit: Any, frame: Any, *, solid: bool = False) -> Any:
     """
 
     view = _header_view_class(appkit).alloc().initWithFrame_(frame)
-    view._mm_style = "solid" if solid else "gradient"
+    view._mm_style = "clear" if clear else "solid" if solid else "gradient"
     return view
 
 
@@ -80,6 +81,8 @@ def _header_view_class(appkit: Any) -> type:
         def drawRect_(self, rect):
             del rect
             style = getattr(self, "_mm_style", "gradient")
+            if style == "clear":
+                return
             if style == "pill":
                 radius = self.bounds().size.height / 2
                 accent_color(appkit).setFill()
