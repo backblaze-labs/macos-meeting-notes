@@ -92,18 +92,26 @@ repo, or service modules as needed.
 ## Change Workflow
 
 1. Read the relevant spec and plan sections.
-2. Fetch `origin/main`, create a dedicated `codex/` branch in a separate git
+2. For every user-visible behavior or capability change, synchronize the
+   relevant canonical documentation: `README.md`, `PRODUCT.md`, `SPEC.md`,
+   and `docs/local-first-contract.md` when its contract is affected. A document
+   that does not apply needs no edit, but the PR description MUST name the
+   documents reviewed.
+3. When removing or replacing a user flow, search the repository for its old
+   terms and update active guidance. Historical plans may retain the terms only
+   when they clearly describe completed, superseded work.
+4. Fetch `origin/main`, create a dedicated `codex/` branch in a separate git
    worktree, and keep the primary checkout unchanged while developing.
-3. Inspect existing code before editing.
-4. Make the smallest coherent change.
-5. Run the strongest available check, usually `make check`.
-6. After app behavior changes, run `make reload-macos-app` with the project
+5. Inspect existing code before editing.
+6. Make the smallest coherent change.
+7. Run the strongest available check, usually `make check`.
+8. After app behavior changes, run `make reload-macos-app` with the project
    virtualenv Python so the official clickable app is updated and restarted.
-7. If requested behavior is not implemented or is only partially implemented,
+9. If requested behavior is not implemented or is only partially implemented,
    append the reason and future first-check guidance to `docs/deferred-work.md`.
-8. Commit and push a passing slice, open and merge its PR, then remove the
+10. Commit and push a passing slice, open and merge its PR, then remove the
    feature worktree and local feature branch.
-9. Update the primary checkout from `origin/main` without discarding or
+11. Update the primary checkout from `origin/main` without discarding or
    overwriting any pre-existing local changes.
 
 ## Official macOS App
