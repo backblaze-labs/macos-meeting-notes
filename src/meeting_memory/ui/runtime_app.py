@@ -143,8 +143,8 @@ def run_runtime_app() -> int:
     if watcher is not None:
         try:
             watcher.start()
-        except Exception:
-            LOGGER.warning("Calendar watcher could not start")
+        except Exception as exc:
+            LOGGER.error("Calendar watcher could not start error_type=%s", type(exc).__name__)
     configuration_surface = ConfigurationSurfaceCoordinator(
         event_queue.put,
         runtime_pause=runtime_capabilities,
@@ -168,8 +168,8 @@ def _transcription_client(
         return None
     try:
         return AssemblyAITranscriptionClient(config.api_key, admit_request=enabled)
-    except Exception:
-        LOGGER.warning("Transcription capability could not start")
+    except Exception as exc:
+        LOGGER.error("Transcription capability could not start error_type=%s", type(exc).__name__)
         return None
 
 
@@ -190,8 +190,8 @@ def _backup_client(
             config.bucket_name,
             admit_request=enabled,
         )
-    except Exception:
-        LOGGER.warning("Backup capability could not start")
+    except Exception as exc:
+        LOGGER.error("Backup capability could not start error_type=%s", type(exc).__name__)
         return None
 
 
@@ -206,8 +206,8 @@ def _notes_generator(configuration: LoadedConfiguration, *, enabled=lambda: True
             prompt_file=config.prompt_file,
             admit_request=enabled,
         )
-    except Exception:
-        LOGGER.warning("Notes capability could not start")
+    except Exception as exc:
+        LOGGER.error("Notes capability could not start error_type=%s", type(exc).__name__)
         return None
 
     def generate(path):
@@ -246,8 +246,8 @@ def _calendar_watcher(
             poll_interval_seconds=config.poll_interval,
             enabled=enabled,
         )
-    except Exception:
-        LOGGER.warning("Calendar capability could not start")
+    except Exception as exc:
+        LOGGER.error("Calendar capability could not start error_type=%s", type(exc).__name__)
         return None
 
 

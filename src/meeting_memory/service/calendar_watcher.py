@@ -75,8 +75,8 @@ class CalendarWatcher:
             )
         except EgressPaused:
             return
-        except Exception:
-            logger.warning("Calendar watcher poll failed")
+        except Exception as exc:
+            logger.error("Calendar watcher poll failed error_type=%s", type(exc).__name__)
             if not self._poll_failed:
                 self.event_sink(
                     NotifyEvent(

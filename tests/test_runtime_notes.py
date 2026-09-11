@@ -86,6 +86,22 @@ def test_v2_notes_rejects_transcript_change_during_remote_call(tmp_path: Path) -
     assert not files.notes_path.exists()
 
 
+def test_v2_notes_allows_backup_bookkeeping_change_during_remote_call(tmp_path: Path) -> None:
+    meetings, files, state = _confirmed_meeting(tmp_path)
+    summarizer = Summarizer(
+        lambda: state.transition_job(
+            files.directory,
+            MeetingJob.BACKUP,
+            MeetingJobState.NOT_REQUESTED,
+            MeetingJobState.PENDING,
+        )
+    )
+
+    notes = generate_v2_notes(meetings, files.directory, summarizer)
+
+    assert notes.read_text(encoding="utf-8").startswith("---\n")
+
+
 def test_v2_notes_publishes_after_stable_confirmed_snapshot(tmp_path: Path) -> None:
     meetings, files, _state = _confirmed_meeting(tmp_path)
 

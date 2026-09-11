@@ -53,8 +53,8 @@ class ReadinessCheck:
             self._active = operation
         try:
             self.thread_factory(target=self._run, args=(operation,), daemon=True).start()
-        except Exception:
-            LOGGER.error("Could not start readiness worker")
+        except Exception as exc:
+            LOGGER.error("Could not start readiness worker error_type=%s", type(exc).__name__)
             self.event_sink(ReadinessChecked(operation, failed_readiness_report()))
         return operation
 
@@ -68,8 +68,8 @@ class ReadinessCheck:
     def _run(self, operation: ConfigurationOperationId) -> None:
         try:
             report = self.report_loader()
-        except Exception:
-            LOGGER.error("Readiness worker failed")
+        except Exception as exc:
+            LOGGER.error("Readiness worker failed error_type=%s", type(exc).__name__)
             report = failed_readiness_report()
         self.event_sink(ReadinessChecked(operation, report))
 
