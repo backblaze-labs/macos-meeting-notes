@@ -48,9 +48,9 @@ workers and emit typed events for the tray main thread to render.
   between ScreenCaptureKit clock domains therefore cannot discard one source.
 - The helper reports callback, frame, peak, total discard, largest contiguous
   discard, and timing counters every five seconds. Missing or stalled sources
-  warn after ten seconds; system audio that arrives with no signal warns after
-  90 seconds so a normal quiet call start does not create a false completion
-  warning. A warning adds `⚠︎` to the timer and Stop label, sends a macOS
+  warn after ten seconds; either expected source that arrives with no signal
+  warns after 90 seconds so a normal quiet call start does not create a false
+  completion warning. A warning adds `⚠︎` to the timer and Stop label, sends a macOS
   notification with a Stop action, and clears from the live UI if the source
   recovers.
 - Distributed one-frame resampling trims do not warn. Discard health requires
