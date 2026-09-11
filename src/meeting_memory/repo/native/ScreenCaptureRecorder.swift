@@ -48,7 +48,10 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
         configuration.sampleRate = 48_000
         configuration.channelCount = 2
         configuration.captureMicrophone = includeMicrophone
-        configuration.microphoneCaptureDeviceID = microphone?.uniqueID
+        // Leave device routing to ScreenCaptureKit's current default instead of
+        // pinning the AVCapture device UID. Bluetooth headsets can renegotiate
+        // their input route as a stream begins; a pinned UID can then deliver
+        // valid callbacks containing only silence.
 
         let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
         try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: captureQueue)

@@ -105,6 +105,23 @@ def test_quiet_call_start_does_not_warn_before_ninety_seconds() -> None:
     assert status.active_warning() is None
 
 
+def test_silent_microphone_warns_with_headset_input_guidance() -> None:
+    event = _event("health", elapsed=95)
+    sources = event["sources"]
+    assert isinstance(sources, dict)
+    microphone = sources["microphone"]
+    assert isinstance(microphone, dict)
+    microphone["peak"] = 0
+    status = HelperStatus()
+
+    status.observe(event)
+
+    warning = status.next_warning()
+    assert warning is not None
+    assert warning.code == "microphone_silent"
+    assert "selected macOS input" in warning.message
+
+
 def test_recovered_system_audio_clears_live_and_final_warning() -> None:
     silent = _event("health", elapsed=95)
     silent_sources = silent["sources"]
