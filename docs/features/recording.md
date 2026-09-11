@@ -72,6 +72,11 @@ workers and emit typed events for the tray main thread to render.
   - `Silent System Only` captures system audio, never enables microphone
     capture, and mutes tapped playback for the recording's lifetime.
 - Neither mode changes the system's selected input or output device.
+- Full Meeting watches the default macOS input while recording. When the user
+  switches it (for example, between MacBook microphone and AirPods), the helper
+  refreshes its active ScreenCaptureKit configuration without stopping the
+  system-audio stream. If macOS rejects that refresh, capture remains active
+  and the tray warns that a manual restart may be needed.
 - macOS prompts for Microphone and Screen & System Audio permissions when the
   relevant mode first needs them.
 - Readiness checks inspect the current permission status without prompting and

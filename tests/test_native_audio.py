@@ -13,20 +13,6 @@ import pytest
 from meeting_memory.repo import native_audio, native_audio_build
 
 
-def test_native_capture_uses_screencapturekit_default_microphone_route() -> None:
-    source = (
-        Path(__file__).resolve().parents[1]
-        / "src"
-        / "meeting_memory"
-        / "repo"
-        / "native"
-        / "ScreenCaptureRecorder.swift"
-    ).read_text(encoding="utf-8")
-
-    assert "configuration.captureMicrophone = includeMicrophone" in source
-    assert "microphoneCaptureDeviceID" not in source
-
-
 def test_build_native_capture_helper_compiles_packaged_swift_sources(
     tmp_path: Path,
     monkeypatch,

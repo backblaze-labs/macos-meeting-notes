@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreAudio
 import CoreMedia
 import Foundation
 import ScreenCaptureKit
@@ -11,7 +12,9 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     private let captureQueue = DispatchQueue(label: "com.meeting-memory.native-capture")
     private let systemConverter = PCMConverter()
     private let microphoneConverter = PCMConverter()
+    private let routeQueue = DispatchQueue(label: "com.meeting-memory.microphone-route")
     private var stream: SCStream?
+    private var routeMonitor: DefaultInputMonitor?
     private var stopped = false
 
     init(
@@ -40,6 +43,38 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
             excludingApplications: excludedApps,
             exceptingWindows: []
         )
+        let configuration = streamConfiguration()
+
+        let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
+        try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: captureQueue)
+        if includeMicrophone {
+            try stream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: captureQueue)
+        }
+        self.stream = stream
+        try await stream.startCapture()
+        if includeMicrophone {
+            let monitor = DefaultInputMonitor(queue: routeQueue)
+            try monitor.start { [weak self] in self?.refreshMicrophoneRoute() }
+            routeMonitor = monitor
+        }
+        return microphone?.localizedName
+    }
+
+    func stop() async throws {
+        guard !stopped else { return }
+        stopped = true
+        routeMonitor?.stop()
+        routeMonitor = nil
+        try await stream?.stopCapture()
+        try captureQueue.sync { try mixer.finish() }
+        stream = nil
+    }
+
+    func metrics(startedAt: Double, now: Double) -> [String: Any] {
+        captureQueue.sync { mixer.metrics(startedAt: startedAt, now: now) }
+    }
+
+    private func streamConfiguration() -> SCStreamConfiguration {
         let configuration = SCStreamConfiguration()
         configuration.width = 2
         configuration.height = 2
@@ -52,27 +87,21 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
         // pinning the AVCapture device UID. Bluetooth headsets can renegotiate
         // their input route as a stream begins; a pinned UID can then deliver
         // valid callbacks containing only silence.
+        return configuration
+    }
 
-        let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
-        try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: captureQueue)
-        if includeMicrophone {
-            try stream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: captureQueue)
+    private func refreshMicrophoneRoute() {
+        guard includeMicrophone, !stopped, let stream else { return }
+        stream.updateConfiguration(streamConfiguration()) { error in
+            guard let error else {
+                emitJSON(["event": "microphone-route-refreshed"])
+                return
+            }
+            emitJSON([
+                "event": "microphone-route-refresh-failed",
+                "message": "Could not refresh microphone routing: \(error.localizedDescription)",
+            ])
         }
-        self.stream = stream
-        try await stream.startCapture()
-        return microphone?.localizedName
-    }
-
-    func stop() async throws {
-        guard !stopped else { return }
-        stopped = true
-        try await stream?.stopCapture()
-        try captureQueue.sync { try mixer.finish() }
-        stream = nil
-    }
-
-    func metrics(startedAt: Double, now: Double) -> [String: Any] {
-        captureQueue.sync { mixer.metrics(startedAt: startedAt, now: now) }
     }
 
     func stream(
