@@ -15,8 +15,8 @@ from meeting_memory.types.audio import (
 
 SOURCE_CALLBACK_GRACE_SECONDS = 10
 SOURCE_STALL_SECONDS = 10
-SYSTEM_SILENCE_GRACE_SECONDS = 90
-SYSTEM_SILENCE_PEAK = 0.00001
+SOURCE_SILENCE_GRACE_SECONDS = 90
+SOURCE_SILENCE_PEAK = 0.00001
 DISCARDED_FRAME_WARNING_MINIMUM = 1_600
 DISCARDED_FRAME_WARNING_RATIO = 0.01
 LOGGER = logging.getLogger(__name__)
@@ -114,23 +114,9 @@ def diagnostic_warnings(
                     ),
                 )
             )
-    system = diagnostics.source("system")
-    if (
-        system is not None
-        and system.callbacks > 0
-        and system.peak <= SYSTEM_SILENCE_PEAK
-        and diagnostics.elapsed_seconds >= SYSTEM_SILENCE_GRACE_SECONDS
-    ):
-        warnings.append(
-            CaptureHealthWarning(
-                code="system_silent",
-                message=(
-                    "No system audio has been detected for 90 seconds. "
-                    "If the call is intentionally quiet, you can ignore this; "
-                    "otherwise verify Zoom output."
-                ),
-            )
-        )
+    for source in diagnostics.sources:
+        if _source_is_silent(source, diagnostics.elapsed_seconds):
+            warnings.append(_silent_source_warning(source))
     return tuple(warnings)
 
 
@@ -149,6 +135,34 @@ def _source_stalled(source: CaptureSourceDiagnostics, elapsed_seconds: float) ->
     return (
         source.last_callback_seconds is not None
         and elapsed_seconds - source.last_callback_seconds >= SOURCE_STALL_SECONDS
+    )
+
+
+def _source_is_silent(source: CaptureSourceDiagnostics, elapsed_seconds: float) -> bool:
+    return (
+        source.callbacks > 0
+        and source.peak <= SOURCE_SILENCE_PEAK
+        and elapsed_seconds >= SOURCE_SILENCE_GRACE_SECONDS
+    )
+
+
+def _silent_source_warning(source: CaptureSourceDiagnostics) -> CaptureHealthWarning:
+    if source.name == "system":
+        return CaptureHealthWarning(
+            code="system_silent",
+            message=(
+                "No system audio has been detected for 90 seconds. "
+                "If the call is intentionally quiet, you can ignore this; "
+                "otherwise verify Zoom output."
+            ),
+        )
+    return CaptureHealthWarning(
+        code="microphone_silent",
+        message=(
+            "No microphone audio has been detected for 90 seconds. "
+            "Verify the selected macOS input; a connected headset can be "
+            "available for output while its microphone is not delivering audio."
+        ),
     )
 
 

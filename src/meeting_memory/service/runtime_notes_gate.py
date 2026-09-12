@@ -54,8 +54,8 @@ class RuntimeNotesGate:
                 NotifyEvent("Notes generation stopped", "Notes is disabled for this session.")
             )
             return
-        except Exception:
-            LOGGER.warning("Notes generation failed")
+        except Exception as exc:
+            LOGGER.error("Notes generation failed error_type=%s", type(exc).__name__)
             self._event_sink(
                 NotifyEvent("Notes generation failed", "Transcript remains saved locally")
             )

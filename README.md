@@ -225,7 +225,7 @@ configured, generates `notes.md` right away using the Calendar attendee names
 
 Meeting Memory checks the system and microphone streams throughout each
 recording. If a source never starts, stalls, loses a material share or burst of
-frames during mixing, or system audio remains silent for 90 seconds, the timer
+frames during mixing, or either source remains silent for 90 seconds, the timer
 and Stop label gain `⚠︎` and a notification offers a Stop action. The warning
 clears when the source recovers. Final source counters, unresolved warnings,
 and recovered warning history are saved as `capture_diagnostics` in

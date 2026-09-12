@@ -16,6 +16,7 @@ from typing import Protocol
 
 from meeting_memory.config.defaults import DEFAULT_NOTES_REPORT_TEMPLATE
 from meeting_memory.service.atomic_io import atomic_replace_text_at
+from meeting_memory.service.backup_revision import normalize_transcript_for_backup
 from meeting_memory.service.frontmatter import split_frontmatter
 from meeting_memory.service.legacy_snapshot import (
     capture_legacy_document_snapshot,
@@ -60,6 +61,7 @@ def generate_v2_notes(
     """Summarize a stable confirmed snapshot, then publish only if still current."""
 
     snapshot, body, meta, identity, frontmatter = _confirmed_snapshot(meetings_dir, meeting_dir)
+    source_revision = normalize_transcript_for_backup(snapshot)
     summary = summarizer.summarize(notes_input_text(frontmatter, body))
     rendered = render_notes_markdown(
         meta,
@@ -71,7 +73,10 @@ def generate_v2_notes(
     with meeting_lock(meetings_dir, meeting_dir.name):
         with open_meeting_document(meetings_dir, meeting_dir) as document:
             current = os.fstat(document.directory_fd)
-            if (current.st_dev, current.st_ino) != identity or document.text != snapshot:
+            if (
+                (current.st_dev, current.st_ino) != identity
+                or normalize_transcript_for_backup(document.text) != source_revision
+            ):
                 raise ValueError("transcript changed while Notes were being generated")
             _reject_unsafe_notes(document.directory_fd)
             atomic_replace_text_at(document.directory_fd, "notes.md", rendered)

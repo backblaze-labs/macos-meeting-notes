@@ -138,8 +138,8 @@ class TrayController:
                 self.thread_factory(
                     target=self.run_local_commit, args=(recovery, meta), daemon=True
                 ).start()
-            except Exception:
-                LOGGER.warning("Could not launch local commit worker")
+            except Exception as exc:
+                LOGGER.error("Local commit worker start failed type=%s", type(exc).__name__)
                 self.event_queue.put(
                     NotifyEvent("Recording could not finish", "Local commit could not start.")
                 )
@@ -160,8 +160,8 @@ class TrayController:
             if is_active_recovery(self.recorder, recovery):
                 return False
             return self.committer.commit(recovery, meta) is not None
-        except Exception:
-            LOGGER.warning("Local meeting commit failed")
+        except Exception as exc:
+            LOGGER.error("Local meeting commit failed error_type=%s", type(exc).__name__)
             self.event_queue.put(
                 NotifyEvent(
                     title="Recording could not finish",
@@ -243,8 +243,8 @@ class TrayController:
         if self.recording_context_provider is not None:
             try:
                 return self.recording_context_provider()
-            except Exception:
-                LOGGER.warning("Could not resolve recording context")
+            except Exception as exc:
+                LOGGER.error("Recording context failed type=%s", type(exc).__name__)
                 self.event_queue.put(
                     NotifyEvent(
                         "Calendar lookup failed",

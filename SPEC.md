@@ -400,8 +400,8 @@ or contiguous burst of frames during mixing, the tray MUST show a warning and
 send a notification with a Stop action. A discard is material only after at
 least 1,600 frames and either a one-percent captured-frame ratio or one
 contiguous 1,600-frame run; isolated resampling-rounding trims MUST NOT warn.
-System audio that continues to arrive at a zero peak for 90 seconds MUST also
-warn. A live warning MUST clear after its condition recovers.
+An expected source that continues to arrive at a zero peak for 90 seconds MUST
+also warn. A live warning MUST clear after its condition recovers.
 
 **REQ-F3-13** Every successfully stopped native recording MUST retain final
 per-source diagnostics in its recovery index and schema-v2 transcript metadata,
