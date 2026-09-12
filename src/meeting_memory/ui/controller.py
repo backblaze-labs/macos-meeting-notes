@@ -18,7 +18,6 @@ from meeting_memory.service.pipeline import Pipeline
 from meeting_memory.service.recorder import RecorderService, RecordingResult
 from meeting_memory.service.recording_context import context_from_meetings
 from meeting_memory.service.runtime_legacy_recovery import LegacyRecoveryRuntime
-from meeting_memory.service.runtime_notes_gate import RuntimeNotesGate
 from meeting_memory.service.storage import list_recent_meetings
 from meeting_memory.service.transcript_review import confirm_speaker_aliases
 from meeting_memory.types.events import (
@@ -36,6 +35,7 @@ from meeting_memory.types.meeting import (
 from meeting_memory.types.recovery import RecoveryIndexEntry, RecoveryOrigin
 from meeting_memory.ui.legacy_processing import launch_legacy_processing
 from meeting_memory.ui.macos import open_in_finder
+from meeting_memory.ui.notes_flow import NotesFlow
 from meeting_memory.ui.recording_duration_guard import RecordingDurationGuard
 from meeting_memory.ui.recording_health import completed_capture_warning
 from meeting_memory.ui.recording_transitions import RecordingTransitions
@@ -69,11 +69,15 @@ class TrayController:
     _recording_token: object | None = field(default=None, init=False)
     _duration_guard: RecordingDurationGuard = field(init=False)
     _transitions: RecordingTransitions = field(init=False)
-    _notes_runtime: RuntimeNotesGate = field(init=False)
+    _notes: NotesFlow = field(init=False)
 
     def __post_init__(self) -> None:
-        self._notes_runtime = RuntimeNotesGate(
-            self.notes_generator, self.event_queue.put, self.thread_factory, self.notes_allowed
+        self._notes = NotesFlow(
+            self.notes_generator,
+            self.event_queue.put,
+            self.thread_factory,
+            self.notes_allowed,
+            lambda path: self.confirm_speaker_aliases(path, {}, keep_labels=True),
         )
         self._transitions = RecordingTransitions(
             self.recorder,
@@ -193,24 +197,17 @@ class TrayController:
         return reviewed
 
     def generate_notes(self, path: Path) -> None:
-        self._notes_runtime.start(path)
+        self._notes.generate(path)
+
+    @property
+    def notes_available(self) -> bool:
+        return self._notes.available
 
     def auto_generate_notes(self, path: Path) -> None:
-        """Keep the diarized labels (off the UI thread), then start Notes: the
-        calendar attendees reach the summarizer, so no manual review step."""
-        self.thread_factory(target=self._confirm_then_summarize, args=(path,), daemon=True).start()
-
-    def _confirm_then_summarize(self, path: Path) -> None:
-        try:
-            self.confirm_speaker_aliases(path, {}, keep_labels=True)
-        except Exception:
-            LOGGER.warning("Transcript could not be confirmed for Notes", exc_info=True)
-            self.event_queue.put(NotifyEvent("Notes skipped", "No speaker labels in transcript."))
-            return
-        self._notes_runtime.start(path)
+        self._notes.auto_generate(path)
 
     def set_notes_enabled(self, enabled: bool) -> None:
-        self._notes_runtime.set_enabled(enabled)  # in-flight generations finish
+        self._notes.set_enabled(enabled)
 
     def recovered_recordings(self) -> list[RecoveryIndexEntry]:
         return list_recoveries(self.recorder, self.legacy_recovery)
