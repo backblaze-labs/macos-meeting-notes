@@ -13,6 +13,7 @@ from meeting_memory.service.recorder import RecordingSession
 from meeting_memory.service.screenshots import ScreenshotStore
 from meeting_memory.types.events import NotifyEvent, RecordingCommitted, TranscriptReady
 from meeting_memory.types.meeting import MeetingMeta, MeetingRef
+from meeting_memory.types.recovery import RecoveryIndexEntry, RecoveryOrigin
 from meeting_memory.ui.screenshot_actions import (
     CAPTURE_FAILED_TITLE,
     NO_RECORDING_TITLE,
@@ -23,6 +24,7 @@ from meeting_memory.ui.tray import RumpsTrayApp, TrayController
 
 STARTED_AT = datetime(2026, 6, 11, 9, 0, tzinfo=UTC)
 SLUG = "2026-06-11_09-00_product-sync"
+SESSION = "capture.a1b2c3"
 
 
 def test_take_requires_an_active_recording(tmp_path: Path) -> None:
@@ -48,10 +50,21 @@ def test_take_stages_a_screenshot_for_the_active_recording(tmp_path: Path) -> No
         NotifyEvent(SAVED_TITLE, "Screenshot 1 · Product Sync"),
         NotifyEvent(SAVED_TITLE, "Screenshot 2 · Product Sync"),
     ]
-    assert sorted(path.name for path in (store.pending_root / "2026-06-11_09-00").iterdir()) == [
+    assert sorted(path.name for path in (store.pending_root / SESSION).iterdir()) == [
         "screenshot-01-at-01m05s.png",
         "screenshot-02-at-01m05s.png",
     ]
+
+
+def test_take_requires_a_session_with_a_recovery_entry(tmp_path: Path) -> None:
+    controller, store = _controller(tmp_path, recording=True)
+    session = controller.recorder.active_session
+    controller.recorder.active_session = RecordingSession(session.meta, session.wav_path)
+
+    ScreenshotActions(controller, store).take()
+
+    assert [event.title for event in controller.drain_events()] == [NO_RECORDING_TITLE]
+    assert not store.pending_root.exists()
 
 
 def test_take_reports_capture_failures(tmp_path: Path) -> None:
@@ -101,9 +114,20 @@ def _controller(
 ) -> tuple[TrayController, ScreenshotStore]:
     recorder = FakeRecorder(tmp_path, is_recording=recording)
     if recording:
+        meta = MeetingMeta(slug=SLUG, started_at=STARTED_AT, calendar_title="Product Sync")
+        session_dir = tmp_path / "staging" / SESSION
         recorder.active_session = RecordingSession(
-            meta=MeetingMeta(slug=SLUG, started_at=STARTED_AT, calendar_title="Product Sync"),
-            wav_path=tmp_path / "recording.wav",
+            meta=meta,
+            wav_path=session_dir / "recording.wav",
+            recovery=RecoveryIndexEntry(
+                session_directory=session_dir,
+                source_path=session_dir / "recording.wav",
+                index_path=session_dir / "recovery.json",
+                meta=meta,
+                origin=RecoveryOrigin.APP_STAGING,
+                session_device=1,
+                session_inode=1,
+            ),
         )
     controller = TrayController(
         settings=_settings(tmp_path),
@@ -123,4 +147,4 @@ def _publish(meetings_dir: Path, slug: str) -> MeetingRef:
     directory.mkdir(parents=True)
     (directory / "transcript.md").write_text("---\nschema_version: 2\n---\n")
     (directory / "recording.m4a").write_bytes(b"audio")
-    return MeetingRef(slug, "Product Sync", directory)
+    return MeetingRef(slug, "Product Sync", directory, SESSION)

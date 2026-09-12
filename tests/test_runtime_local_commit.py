@@ -53,7 +53,8 @@ def test_commit_event_cleanup_and_optional_launch_have_strict_order(
         validate_m4a=lambda _path: None,
         policy_provider=lambda: policy,
         post_commit_launcher=lambda _files, captured: (
-            policies.append(captured), order.append("workers")
+            policies.append(captured),
+            order.append("workers"),
         ),
     )
 
@@ -107,9 +108,7 @@ def test_published_cleanup_uncertain_continues_event_cleanup_workers(
     monkeypatch.setattr(recovery_commit, "_close_source", close_then_fail)
     committer = LocalRecordingCommitter(
         MeetingStore(tmp_path / "meetings"),
-        lambda event: observed.append("event")
-        if isinstance(event, RecordingCommitted)
-        else None,
+        lambda event: observed.append("event") if isinstance(event, RecordingCommitted) else None,
         converter=lambda _wav, output: output.write_bytes(b"m4a"),
         validate_m4a=lambda _path: None,
         post_commit_launcher=lambda _files, _policy: observed.append("workers"),
@@ -161,9 +160,7 @@ def test_durability_uncertain_persists_exact_reconciliation_without_duplicate(
         committed_events.append,
         converter=lambda *_args: (_ for _ in ()).throw(AssertionError("converted twice")),
         validate_m4a=lambda *_args: (_ for _ in ()).throw(AssertionError("validated twice")),
-        post_commit_launcher=lambda files, policy: reconciled_launches.append(
-            (files, policy)
-        ),
+        post_commit_launcher=lambda files, policy: reconciled_launches.append((files, policy)),
     )
 
     files = reconciler.commit(entry, entry.meta)
@@ -171,6 +168,7 @@ def test_durability_uncertain_persists_exact_reconciliation_without_duplicate(
     assert files is not None and files.directory == meetings / meta.slug
     assert len(committed_events) == 1
     assert isinstance(committed_events[0], RecordingCommitted)
+    assert committed_events[0].meeting.recording_session == entry.session_directory.name
     assert len(reconciled_launches) == 1
     assert not entry.session_directory.exists()
     assert not (meetings / f"{meta.slug}-2").exists()
@@ -263,4 +261,3 @@ def test_partially_pinned_source_is_rejected_without_repin(tmp_path: Path) -> No
 
     with pytest.raises(ValueError, match="provenance is incomplete"):
         committer.commit(partial, meta)
-

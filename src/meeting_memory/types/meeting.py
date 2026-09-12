@@ -73,11 +73,17 @@ class MeetingDirectoryIdentity:
 
 @dataclass(frozen=True)
 class MeetingRef:
-    """Stable reference carried by local-first boundary events."""
+    """Stable reference carried by local-first boundary events.
+
+    ``recording_session`` is the unique private capture session name the
+    recording was staged under, when the emitter knows it. It is the durable
+    key for artifacts staged before the meeting directory existed.
+    """
 
     slug: str
     calendar_title: str
     directory: Path
+    recording_session: str | None = None
 
     @property
     def audio_path(self) -> Path:

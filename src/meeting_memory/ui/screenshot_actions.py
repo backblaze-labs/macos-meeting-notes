@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from meeting_memory.service.recorder import RecordingSession
 from meeting_memory.service.screenshots import ScreenshotStore
 from meeting_memory.types.events import (
     NotifyEvent,
@@ -38,11 +39,14 @@ class ScreenshotActions:
     def take(self) -> None:
         recorder = self.controller.recorder
         session = recorder.active_session
-        if session is None or not recorder.is_recording:
+        session_id = recording_session_id(session) if recorder.is_recording else None
+        if session is None or session_id is None:
             self._notify(NO_RECORDING_TITLE, NO_RECORDING_BODY)
             return
         try:
-            captured = self.store.capture(session.meta.started_at, now=self.controller.now())
+            captured = self.store.capture(
+                session_id, started_at=session.meta.started_at, now=self.controller.now()
+            )
         except Exception:
             LOGGER.warning("Screenshot capture failed", exc_info=True)
             self._notify(CAPTURE_FAILED_TITLE, CAPTURE_FAILED_BODY)
@@ -66,6 +70,18 @@ class ScreenshotActions:
 
     def _notify(self, title: str, body: str) -> None:
         self.controller.event_queue.put(NotifyEvent(title, body))
+
+
+def recording_session_id(session: RecordingSession | None) -> str | None:
+    """Return the durable capture session name behind an active recording.
+
+    Change this if the recorder ever stages recordings somewhere other than an
+    indexed recovery session.
+    """
+
+    if session is None or session.recovery is None:
+        return None
+    return session.recovery.session_directory.name
 
 
 def published_meeting(event: object) -> MeetingRef | None:

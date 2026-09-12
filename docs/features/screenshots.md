@@ -12,8 +12,8 @@ meeting directory; two or more are grouped in a `screenshots/` subfolder.
 - The global shortcut **⌥⇧S** (Option+Shift+S), registered through the Carbon
   hot-key API so it works from any app without Accessibility or Input
   Monitoring permission
-- The active recording's start time (screenshots need a recording; without
-  one the app notifies "No active recording")
+- The active recording's capture session and start time (screenshots need a
+  recording; without one the app notifies "No active recording")
 
 ## Outputs
 
@@ -34,11 +34,13 @@ atomic rename, so screenshots are staged until then.
 ## Behavior Notes
 
 - While recording, screenshots are staged under
-  `MEETINGS_DIR/.meeting-memory-staging/screenshots/<start-minute>/` on the
-  same filesystem as the meetings, keyed by the recording's start minute — the
-  prefix its meeting slug carries. When the meeting directory is published
-  the files are renamed into it. Two recordings that start within the same
-  minute share a key; their screenshots attach to whichever commits first.
+  `MEETINGS_DIR/.meeting-memory-staging/screenshots/<capture-session>/` on
+  the same filesystem as the meetings, keyed by the recording's unique
+  capture session name (the private recovery session directory). That name
+  survives title changes and crash recovery, and the committed-meeting event
+  carries it, so two recordings that start within the same minute never mix
+  screenshots. When the meeting directory is published the files are renamed
+  into it.
 - Staged screenshots survive a crash: a recovered recording that commits later
   still receives them.
 - `screencapture -x -t png` captures the main display silently. If macOS

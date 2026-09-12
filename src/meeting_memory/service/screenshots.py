@@ -3,10 +3,12 @@
 Screenshots taken while a recording is active cannot go into the meeting
 directory yet: that directory only appears when the local commit publishes it
 with one atomic rename. They are staged under the app-owned staging root on
-the ``MEETINGS_DIR`` filesystem, keyed by the recording's start minute (the
-same prefix its meeting slug carries), and moved into the published directory
-when a committed-meeting event names that slug. One screenshot lands directly
-in the meeting directory; two or more land in a ``screenshots/`` subfolder.
+the ``MEETINGS_DIR`` filesystem, keyed by the recording's unique capture
+session name (the private recovery session directory, which survives title
+changes and crash recovery), and moved into the published directory when a
+committed-meeting event carries that session name. One screenshot lands
+directly in the meeting directory; two or more land in a ``screenshots/``
+subfolder.
 """
 
 from __future__ import annotations
@@ -26,8 +28,7 @@ LOGGER = logging.getLogger(__name__)
 SCREENSHOT_SUFFIX = ".png"
 SCREENSHOTS_FOLDER = "screenshots"
 STAGING_FOLDER = ".meeting-memory-staging"
-RECORDING_KEY_FORMAT = "%Y-%m-%d_%H-%M"
-_RECORDING_KEY = re.compile(r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}")
+_SESSION_KEY = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 Capturer = Callable[[Path], None]
 
 
@@ -52,10 +53,15 @@ class ScreenshotStore:
     def pending_root(self) -> Path:
         return self.meetings_dir / STAGING_FOLDER / SCREENSHOTS_FOLDER
 
-    def capture(self, started_at: datetime, *, now: datetime) -> CapturedScreenshot:
-        """Capture one screenshot for the recording that began at ``started_at``."""
+    def capture(
+        self, session_id: str, *, started_at: datetime, now: datetime
+    ) -> CapturedScreenshot:
+        """Capture one screenshot for the capture session ``session_id``.
 
-        pending = self.pending_root / recording_key(started_at)
+        ``started_at`` only names the file by its offset into the recording.
+        """
+
+        pending = self.pending_root / validate_session_key(session_id)
         pending.mkdir(parents=True, exist_ok=True)
         index = len(_pending_files(pending)) + 1
         destination = pending / screenshot_name(index, now - started_at)
@@ -64,13 +70,17 @@ class ScreenshotStore:
             raise ScreenshotUnavailable(f"no screenshot was written at {destination}")
         return CapturedScreenshot(destination, index)
 
-    def pending_count(self, started_at: datetime) -> int:
-        return len(_pending_files(self.pending_root / recording_key(started_at)))
+    def pending_count(self, session_id: str) -> int:
+        return len(_pending_files(self.pending_root / validate_session_key(session_id)))
 
     def attach(self, meeting: MeetingRef) -> tuple[Path, ...]:
-        """Move staged screenshots into a published meeting directory."""
+        """Move staged screenshots into a published meeting directory.
 
-        key = recording_key_from_slug(meeting.slug)
+        A meeting without a known capture session, or with a session name that
+        is not one safe path component, attaches nothing.
+        """
+
+        key = session_key(meeting.recording_session)
         if key is None:
             return ()
         pending = self.pending_root / key
@@ -100,13 +110,21 @@ class ScreenshotStore:
         return directory.parent.resolve() == self.meetings_dir.resolve()
 
 
-def recording_key(started_at: datetime) -> str:
-    return f"{started_at:{RECORDING_KEY_FORMAT}}"
+def session_key(session_id: str | None) -> str | None:
+    """Return the staging folder name for a capture session, or None if unusable."""
+
+    if not isinstance(session_id, str) or _SESSION_KEY.fullmatch(session_id) is None:
+        return None
+    return session_id
 
 
-def recording_key_from_slug(slug: str) -> str | None:
-    match = _RECORDING_KEY.match(slug)
-    return match.group(0) if match else None
+def validate_session_key(session_id: str) -> str:
+    """Reject a capture session name that could escape the staging root."""
+
+    key = session_key(session_id)
+    if key is None:
+        raise ValueError("capture session name must be one safe path component")
+    return key
 
 
 def screenshot_name(index: int, elapsed: timedelta) -> str:
