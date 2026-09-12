@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from meeting_memory.types.meeting import RecentMeeting
+from meeting_memory.types.processing import ProcessingTask
 
 APP_TITLE = "● Meeting Memory"
 SCREENSHOT_SHORTCUT = "⌥⇧S"
@@ -12,6 +13,7 @@ AUDIO_MODE_HEADER = "Audio Mode"
 CONFIGURATION_LABEL = "Configuration"
 DEBUGGING_LABEL = "Debugging"
 NO_MEETINGS_LABEL = "No meetings yet"
+PROCESSING_HEADER = "Pending Meeting Tasks"
 RECOVERED_HEADER = "Interrupted Recordings"
 LEGACY_RECOVERY_SCAN_LABEL = "Find Legacy Recordings..."
 NO_RECOVERED_LABEL = "No recovered recordings"
@@ -40,6 +42,23 @@ def recording_label(
 
 def recent_meeting_label(meeting: RecentMeeting) -> str:
     return f"{meeting.started_at:%Y-%m-%d %H:%M} · {meeting.calendar_title}"
+
+
+def processing_task_label(task: ProcessingTask) -> str:
+    meeting = task.meeting
+    return f"{meeting.started_at:%Y-%m-%d %H:%M} · {task.label} · {meeting.calendar_title}"
+
+
+def processing_header_label(count: int) -> str:
+    return f"{PROCESSING_HEADER} ({count})"
+
+
+def processing_task_tooltip(task: ProcessingTask) -> str:
+    if task.action == "review_speakers":
+        return "Confirm who each speaker is, then generate notes."
+    if task.status in {"failed", "skipped"}:
+        return "Retry notes generation for this meeting."
+    return "Generate notes from the reviewed transcript."
 
 
 def recovered_header_label(count: int) -> str:

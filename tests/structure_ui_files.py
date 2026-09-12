@@ -37,4 +37,8 @@ REQUIRED_UI_SOURCE_FILES = (
     "ui/status_menu.py",
     "ui/screenshot_actions.py",
     "ui/screenshot_hotkey.py",
+    "ui/speaker_review.py",
+    "ui/processing_actions.py",
+    "ui/notes_flow.py",
+    "ui/stop_reminder.py",
 )

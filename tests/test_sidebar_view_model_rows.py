@@ -92,6 +92,8 @@ def test_recovered_row_action_invokes_process_recovered_recording(tmp_path: Path
     configuration_actions, _ = no_op_actions()
     processed = []
     debugging_actions = DebuggingActions(
+        review_speakers=lambda _path: None,
+        generate_notes=lambda _path: None,
         process_recovered_recording=lambda recording: processed.append(recording),
         scan_legacy_recoveries=lambda: None,
         sync_to_b2=lambda: None,

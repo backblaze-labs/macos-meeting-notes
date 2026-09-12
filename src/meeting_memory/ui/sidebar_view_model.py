@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from meeting_memory.service.audio_modes import AUDIO_MODES
@@ -17,6 +18,7 @@ from meeting_memory.types.capabilities import Capability, ReadinessReport
 from meeting_memory.ui import menu
 from meeting_memory.ui.audio_modes import AudioModeMenu
 from meeting_memory.ui.controller import TrayController
+from meeting_memory.ui.processing_actions import run_processing_task
 from meeting_memory.ui.setup_readiness import readiness_menu_label, readiness_tooltip
 
 RECENT_MEETINGS_CAP = 3
@@ -39,6 +41,8 @@ class ConfigurationActions:
 
 @dataclass(frozen=True)
 class DebuggingActions:
+    review_speakers: Callable[[Path], None]
+    generate_notes: Callable[[Path], None]
     process_recovered_recording: Callable[[Any], None]
     scan_legacy_recoveries: Callable[[], None]
     sync_to_b2: Callable[[], None]
@@ -75,6 +79,7 @@ class SidebarViewModel:
     recording: RecordingView
     audio_modes: tuple[RowView, ...]
     recent: SectionView
+    processing: SectionView  # Pending Meeting Tasks; header always shown with its count
     recovered: SectionView  # rows empty -> section hidden
     readiness: tuple[RowView, ...]
     configuration: tuple[RowView, ...]
@@ -95,6 +100,7 @@ def build_view_model(
         recording=recording_view_for(controller),
         audio_modes=_audio_mode_rows(audio_mode_menu),
         recent=_recent_section(controller),
+        processing=_processing_section(controller, debugging_actions),
         recovered=_recovered_section(controller, debugging_actions),
         readiness=_readiness_rows(readiness_report),
         configuration=_configuration_rows(configuration_actions),
@@ -148,6 +154,27 @@ def _recent_section(controller: TrayController) -> SectionView:
             for item in meetings[:RECENT_MEETINGS_CAP]
         ),
         empty_label=menu.NO_MEETINGS_LABEL if not meetings else None,
+    )
+
+
+def _processing_section(controller: TrayController, actions: DebuggingActions) -> SectionView:
+    """Meetings waiting on speaker review or Notes (SPEC F8, Debugging submenu)."""
+
+    tasks = controller.pending_processing_tasks()
+    return SectionView(
+        title=menu.processing_header_label(len(tasks)),
+        rows=tuple(
+            RowView(
+                label=menu.processing_task_label(task),
+                tooltip=menu.processing_task_tooltip(task),
+                action=lambda task=task: run_processing_task(
+                    task,
+                    review_speakers=actions.review_speakers,
+                    generate_notes=actions.generate_notes,
+                ),
+            )
+            for task in tasks
+        ),
     )
 
 

@@ -48,6 +48,8 @@ def flatten_view_model(view) -> list[str]:
     labels += [row.label for row in view.audio_modes]
     labels += [row.label for row in view.configuration]
     labels.append(menu.DEBUGGING_LABEL)
+    labels.append(view.processing.title)
+    labels += [row.label for row in view.processing.rows]
     labels += [row.label for row in view.readiness]
     if view.recovered.rows:
         labels.append(view.recovered.title)
@@ -122,6 +124,8 @@ def no_op_actions() -> tuple[ConfigurationActions, DebuggingActions]:
             open_notes_prompt=lambda: None,
         ),
         DebuggingActions(
+            review_speakers=lambda _path: None,
+            generate_notes=lambda _path: None,
             process_recovered_recording=lambda _recording: None,
             scan_legacy_recoveries=lambda: None,
             sync_to_b2=lambda: None,

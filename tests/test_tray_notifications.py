@@ -78,8 +78,7 @@ def test_stop_notification_uses_stop_action(tmp_path: Path) -> None:
     assert fake_rumps.notification_options[0]["data"] == {"action": "stop_recording"}
 
 
-def test_transcript_ready_starts_notes_and_offers_open(tmp_path: Path) -> None:
-    # No speaker-review step: the transcript's calendar attendees feed Notes.
+def test_transcript_ready_offers_manual_speaker_review_by_default(tmp_path: Path) -> None:
     fake_rumps = FakeRumps()
     controller = FakeController(tmp_path)
     app = RumpsTrayApp(controller, rumps_module=fake_rumps)
@@ -87,8 +86,26 @@ def test_transcript_ready_starts_notes_and_offers_open(tmp_path: Path) -> None:
 
     app.handle_event(TranscriptReady(meeting))
 
-    assert controller.auto_notes == [tmp_path]
+    assert controller.auto_notes == []
     assert fake_rumps.notifications[0][:2] == ("Transcript ready", "")
+    assert fake_rumps.notifications[0][2] == "Product Sync · review speakers"
+    assert fake_rumps.notification_options[0]["action_button"] == "Review Speakers"
+    assert fake_rumps.notification_options[0]["data"] == {
+        "action": "review_speakers",
+        "meeting_directory": str(tmp_path),
+    }
+
+
+def test_transcript_ready_starts_notes_when_automatic_mode_is_on(tmp_path: Path) -> None:
+    fake_rumps = FakeRumps()
+    controller = FakeController(tmp_path)
+    app = RumpsTrayApp(controller, rumps_module=fake_rumps)
+    app.automatic_notes = lambda: True
+    meeting = MeetingRef("2026-06-11_09-00_product-sync", "Product Sync", tmp_path)
+
+    app.handle_event(TranscriptReady(meeting))
+
+    assert controller.auto_notes == [tmp_path]
     assert fake_rumps.notifications[0][2] == "Product Sync · generating notes"
     assert fake_rumps.notification_options[0]["action_button"] == "Open"
     assert fake_rumps.notification_options[0]["data"] == {
@@ -104,17 +121,27 @@ def test_open_meeting_notification_reveals_the_directory(tmp_path: Path) -> None
     controller.opener = opened.append
 
     app.handle_notification({"action": "open_meeting", "meeting_directory": str(tmp_path)})
+
+    assert opened == [tmp_path]
+
+
+def test_review_speakers_notification_opens_the_review_window(tmp_path: Path) -> None:
+    app = RumpsTrayApp(FakeController(tmp_path), rumps_module=FakeRumps())
+    reviewed: list[Path] = []
+    app.open_speaker_review = reviewed.append
+
     app.handle_notification({"action": "review_speakers", "meeting_directory": str(tmp_path)})
 
-    assert opened == [tmp_path]  # the retired review action is ignored
+    assert reviewed == [tmp_path]
 
 
-def test_debugging_submenu_has_no_pending_task_section(tmp_path: Path) -> None:
+def test_debugging_submenu_starts_with_pending_meeting_tasks(tmp_path: Path) -> None:
     app = RumpsTrayApp(FakeController(tmp_path), rumps_module=FakeRumps())
 
     debugging_titles = submenu_titles(app, menu.DEBUGGING_LABEL)
 
     assert debugging_titles == [
+        menu.processing_header_label(0),
         menu.LEGACY_RECOVERY_SCAN_LABEL,
         menu.SYNC_LABEL,
         menu.RETRY_PROCESSING_LABEL,
@@ -162,6 +189,9 @@ class FakeController:
     def recovered_recordings(self) -> list[object]:
         return []
 
+    def pending_processing_tasks(self) -> list[object]:
+        return []
+
     def recording_duration_seconds(self) -> int:
         return 0
 
@@ -179,6 +209,18 @@ class FakeController:
 
     def auto_generate_notes(self, path: Path) -> None:
         self.auto_notes.append(path)
+
+    def generate_notes(self, path: Path) -> None:
+        pass
+
+    def load_speaker_review(self, path: Path) -> object:
+        raise NotImplementedError
+
+    def confirm_speaker_aliases(self, path: Path, aliases: dict[str, str]) -> Path:
+        return path
+
+    def keep_speaker_labels(self, path: Path) -> Path:
+        return path
 
     def process_recovered_recording(self, recording: object) -> None:
         pass

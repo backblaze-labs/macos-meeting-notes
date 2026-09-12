@@ -50,6 +50,7 @@ REQUIRED_SOURCE_FILES = (
     "types/egress.py",
     "types/recovery.py",
     "types/speakers.py",
+    "types/processing.py",
     "config/__init__.py",
     "config/notes_template.py",
     "config/settings.py",
@@ -144,6 +145,7 @@ REQUIRED_SOURCE_FILES = (
     "service/calendar_authorization.py",
     "service/sync.py",
     "service/screenshots.py",
+    "service/processing_state.py",
     *REQUIRED_UI_SOURCE_FILES,
 )
 

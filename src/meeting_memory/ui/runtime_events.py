@@ -10,7 +10,14 @@ from meeting_memory.types.events import (
 )
 
 
-def runtime_notification(event: object) -> NotifyEvent | None:
+def runtime_notification(event: object, *, automatic_notes: bool = False) -> NotifyEvent | None:
+    """Map a typed runtime event to its exact tray notification.
+
+    ``automatic_notes`` selects the transcript-ready copy: the default offers
+    manual speaker review; the opt-in automatic mode reports that Notes are
+    being generated. Change this when notification copy in SPEC F9 changes.
+    """
+
     if isinstance(event, RecordingCommitted):
         return NotifyEvent(
             "Recording saved",
@@ -36,11 +43,19 @@ def runtime_notification(event: object) -> NotifyEvent | None:
             meeting_directory=event.meeting.directory,
         )
     if isinstance(event, TranscriptReady):
+        if automatic_notes:
+            return NotifyEvent(
+                "Transcript ready",
+                f"{event.meeting.calendar_title} · generating notes",
+                action_label="Open",
+                action="open_meeting",
+                meeting_directory=event.meeting.directory,
+            )
         return NotifyEvent(
             "Transcript ready",
-            f"{event.meeting.calendar_title} · generating notes",
-            action_label="Open",
-            action="open_meeting",
+            f"{event.meeting.calendar_title} · review speakers",
+            action_label="Review Speakers",
+            action="review_speakers",
             meeting_directory=event.meeting.directory,
         )
     if isinstance(event, TranscriptionFailed):

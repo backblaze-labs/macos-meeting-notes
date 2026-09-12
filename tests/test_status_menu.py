@@ -58,6 +58,8 @@ def test_menu_order_matches_the_spec_and_puts_the_sidebar_toggle_first() -> None
         "Notes Customization...",
     ]
     assert _titles(_submenu(app_menu, menu.DEBUGGING_LABEL).items) == [
+        "Pending Meeting Tasks (0)",
+        None,
         "Calendar: connected",
         None,
         "Check Setup & Dependencies",

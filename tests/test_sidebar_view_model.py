@@ -1,8 +1,8 @@
 """View-model snapshot tests.
 
 The snapshot covers every label the status-item menu and the compact
-sidebar render, in menu order — the same rows the original dropdown showed
-minus the retired speaker-review tasks. If the expected lists ever need
+sidebar render, in menu order — the same rows the original dropdown showed,
+including Pending Meeting Tasks. If the expected lists ever need
 editing, the menu's content changed and the diff needs review — not a new
 snapshot. Per-row unit tests for `build_view_model` live in
 tests/test_sidebar_view_model_rows.py.
@@ -23,6 +23,7 @@ from sidebar_view_model_test_fixtures import (
 from test_tray import FakePipeline, FakeRecorder, _settings
 from tray_fakes import FakeRumps
 
+from meeting_memory.types.processing import ProcessingTask
 from meeting_memory.ui.tray import RumpsTrayApp, TrayController
 
 CONFIGURATION_TITLES = [
@@ -83,6 +84,7 @@ EXPECTED_POPULATED_TITLES = [
     "Open Meetings Folder",
     *CONFIGURATION_TITLES,
     "Debugging",
+    "Pending Meeting Tasks (0)",
     "Recording Core: Ready",
     "Transcription: Degraded",
     "Backup: Failed",
@@ -116,15 +118,21 @@ def test_sidebar_snapshot_idle_empty(tmp_path: Path) -> None:
         "Open Meetings Folder",
         *CONFIGURATION_TITLES,
         "Debugging",
+        "Pending Meeting Tasks (0)",
         *DIAGNOSTIC_TITLES,
         "Quit",
     ]
 
 
-def test_no_pending_task_or_speaker_review_rows_anywhere(tmp_path: Path) -> None:
-    # Notes now follow transcription automatically with calendar attendees;
-    # the "Pending Meeting Tasks" / "Review speakers" surfaces are gone.
+def test_pending_speaker_review_shows_as_a_debugging_task(tmp_path: Path) -> None:
+    # Manual speaker review is the default flow, so a diarized transcript that
+    # is not yet confirmed appears under Pending Meeting Tasks.
     app = _build_populated_app(tmp_path)
-    labels = " ".join(flatten_view_model(app.view_model))
-    assert "Pending Meeting Tasks" not in labels
-    assert "Review speakers" not in labels
+    meeting = recent_meeting(tmp_path, 1, "Standup")
+    app.controller.pending_processing_tasks = lambda: [
+        ProcessingTask(meeting, "speaker_review", "review_speakers", "waiting", "Review speakers")
+    ]
+    app.refresh_sidebar()
+    labels = flatten_view_model(app.view_model)
+    assert "Pending Meeting Tasks (1)" in labels
+    assert "2026-06-11 09:00 · Review speakers · Standup" in labels

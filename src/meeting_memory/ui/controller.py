@@ -15,11 +15,12 @@ from meeting_memory.config.runtime import RuntimeSettings
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.local_commit import LocalRecordingCommitter
 from meeting_memory.service.pipeline import Pipeline
+from meeting_memory.service.processing_state import list_pending_processing_tasks
 from meeting_memory.service.recorder import RecorderService, RecordingResult
 from meeting_memory.service.recording_context import context_from_meetings
 from meeting_memory.service.runtime_legacy_recovery import LegacyRecoveryRuntime
 from meeting_memory.service.storage import list_recent_meetings
-from meeting_memory.service.transcript_review import confirm_speaker_aliases
+from meeting_memory.service.transcript_review import confirm_speaker_aliases, load_speaker_review
 from meeting_memory.types.events import (
     MeetingDetected,
     NotifyEvent,
@@ -32,7 +33,9 @@ from meeting_memory.types.meeting import (
     RecentMeeting,
     RecordingContext,
 )
+from meeting_memory.types.processing import ProcessingTask
 from meeting_memory.types.recovery import RecoveryIndexEntry, RecoveryOrigin
+from meeting_memory.types.transcript import SpeakerReviewState
 from meeting_memory.ui.legacy_processing import launch_legacy_processing
 from meeting_memory.ui.macos import open_in_finder
 from meeting_memory.ui.notes_flow import NotesFlow
@@ -40,6 +43,7 @@ from meeting_memory.ui.recording_duration_guard import RecordingDurationGuard
 from meeting_memory.ui.recording_health import completed_capture_warning
 from meeting_memory.ui.recording_transitions import RecordingTransitions
 from meeting_memory.ui.recovery_actions import is_active_recovery, list_recoveries
+from meeting_memory.ui.stop_reminder import schedule_stop_reminder
 
 EventQueue = queue.Queue[object]
 ThreadFactory = Callable[..., threading.Thread]
@@ -117,7 +121,16 @@ class TrayController:
         self._recording_token = object()
         token = self._recording_token
         self._duration_guard.start(title, token)
-        self._schedule_stop_reminder(title, reminder_end, token)
+        schedule_stop_reminder(
+            calendar_title=title,
+            ends_at=reminder_end,
+            token=token,
+            now=self.now,
+            sleeper=self.sleeper,
+            thread_factory=self.thread_factory,
+            is_active=lambda t: self._recording_token is t and self.recorder.is_recording,
+            event_sink=self.event_queue.put,
+        )
 
     def _recording_stopped(self, result: RecordingResult) -> None:
         self._recording_token = None
@@ -185,6 +198,15 @@ class TrayController:
 
     def recent_meetings(self) -> list[RecentMeeting]:
         return list_recent_meetings(self.settings.meetings_dir_path)
+
+    def pending_processing_tasks(self) -> list[ProcessingTask]:
+        return list_pending_processing_tasks(self.settings.meetings_dir_path)
+
+    def load_speaker_review(self, path: Path) -> SpeakerReviewState:
+        return load_speaker_review(path)
+
+    def keep_speaker_labels(self, path: Path) -> Path:
+        return self.confirm_speaker_aliases(path, {}, keep_labels=True)
 
     def confirm_speaker_aliases(
         self, path: Path, aliases: dict[str, str], *, keep_labels: bool = False
@@ -270,27 +292,3 @@ class TrayController:
                 events.append(self.event_queue.get_nowait())
             except queue.Empty:
                 return events
-
-    def _schedule_stop_reminder(
-        self,
-        calendar_title: str,
-        ends_at: datetime | None,
-        token: object,
-    ) -> None:
-        if ends_at is None or ends_at <= self.now():
-            return
-        self.thread_factory(
-            target=self._send_stop_reminder, args=(calendar_title, ends_at, token), daemon=True
-        ).start()
-
-    def _send_stop_reminder(self, calendar_title: str, ends_at: datetime, token: object) -> None:
-        self.sleeper(max(0, (ends_at - self.now()).total_seconds()))
-        if self._recording_token is token and self.recorder.is_recording:
-            self.event_queue.put(
-                NotifyEvent(
-                    title="Meeting ending",
-                    body=f"{calendar_title} is ending now. Stop recording?",
-                    action_label="Stop",
-                    action="stop_recording",
-                )
-            )

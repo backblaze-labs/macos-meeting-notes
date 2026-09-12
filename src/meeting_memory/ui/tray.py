@@ -6,12 +6,17 @@ panel (record/stop, screenshot, quit); right-click pops up the app menu with
 everything else (`ui/status_menu.py`). Every state change funnels through
 `refresh_sidebar()`, which rebuilds both from one immutable
 `SidebarViewModel` snapshot.
+
+After transcription the default flow is manual speaker review. The opt-in
+automatic mode (`automatic_notes`) keeps the diarized labels and starts Notes
+with Calendar attendees as context instead.
 """
 
 from __future__ import annotations
 
 import logging
 import webbrowser
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +61,7 @@ from meeting_memory.ui.sidebar_view_model import (
     SidebarViewModel,
     build_view_model,
 )
+from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
 from meeting_memory.ui.status_menu import rebuild_status_menu, sidebar_toggle_label
 from meeting_memory.ui.submenus import configuration_surface_actions
 from meeting_memory.ui.title_prompt import ask_recording_title
@@ -110,6 +116,8 @@ class RumpsTrayApp:
         self.view_model: SidebarViewModel | None = None
         self.sidebar_menu_item: Any = None
         self.open_url = webbrowser.open  # swapped out by tests
+        # Opt-in automatic Notes after transcription; off means manual review.
+        self.automatic_notes: Callable[[], bool] = lambda: False
         self.recording_health = RecordingHealthMonitor(controller.recorder, controller.event_queue)
         self.audio_mode_menu = AudioModeMenu(
             self.rumps, self.controller, on_change=self.refresh_sidebar
@@ -147,6 +155,8 @@ class RumpsTrayApp:
             audio_mode_menu=self.audio_mode_menu,
             configuration_actions=configuration_surface_actions(self.configuration_ui),
             debugging_actions=DebuggingActions(
+                review_speakers=self.open_speaker_review,
+                generate_notes=self.controller.generate_notes,
                 process_recovered_recording=self.controller.process_recovered_recording,
                 scan_legacy_recoveries=self.controller.scan_legacy_recoveries,
                 sync_to_b2=self.controller.sync_to_b2,
@@ -175,6 +185,19 @@ class RumpsTrayApp:
 
     def take_screenshot(self, _sender=None) -> None:
         self.screenshots.take()
+
+    def open_speaker_review(self, meeting_path: Path) -> None:
+        open_speaker_review_window(
+            meeting_path,
+            SpeakerReviewActions(
+                load_review=self.controller.load_speaker_review,
+                confirm_aliases=self.controller.confirm_speaker_aliases,
+                keep_labels=self.controller.keep_speaker_labels,
+                generate_notes=self.controller.generate_notes,
+            ),
+            rumps_module=self.rumps,
+        )
+        self.refresh_sidebar()
 
     def run_diagnostics(self, _sender=None) -> None:
         if self.readiness_check.start() is not None:
@@ -216,10 +239,10 @@ class RumpsTrayApp:
             )
             self.refresh_sidebar()
             return
-        runtime_event = runtime_notification(event)
+        automatic = bool(self.automatic_notes())
+        runtime_event = runtime_notification(event, automatic_notes=automatic)
         if runtime_event is not None:
-            if isinstance(event, TranscriptReady):
-                # Calendar attendees ride along in the transcript; no review step.
+            if isinstance(event, TranscriptReady) and automatic:
                 self.controller.auto_generate_notes(event.meeting.directory)
             self.notify_event(runtime_event)
             self.refresh_sidebar()
@@ -267,6 +290,10 @@ class RumpsTrayApp:
             directory = data.get("meeting_directory")
             if directory:
                 self.controller.opener(Path(str(directory)))
+        elif data.get("action") == "review_speakers":
+            directory = data.get("meeting_directory")
+            if directory:
+                self.open_speaker_review(Path(str(directory)))
 
     def _send_notification(self, title: str, subtitle: str, message: str, **kwargs) -> None:
         send_notification(self.rumps, title, subtitle, message, LOGGER, **kwargs)
