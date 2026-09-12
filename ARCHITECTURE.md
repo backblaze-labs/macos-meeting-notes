@@ -19,7 +19,7 @@ types <- config <- repo <- service <- ui
 | config | `config/` | Capability-scoped settings, typed schema, pure precedence resolution, and isolated legacy validation. |
 | repo | `repo/` | External service, hardware, and Keychain adapters. |
 | service | `service/` | Local behavior, orchestration, and private app-owned filesystem stores. |
-| ui | `ui/` | `rumps` status item plus the compact AppKit sidebar (record, screenshot, quit) and the right-click `rumps` menu that holds everything else (`docs/features/sidebar.md`). `ui/sidebar_toggle.py` is the only sidebar module that reaches into rumps internals (`ui/macos.py` also does, for notifications and app identity); `ui/screenshot_hotkey.py` calls Carbon through `ctypes` for the global screenshot shortcut. |
+| ui | `ui/` | `rumps` status item and menu (Start/Stop Recording first) plus the compact AppKit sidebar (record, screenshot, quit) that appears when a recording starts (`docs/features/sidebar.md`). The menu bar icon keeps rumps' ordinary click behavior; no sidebar module reaches into rumps internals (`ui/macos.py` does, for notifications and app identity). `ui/screenshot_hotkey.py` calls Carbon through `ctypes` for the global screenshot shortcut. |
 
 Cross-cutting modules live directly under `meeting_memory`: `__main__.py`,
 `doctor.py`, and `logging_config.py`.
@@ -189,8 +189,7 @@ source archive, and verified as a bundle resource.
 - External SDK imports are contained to `repo/`.
 - `rumps` imports are contained to `ui/`. Sidebar layout/panel modules take an
   injected AppKit namespace (`ui/sidebar_appkit.py`) rather than importing
-  AppKit; `ui/sidebar_toggle.py` is the exception and wraps its own AppKit
-  needs behind its `ClickAppKit` seam.
+  AppKit.
 - Background workers communicate with the UI through `types/events.py` objects
   and a thread-safe queue.
 - Python and Swift source files stay at or below 300 lines.

@@ -309,9 +309,9 @@ tl;dv, Apple Notes/FaceTime) and improve the sidebar accordingly.
 
 Implemented (see `docs/features/sidebar.md`):
 
-- A red dot on the menu bar icon while recording (Superwhisper/Granola-style
-  quiet indicator; also closes the "no indicator when hidden" gap the code
-  review raised). No timer in the menu bar — that decision stands.
+- A red dot on the menu bar icon while recording. *(Superseded 2026-09-12:
+  the status bar shows `● mm:ss` again through the plain rumps title, so no
+  rumps internals are needed.)*
 - A post-stop status row (Fireflies "instant summary" / Notion auto-generate
   pattern): the latest lifecycle message with a click-through to reveal the
   meeting or review speakers.
@@ -359,11 +359,9 @@ Outcome: all four shipped (`docs/features/screenshots.md`,
   participant source; the summarizer receives it ahead of the transcript and
   names owners only where the conversation makes the mapping clear.
 - **Speaker review is retired from the UI**, not from the data model.
-  `speaker_status: confirmed` with empty `speaker_aliases` is written
-  automatically when transcription succeeds; `meeting-memory relabel` and
-  `meeting-memory summarize` remain the CLI path to rename speakers and
-  regenerate notes. `service/processing_state.py`, `types/processing.py`,
-  `ui/speaker_review.py`, and `ui/processing_actions.py` were deleted.
+  *(Superseded 2026-09-12: manual review is the default again and automatic
+  Notes is an opt-in; the deleted modules were restored. See the review
+  entry below.)*
 - **"Resume" recording is not implemented.** The recorder has no pause, so
   the sidebar's record button toggles start/stop only (see the 2026-09-06
   note on Pause/Resume). Adding it is backend work in `service/recorder.py`
@@ -371,9 +369,8 @@ Outcome: all four shipped (`docs/features/screenshots.md`,
 - **The sidebar shows a timer while recording.** It is digits, not words, and
   it is the only text on the panel; the panel grows by one small slot while
   recording so the timer never overlaps a button.
-- **Right-click, not left-click, opens the menu.** Left-click keeps toggling
-  the sidebar (the previous behavior); the menu's first item is Show/Hide
-  Sidebar so it is discoverable from the menu too.
+- **Right-click, not left-click, opens the menu.** *(Superseded 2026-09-12:
+  either click opens the menu; see the review entry below.)*
 
 First thing to check if this comes up again: `ui/status_menu.py` for what the
 menu holds, `ui/sidebar_compact.py` for the three buttons and their tooltips,
@@ -382,3 +379,38 @@ menu holds, `ui/sidebar_compact.py` for the three buttons and their tooltips,
 The global shortcut lives in `ui/screenshot_hotkey.py`; if it stops firing
 after a macOS update, check `app.log` for the "Global screenshot hotkey"
 line first.
+
+## 2026-09-12 PR 18 Review Follow-Up
+
+Request (review on PR 18): open the normal menu on any icon click and keep
+Start Recording in it; make the sidebar auto-show on recording start and
+otherwise leave visibility to the user; keep manual speaker review as the
+default with automatic Notes as an explicit opt-in that cannot lock out a
+later correction; never start or fail Notes when it is unavailable; key
+screenshot staging by the durable capture session; synchronize the docs.
+
+Outcome: all implemented. The `rumps` pin returned to `>=0.4` because the
+status item toggle module and its internals are gone. Decisions:
+
+- **Automatic Notes lives in `NSUserDefaults`** (`ui/notes_mode.py`) next to
+  the sidebar preferences, as session UI behavior rather than a Phase 4
+  preference-document field. Move it there if it ever needs migration or
+  disclosure through the capability forms.
+- **Attendee context only for kept labels.** The `Calendar attendees:` line
+  reaches the summarizer only when the review stored no aliases, so the
+  manual flow sends exactly what it sent before.
+- **One correction for kept labels.** A confirmed transcript with empty
+  `speaker_aliases` accepts one full alias map; named aliases stay terminal.
+  Recent kept-label meetings appear under **Debugging › Correct Speakers**.
+- **Screenshot staging key** is the recovery session directory name carried
+  on `MeetingRef.recording_session` by the local-commit events.
+
+Still open from the review's manual checklist: a real-mouse pass of the
+menu, the auto-show and close rules, a same-minute double recording with
+screenshots, and one automatic-mode meeting followed by a correction.
+
+First thing to check if this comes up again: `ui/status_menu.py` for the menu
+order, `ui/sidebar_tray_wiring.py:reveal` for the only automatic show,
+`ui/notes_mode.py` and `ui/tray.py:handle_event` for the transcript-ready
+routing, `service/speaker_state.py:_confirm_locked` for the kept-label rule,
+and `service/screenshots.py` for the session key.

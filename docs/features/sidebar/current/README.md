@@ -10,7 +10,7 @@ warning glyph — everything moves into the panel.
 
 | Question | Decision |
 |---|---|
-| Menu bar item | Icon only. Left-click toggles the sidebar. |
+| Menu bar item | Icon only. Left-click toggles the sidebar. *(Superseded 2026-09-12 after PR review: either click opens the normal menu, Start Recording is back in it, and the status bar shows the timer while recording — see `../../sidebar.md`.)* |
 | Quit safety hatch | Right-click opens a 1-item Quit menu. *(Superseded 2026-09-08: the right-click menu now holds everything but record/screenshot/quit, and the panel is three icon buttons — see `../../sidebar.md`.)* |
 | Recording visibility | Starting a recording forces the sidebar visible. |
 | Setup tray | Unchanged — keeps its plain dropdown menu. |
@@ -68,10 +68,9 @@ From `AGENTS.md` and `ARCHITECTURE.md`, applying to every plan here:
 
 ## Known risk
 
-`ui/sidebar_toggle.py` (plan 03) depends on `rumps` 0.4.0 internals —
-specifically detaching the menu that `rumps.py:954` attaches to the status item.
-That access is contained to one module and the rumps version is pinned. If a
-future upgrade breaks the toggle, that file is the only place to fix.
+`ui/sidebar_toggle.py` (plan 03) depended on `rumps` 0.4.0 internals.
+*Resolved 2026-09-12:* the module was removed after PR review; the status
+item keeps its ordinary rumps menu and the exact pin is gone.
 
 ---
 

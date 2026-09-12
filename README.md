@@ -19,8 +19,8 @@ The app is local-first: each completed recording creates a directory under
 
 - `recording.m4a`
 - `transcript.md`
-- `notes.md`, generated automatically after transcription using the Calendar
-  attendee names
+- `notes.md` after you review speakers, or right after transcription when the
+  optional automatic Notes mode is on
 - `screenshot-*.png` (or a `screenshots/` folder) when you captured the screen
   during the recording
 
@@ -184,15 +184,18 @@ make uninstall-launch-agent
 
 ## Using the App
 
-Meeting Memory runs as a menu-bar app. Click the menu bar icon to show or hide
-the sidebar: a small floating pill with three icon buttons — record/stop,
-screenshot, and quit. Right-click the icon for everything else: recent
-meetings, the meetings folder, Configuration, Debugging, and Quit. Use the
-record button for ad-hoc calls, or click `Record` from a pre-meeting
+Meeting Memory runs as a menu-bar app. Click the menu bar icon (left or right
+button) for the app menu: `Start Recording`, Show/Hide Sidebar, recent
+meetings, the meetings folder, Configuration, Debugging, and Quit. Use
+`Start Recording` for ad-hoc calls, or click `Record` from a pre-meeting
 notification when the calendar watcher detects an upcoming Meet or Zoom
 event. Manual start uses only watcher-cached Calendar context; without one,
 the app records under a provisional title and asks for the final title after
 stop.
+
+When a recording starts, a small floating sidebar appears: a pill with three
+icon buttons for record/stop, screenshot, and quit. It stays until you close
+it and can be reopened from the menu at any time.
 
 While recording, click the camera button or press **⌥⇧S** anywhere to capture
 the screen. A single screenshot is saved next to `recording.m4a`; two or more
@@ -213,15 +216,17 @@ Aggregate Devices, or per-device configuration. The durable capture is first a
 16 kHz mono WAV; conversion prefers AVFoundation and uses the separately
 bundled, offline minimal LGPL encoder only when the host lacks AAC encoding.
 
-When a recording starts the sidebar appears on its own; the record button
-turns into a red stop button with a small live timer. Drag the panel by its
-`⠿` grip to snap it to any screen edge — top and bottom turn it into a
-horizontal row. When a calendar-backed recording reaches the event end time,
-the app sends a `Stop` reminder action. Long recordings also send a reminder
-after one hour and every 30 minutes after that, until recording stops. After
-transcription finishes, the app writes `transcript.md` and, when Notes is
-configured, generates `notes.md` right away using the Calendar attendee names
-— there is no speaker-review step to complete.
+While recording, the status bar shows a dot and a live timer next to the icon
+and the menu switches to `Stop Recording`. The sidebar's record button turns
+into a red stop button with the same timer. Drag the panel by its `⠿` grip to
+snap it to any screen edge — top and bottom turn it into a horizontal row.
+Turn on **Configuration › Hide sidebar while recording** if you never want
+the panel to appear on its own; you can still open it from the menu. When a
+calendar-backed recording reaches the event end time, the app sends a `Stop`
+reminder action. Long recordings also send a reminder after one hour and
+every 30 minutes after that, until recording stops. After transcription
+finishes, the app writes `transcript.md`; the completion notification offers
+`Review Speakers` so you can confirm who said what before Notes run.
 
 Meeting Memory checks the system and microphone streams throughout each
 recording. If a source never starts, stalls, loses a material share or burst of
@@ -400,24 +405,36 @@ the new workspace.
 
 ## Participants and Speaker Names
 
-`transcript.md` is the source-of-truth transcript. It carries the participant
-names from the Google Calendar event's attendee list (by Calendar full name,
-except configured matches from `KNOWN_SPEAKERS`), the diarized `Speaker A`,
-`Speaker B` labels AssemblyAI returned, and an editable alias map:
+`transcript.md` is the source-of-truth transcript. It carries candidate
+speaker names from the Google Calendar event's attendee list (by Calendar
+full name, except configured matches from `KNOWN_SPEAKERS`), the diarized
+`Speaker A`, `Speaker B` labels AssemblyAI returned, and an editable alias
+map:
 
 ```yaml
 speaker_candidates: ["Alex", "Ada Lovelace", "Casey"]
-speaker_aliases: {}
-speaker_status: "confirmed"
+speaker_aliases: {"Speaker A": "Alex", "Speaker B": "Ada Lovelace"}
+speaker_status: "needs_review"
 ```
 
-Nothing has to be typed in after a meeting. As soon as transcription
-finishes, the app keeps the diarized labels, hands the attendee list to the
-summarizer ahead of the transcript, and generates `notes.md`; owners are
-named when the conversation makes the mapping clear and left as speaker
-labels otherwise. Google Meet and Zoom expose no API a menu-bar app can use
-to learn who is speaking, so the Calendar invite is the participant source.
-To rename speakers afterwards, edit `speaker_aliases` and apply the
+By default the app asks you to review speakers after each transcription. In
+the review window choose **Confirm Names** to apply names or **Keep Speaker
+Labels** when you do not know them. Both choices mark the review as confirmed
+and start notes generation; keeping labels leaves `speaker_aliases` empty and
+preserves names such as `Speaker A`.
+
+**Configuration › Automatic Notes from Calendar attendees** is an optional
+mode, off by default. When on, the app skips the review, keeps the diarized
+labels, hands the attendee list to the summarizer ahead of the transcript,
+and generates `notes.md` right away. It does not assign names in the
+transcript, and Notes can still attribute a statement to the wrong person;
+turning it on asks you to accept that tradeoff. A meeting handled this way is
+listed under **Debugging › Correct Speakers** so you can map names later and
+regenerate Notes. Google Meet and Zoom expose no API a menu-bar app can use
+to learn who is speaking, so the Calendar invite is the only participant
+source.
+
+For CLI backfill or repair, edit `speaker_aliases` and apply the
 deterministic relabel step (then `meeting-memory summarize` to regenerate
 notes):
 

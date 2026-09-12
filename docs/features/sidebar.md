@@ -2,25 +2,27 @@
 
 ## Purpose
 
-The runtime menu bar item is an icon-only toggle for a small floating,
-draggable, edge-snapping panel with exactly three icon buttons: record/stop,
-screenshot, and quit. Everything else the old dropdown showed — recent
-meetings, the meetings folder, audio mode, configuration, diagnostics — is the
-menu behind a right-click on the same icon (`ui/status_menu.py`). The menu bar
-item itself carries no title, no timer, and no warning glyph. The setup tray
-(before Recording Core is configured) keeps its plain dropdown menu and is
-not affected.
+A small floating, draggable, edge-snapping panel with exactly three icon
+buttons: record/stop, screenshot, and quit. It is a companion to the normal
+app menu, not the entry point: clicking the menu bar icon with either button
+opens the menu (`ui/status_menu.py`) with Start/Stop Recording first, then
+Show/Hide Sidebar, recent meetings, the meetings folder, Configuration,
+Debugging, and Quit. The panel appears when a recording starts and stays
+until the user closes it. While recording the status bar shows a dot and the
+live timer beside the icon. The setup tray (before Recording Core is
+configured) keeps its plain dropdown menu and is not affected.
 
 ## Interaction model
 
 | Gesture | Result |
 |---|---|
-| Left-click the menu bar icon | Toggle the panel. It starts hidden on every launch. While recording the icon carries a small red dot (no timer), so a hidden panel never hides the fact that a recording is running. |
-| Right-click the menu bar icon | The app menu: Show/Hide Sidebar, Recent Meetings, Open Meetings Folder, Configuration (audio mode, capability forms, notes customization, calendar auth, legacy import, hide-while-recording), Debugging (readiness, interrupted recordings, retries, diagnostics), Quit. |
+| Click the menu bar icon (either button) | The app menu: Start/Stop Recording, Show/Hide Sidebar, Recent Meetings, Open Meetings Folder, Configuration (audio mode, capability forms, notes customization, calendar auth, legacy import, automatic Notes, hide-while-recording), Debugging (pending tasks, speaker corrections, readiness, interrupted recordings, retries, diagnostics), Quit. The panel starts hidden on every launch. |
+| Status bar while recording | `● mm:ss` beside the icon (`⚠︎ mm:ss` on an audio warning), so a hidden panel never hides the fact that a recording is running. |
 | Click the record button | Start or stop recording. Idle: teal `record.circle`. Recording: red `stop.circle.fill` plus a small `mm:ss` timer; orange when the audio-health monitor is warning. |
 | Click the camera button, or press **⌥⇧S** anywhere | Take a screenshot for the active recording (`docs/features/screenshots.md`). |
 | Click the power button | Quit. |
-| Start a recording (any source) | The panel is forced visible (auto-show). With **Hide sidebar while recording** on (Configuration submenu; stored in `NSUserDefaults`) it is hidden instead and kept hidden for the whole recording; only a click on the menu bar icon shows it, until the recording ends. Stopping never changes visibility. |
+| Start a recording (any source) | The panel is shown (auto-show) and stays visible until the user closes it. With **Hide sidebar while recording** on (Configuration submenu; stored in `NSUserDefaults`) the auto-show is suppressed for the whole session; a panel the user opened is never hidden by the app. |
+| Close the panel during a recording | It stays closed until the next recording starts. Stopping never changes visibility. |
 | Drag the panel by its `⠿` grip | Free-float, or snap when one of the panel's edges is released within 64 pt of the matching screen edge. A snapped panel is sticky: it stays on its edge unless dragged more than 160 pt clear of it. |
 
 Every button has a tooltip; there are no words on the panel apart from the
@@ -58,9 +60,9 @@ Phase 4 preference store. Whether the panel was visible is **not** persisted.
 - The panel window: a borderless, non-activating, floating `NSPanel` with a
   14 pt corner radius on the HUD vibrancy material, joining all Spaces and
   floating over full-screen apps.
-- The rumps `App.menu`, detached from the status item and popped up on
-  right-click. Button and menu actions call straight back into the same
-  `TrayController` methods the dropdown used.
+- The rumps `App.menu`, attached to the status item as usual and opened by
+  either mouse button. Button and menu actions call straight back into the
+  same `TrayController` methods the dropdown used.
 
 ## Threading
 
@@ -71,13 +73,8 @@ rather than calling the panel.
 
 ## Dependencies and blast radius
 
-`ui/sidebar_toggle.py` is the only module that reaches into rumps 0.4.0
-internals (`rumps_app._nsapp.nsstatusitem`, `_app["_menu"]._menu`) to detach
-the menu rumps attaches, arm the status item's button directly, and pop the
-detached menu up on right-click. `rumps` is pinned to `0.4.0` in
-`pyproject.toml` for that reason. If a rumps upgrade breaks the toggle, that
-file is the only place to fix; on failure it logs and restores the rumps menu
-so the app stays usable and quittable.
+No sidebar module reaches into rumps internals: the status item keeps the
+menu rumps attaches, and `rumps` is required as `>=0.4` like before.
 
 Every sidebar module takes an injected AppKit namespace. In production that
 is `ui/sidebar_appkit.py:real_appkit`; tests inject fakes. Any AppKit symbol a
@@ -99,18 +96,19 @@ text.
 ## Accessibility
 
 A floating panel is a departure from `PRODUCT.md`'s "prefer familiar macOS
-controls" — a dropdown needs no discovery. The mitigations: auto-show when a
-recording starts so recording state is never hidden; the right-click menu
-with Show/Hide Sidebar and Quit; tooltips on every button; recording and
-warning state carried by glyph shape and tooltip text, not color alone; snap
-animation honors the reduce-motion preference.
+controls" — a dropdown needs no discovery. The mitigations: the ordinary menu
+stays the entry point with Start Recording, Show/Hide Sidebar, and Quit;
+auto-show when a recording starts so recording state is never hidden; the
+status-bar timer; tooltips on every button; recording and warning state
+carried by glyph shape and tooltip text, not color alone; snap animation
+honors the reduce-motion preference.
 
 ## Related Files
 
 - `src/meeting_memory/ui/tray.py` — `refresh_sidebar()`, event routing
-- `src/meeting_memory/ui/status_menu.py` — the right-click menu
-- `src/meeting_memory/ui/sidebar_tray_wiring.py` — panel + toggle + content wiring, orientation switch
-- `src/meeting_memory/ui/sidebar_toggle.py` — status item left/right click
+- `src/meeting_memory/ui/status_menu.py` — the app menu
+- `src/meeting_memory/ui/sidebar_tray_wiring.py` — panel + content wiring, orientation switch
+- `src/meeting_memory/ui/notes_mode.py` — the automatic Notes opt-in row and its confirmation
 - `src/meeting_memory/ui/sidebar_compact.py` — the three icon buttons in both orientations
 - `src/meeting_memory/ui/sidebar_panel.py` — the `NSPanel` shell: show/hide, drag-to-snap, persistence
 - `src/meeting_memory/ui/sidebar_drag.py` — drag tracking view and the `⠿` grabber
@@ -127,9 +125,9 @@ animation honors the reduce-motion preference.
 
 - `tests/test_sidebar_geometry.py` — snap math
 - `tests/test_sidebar_panel.py`, `tests/test_sidebar_drag.py` — panel shell, drag, grabber
-- `tests/test_sidebar_toggle.py` — status item behavior and the restore path
 - `tests/test_sidebar_compact.py`, `tests/test_sidebar_widgets.py` — the icon buttons
-- `tests/test_status_menu.py` — the right-click menu
+- `tests/test_status_menu.py` — the app menu
+- `tests/test_notes_mode.py` — the automatic Notes opt-in
 - `tests/test_sidebar_view_model.py` (label snapshot: every retired menu row is still rendered), `tests/test_sidebar_view_model_rows.py`
 - `tests/test_sidebar_tray_wiring.py`, `tests/test_sidebar_autoshow.py`, `tests/test_sidebar_status_and_indicator.py`
 - `tests/test_tray.py`, `tests/test_tray_notifications.py`, `tests/test_setup_readiness.py`

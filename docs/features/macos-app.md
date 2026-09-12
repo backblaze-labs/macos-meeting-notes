@@ -32,9 +32,9 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
 
 - The `.app` is a generated local wrapper around this repo and virtualenv.
 - The app uses `LSUIElement`, so it appears as a menu-bar app rather than a
-  regular Dock app. At runtime the menu bar item is an icon-only toggle for the
-  sidebar panel (left-click shows/hides it, right-click quits); see
-  `sidebar.md`. The setup tray shown before configuration keeps a plain menu.
+  regular Dock app. Clicking the menu bar item opens the app menu; the
+  floating sidebar panel appears when a recording starts (`sidebar.md`). The
+  setup tray shown before configuration keeps a plain menu.
 - The wrapper sets `PYTHONPATH=src` and runs `python -m meeting_memory`.
 - The LaunchAgent refreshes and opens the generated app bundle with
   LaunchServices so startup-at-login keeps the menu-bar app identity instead of
