@@ -1,11 +1,10 @@
 """Sidebar-only preferences, persisted to `NSUserDefaults` like the panel
 frame, anchor, and section state — UI chrome, not app configuration.
 
-`hide_while_recording`: when on, starting a recording hides the panel
-instead of forcing it visible (the default auto-show from
-docs/features/sidebar.md), and it stays hidden for the whole recording in
-either orientation — only an explicit click on the menu bar icon shows it.
-Off by default; the user opts in from the panel's Configuration section.
+`hide_while_recording`: when on, the auto-show that normally happens when a
+recording starts (docs/features/sidebar.md) is suppressed for the whole
+session. The panel is never hidden by the app; the user can still open it
+from Show Sidebar. Off by default; the user opts in from Configuration.
 """
 
 from __future__ import annotations

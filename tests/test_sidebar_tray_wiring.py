@@ -1,5 +1,6 @@
 """Tests for SidebarWiring: toggle install, compact content, tick, reveal,
-and the hide-while-recording preference."""
+the hide-while-recording preference, and the visibility rules from
+docs/features/sidebar.md (auto-show once per recording, user closes win)."""
 
 from __future__ import annotations
 
@@ -144,15 +145,20 @@ def test_reveal_shows_the_panel() -> None:
     assert wiring.is_visible is True
 
 
-def test_reveal_hides_instead_when_hide_while_recording_is_on() -> None:
+def test_hide_while_recording_suppresses_the_auto_show_without_hiding() -> None:
     from meeting_memory.ui.sidebar_prefs import set_hide_while_recording
 
     wiring = SidebarWiring(None, panel_factory=FakePanel)
     set_hide_while_recording(wiring.panel.appkit, True)
 
     wiring.reveal()
+    assert (wiring.panel.show_calls, wiring.panel.hide_calls) == (0, 0)
 
-    assert (wiring.panel.show_calls, wiring.panel.hide_calls) == (0, 1)
+    # A panel the user opened before the recording is left alone.
+    wiring.panel.show()
+    wiring.reveal()
+    assert wiring.is_visible is True
+    assert wiring.panel.hide_calls == 0
 
 
 def test_preference_rows_toggle_hide_while_recording_and_notify() -> None:
@@ -198,41 +204,53 @@ def test_a_failed_toggle_install_is_retried_a_bounded_number_of_times() -> None:
     assert status_item.menu.items[0][0] == "Quit"
 
 
-def test_hide_while_recording_keeps_the_panel_hidden_for_the_whole_recording() -> None:
+def test_hide_while_recording_leaves_a_manually_shown_panel_alone() -> None:
     from meeting_memory.ui.sidebar_prefs import set_hide_while_recording
 
     wiring = SidebarWiring(None, panel_factory=FakePanel)
     wiring.rebuild(idle_view_model())
     set_hide_while_recording(wiring.panel.appkit, True)
-    wiring.panel.show()  # e.g. it was open before the recording started
 
-    wiring.tick(_FakeController(is_recording=True, duration=1))
-    assert wiring.panel.is_visible is False
+    wiring.reveal()  # recording starts: suppressed
+    assert wiring.is_visible is False
 
-    # Whatever re-shows it mid-recording is undone on the next tick...
-    wiring.panel.show()
+    wiring.toggle_panel()  # the user opens it anyway
     wiring.tick(_FakeController(is_recording=True, duration=2))
-    assert wiring.panel.is_visible is False
-
-    # ...except the user's own icon click, which is a deliberate peek.
-    wiring.toggle_panel()
     wiring.tick(_FakeController(is_recording=True, duration=3))
-    assert wiring.panel.is_visible is True
-
-    # The peek does not outlive the recording: the next one hides again.
-    wiring.tick(_FakeController(is_recording=False))
-    wiring.tick(_FakeController(is_recording=True, duration=1))
-    assert wiring.panel.is_visible is False
+    assert wiring.is_visible is True
+    assert wiring.panel.hide_calls == 0
 
 
-def test_hide_while_recording_off_leaves_visibility_alone() -> None:
+def test_a_panel_closed_during_a_recording_stays_closed_until_the_next_start() -> None:
     wiring = SidebarWiring(None, panel_factory=FakePanel)
     wiring.rebuild(idle_view_model())
-    wiring.panel.show()
 
+    wiring.reveal()  # first recording starts: auto-show
+    assert wiring.is_visible is True
+
+    wiring.toggle_panel()  # the user closes it mid-recording
+    wiring.tick(_FakeController(is_recording=True, duration=5))
+    wiring.panel.drag_to(SnapAnchor.TOP, Orientation.HORIZONTAL)  # rebuilds content
+    wiring.tick(_FakeController(is_recording=False))
+    assert wiring.is_visible is False
+    assert wiring.panel.show_calls == 1
+
+    wiring.reveal()  # the next recording starts
+    assert wiring.is_visible is True
+    assert wiring.panel.show_calls == 2
+
+
+def test_the_panel_stays_visible_until_the_user_closes_it() -> None:
+    wiring = SidebarWiring(None, panel_factory=FakePanel)
+    wiring.rebuild(idle_view_model())
+
+    wiring.reveal()
     wiring.tick(_FakeController(is_recording=True, duration=1))
+    wiring.tick(_FakeController(is_recording=False))
+    wiring.tick(_FakeController(is_recording=False))
 
-    assert wiring.panel.is_visible is True
+    assert wiring.is_visible is True
+    assert wiring.panel.hide_calls == 0
 
 
 def _recording(is_recording: bool, duration: int = 0) -> RecordingView:

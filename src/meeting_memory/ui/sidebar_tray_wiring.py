@@ -27,7 +27,7 @@ from meeting_memory.ui.sidebar_view_model import RowView, recording_view_for
 # log once a second for the life of the process.
 MAX_INSTALL_ATTEMPTS = 3
 HIDE_WHILE_RECORDING_TOOLTIP = (
-    "When on, starting a recording hides the sidebar instead of showing it."
+    "When on, the sidebar does not appear by itself when a recording starts."
 )
 
 
@@ -59,10 +59,6 @@ class SidebarWiring:
         self._on_quit = on_quit
         self._click_appkit = click_appkit  # tests inject a fake; None -> real AppKit
         self._install_attempts = 0
-        # "Hide sidebar while recording": an explicit icon click during a
-        # recording is a deliberate peek, so the per-tick hide stands down
-        # until the recording ends.
-        self._peeking = False
         if panel_factory is None and rumps_module is None:
             panel_factory = SidebarPanel
         self.panel = (
@@ -147,17 +143,20 @@ class SidebarWiring:
         self.rebuild(self._view_model)
 
     def toggle_panel(self) -> None:
-        """The status item's left-click (and the menu's Show/Hide Sidebar),
-        routed here so a deliberate peek during a recording is remembered."""
+        """Show/Hide Sidebar from the menu (and, while it exists, the icon click).
+
+        Visibility is the user's decision from here on: nothing in the wiring
+        shows or hides the panel again until the next recording starts.
+        """
 
         if self.panel is None:
             return
-        self._peeking = self.panel.toggle()
+        self.panel.toggle()
 
     def tick(self, controller: Any) -> None:
-        """The 1 Hz tick: update the record button in place, rebuild when the
-        recording state flipped (the timer slot changes the panel size), and
-        keep the panel hidden while recording if the user asked for that."""
+        """The 1 Hz tick: update the record button in place and rebuild when
+        the recording state flipped (the timer slot changes the panel size).
+        Visibility is never changed here."""
 
         if self._recording is None:
             return
@@ -168,36 +167,19 @@ class SidebarWiring:
             self._recording.update(view)
         if self.toggle is not None:
             self.toggle.set_recording_indicator(view.is_recording)
-        self._enforce_hide_while_recording(view.is_recording)
-
-    def _enforce_hide_while_recording(self, is_recording: bool) -> None:
-        # Whatever showed the panel mid-recording — a rebuild, a reveal, an
-        # orientation swap — it goes back to hidden, in either orientation.
-        # Only the user's own icon click (`toggle`) is allowed to override,
-        # and that override ends with the recording.
-        if not is_recording:
-            self._peeking = False
-            return
-        if self._peeking or not hide_while_recording(self.panel.appkit):
-            return
-        if self.panel.is_visible:
-            self.panel.hide()
 
     def reveal(self) -> None:
-        """Auto-show on record start (docs/features/sidebar.md) — or, when the
-        user turned on "Hide sidebar while recording", the opposite.
+        """Auto-show when a recording starts (docs/features/sidebar.md).
 
-        A no-op when the sidebar isn't present. Either way it is a one-shot
-        nudge, not a lock: the user can toggle the panel right after.
+        The controller queues one `SidebarRevealRequested` per recording start,
+        from every start path, so this is the only automatic show. With "Hide
+        sidebar while recording" on it does nothing, and it never hides. A
+        panel the user closed stays closed until the next recording starts.
         """
 
-        if self.panel is None:
+        if self.panel is None or hide_while_recording(self.panel.appkit):
             return
-        if hide_while_recording(self.panel.appkit):
-            self._peeking = False
-            self.panel.hide()
-        else:
-            self.panel.show()
+        self.panel.show()
 
 
 class _PanelToggleProxy:
