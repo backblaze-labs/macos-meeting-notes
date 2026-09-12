@@ -33,7 +33,7 @@ class Summarizer:
         return SummaryResult(summary="Reviewed")
 
 
-def _confirmed_meeting(tmp_path: Path):
+def _confirmed_meeting(tmp_path: Path, *, keep_labels: bool = False):
     meetings = tmp_path / "meetings"
     audio = tmp_path / "source.m4a"
     audio.write_bytes(b"audio")
@@ -59,7 +59,10 @@ def _confirmed_meeting(tmp_path: Path):
         meta,
         TranscriptResult("job-1", (TranscriptSegment("A", 0, "Hello"),)),
     )
-    state.confirm_speakers(files.directory, {"A": "Alex"}, expected_status="needs_review")
+    if keep_labels:
+        confirm_speaker_aliases(files.directory, {}, keep_labels=True)
+    else:
+        state.confirm_speakers(files.directory, {"A": "Alex"}, expected_status="needs_review")
     return meetings, files, state
 
 
@@ -117,10 +120,10 @@ def test_v2_notes_publishes_after_stable_confirmed_snapshot(tmp_path: Path) -> N
     assert "Reviewed" in notes.read_text(encoding="utf-8")
 
 
-def test_v2_notes_prefix_calendar_attendees_for_the_summarizer(tmp_path: Path) -> None:
-    # Attendees come from the calendar event; nobody types them in after the
-    # meeting. The summarizer sees them ahead of the (label-only) transcript.
-    meetings, files, state = _confirmed_meeting(tmp_path)
+def test_v2_notes_prefix_calendar_attendees_for_a_label_only_transcript(tmp_path: Path) -> None:
+    # Automatic mode keeps the diarized labels, so the summarizer sees the
+    # calendar attendees ahead of the label-only transcript as context.
+    meetings, files, state = _confirmed_meeting(tmp_path, keep_labels=True)
     state.merge_fields(
         files.directory,
         ArtifactFieldOwner.SPEAKERS,
@@ -135,7 +138,27 @@ def test_v2_notes_prefix_calendar_attendees_for_the_summarizer(tmp_path: Path) -
     assert "Hello" in summarizer.text
 
 
+def test_v2_notes_send_a_relabeled_transcript_without_attendee_context(tmp_path: Path) -> None:
+    meetings, files, state = _confirmed_meeting(tmp_path)
+    state.merge_fields(
+        files.directory,
+        ArtifactFieldOwner.SPEAKERS,
+        {"speaker_candidates": ["Alex Doe"]},
+    )
+    summarizer = Summarizer()
+
+    generate_v2_notes(meetings, files.directory, summarizer)
+
+    assert summarizer.text is not None
+    assert not summarizer.text.startswith("Calendar attendees:")
+    assert "**Alex**" in summarizer.text
+
+
 def test_notes_input_text_without_attendees_is_the_bare_body() -> None:
+    assert (
+        notes_input_text({"speaker_aliases": {"A": "Alex"}, "speaker_candidates": ["Alex"]}, "body")
+        == "body"
+    )
     assert notes_input_text({}, "body") == "body"
     assert notes_input_text({"speaker_candidates": []}, "body") == "body"
     assert notes_input_text({"speaker_candidates": "Alex"}, "body") == "body"

@@ -1,9 +1,10 @@
 """Pinned schema-v2 Notes generation for a speaker-confirmed transcript.
 
-Calendar attendees (`speaker_candidates`) are prepended to the text the
-summarizer sees, so owners can be named from the calendar without a manual
-speaker-review step. Speaker labels in the body are left as AssemblyAI wrote
-them; naming an owner is the model's call, guided by the notes instructions.
+When the review kept the diarized labels (no aliases stored, which is what
+the opt-in automatic mode does), the Calendar attendees in
+`speaker_candidates` are prepended to the text the summarizer sees so it has
+context for naming owners. A transcript the user relabeled with real names
+already carries them, so it is sent as-is.
 """
 
 from __future__ import annotations
@@ -73,10 +74,9 @@ def generate_v2_notes(
     with meeting_lock(meetings_dir, meeting_dir.name):
         with open_meeting_document(meetings_dir, meeting_dir) as document:
             current = os.fstat(document.directory_fd)
-            if (
-                (current.st_dev, current.st_ino) != identity
-                or normalize_transcript_for_backup(document.text) != source_revision
-            ):
+            if (current.st_dev, current.st_ino) != identity or normalize_transcript_for_backup(
+                document.text
+            ) != source_revision:
                 raise ValueError("transcript changed while Notes were being generated")
             _reject_unsafe_notes(document.directory_fd)
             atomic_replace_text_at(document.directory_fd, "notes.md", rendered)
@@ -122,8 +122,16 @@ def _confirmed_snapshot(
 
 
 def notes_input_text(frontmatter: dict[str, object], body: str) -> str:
-    """Prefix the transcript with the calendar attendee list when one exists."""
+    """Prefix a label-only transcript with the Calendar attendee list.
 
+    A transcript with stored speaker aliases already names its speakers and
+    is returned unchanged. Change this if attendee context should also reach
+    the summarizer for manually relabeled transcripts.
+    """
+
+    aliases = frontmatter.get("speaker_aliases")
+    if isinstance(aliases, dict) and aliases:
+        return body
     raw = frontmatter.get("speaker_candidates")
     if not isinstance(raw, list):
         return body

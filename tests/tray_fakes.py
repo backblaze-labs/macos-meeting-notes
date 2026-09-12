@@ -131,6 +131,7 @@ class FakeRumps:
         self.notifications = []
         self.notification_options = []
         self.alerts = []
+        self.alert_response = 1  # rumps: 1 means the default (ok) button
 
     class MenuItem:
         def __init__(self, title, callback=None):
@@ -166,8 +167,9 @@ class FakeRumps:
         self.notifications.append((title, subtitle, message))
         self.notification_options.append(kwargs)
 
-    def alert(self, *, title, message) -> None:
+    def alert(self, *, title, message, ok=None, cancel=None) -> int:
         self.alerts.append((title, message))
+        return self.alert_response
 
     def quit_application(self, _sender=None) -> None:
         pass

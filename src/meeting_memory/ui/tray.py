@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import logging
 import webbrowser
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -43,11 +42,11 @@ from meeting_memory.ui.macos import (
     configure_modern_notifications,
     keep_timer_running_during_menu_tracking,
 )
+from meeting_memory.ui.notes_mode import MemoryDefaults, NotesMode, standard_defaults
+from meeting_memory.ui.notification_actions import dispatch_notification
 from meeting_memory.ui.notifications import (
     meeting_detected_notification,
     notify_event_kwargs,
-    parse_notification_candidates,
-    parse_notification_datetime,
     send_notification,
 )
 from meeting_memory.ui.recording_health import RecordingHealthMonitor
@@ -80,6 +79,7 @@ class RumpsTrayApp:
         sidebar_panel_factory: Any = None,
         sidebar_click_appkit: Any = None,
         screenshot_store: ScreenshotStore | None = None,
+        notes_defaults: Any = None,
     ) -> None:
         self.rumps = rumps_module or load_rumps()
         self.controller = controller
@@ -117,7 +117,10 @@ class RumpsTrayApp:
         self.sidebar_menu_item: Any = None
         self.open_url = webbrowser.open  # swapped out by tests
         # Opt-in automatic Notes after transcription; off means manual review.
-        self.automatic_notes: Callable[[], bool] = lambda: False
+        if notes_defaults is None:
+            notes_defaults = MemoryDefaults() if rumps_module is not None else standard_defaults()
+        self.notes_mode = NotesMode(notes_defaults)
+        self.automatic_notes = self.notes_mode.enabled
         self.recording_health = RecordingHealthMonitor(controller.recorder, controller.event_queue)
         self.audio_mode_menu = AudioModeMenu(
             self.rumps, self.controller, on_change=self.refresh_sidebar
@@ -173,7 +176,10 @@ class RumpsTrayApp:
             sidebar_visible=self.sidebar.is_visible,
             on_toggle_sidebar=self.sidebar.toggle_panel,
             on_quit=self.rumps.quit_application,
-            sidebar_rows=self.sidebar.preference_rows(on_change=self.refresh_sidebar),
+            sidebar_rows=(
+                *self.notes_mode.rows(self.rumps, on_change=self.refresh_sidebar),
+                *self.sidebar.preference_rows(on_change=self.refresh_sidebar),
+            ),
         )
 
     def toggle_recording(self, _sender=None) -> None:
@@ -270,30 +276,7 @@ class RumpsTrayApp:
         self._send_notification(title, "", message, **kwargs)
 
     def handle_notification(self, data) -> None:
-        if not isinstance(data, dict):
-            return
-        if data.get("action") == "start_recording":
-            self.controller.start_recording(
-                str(data.get("calendar_title") or "Untitled"),
-                ends_at=parse_notification_datetime(data.get("ends_at")),
-                speaker_candidates=parse_notification_candidates(data.get("speaker_candidates")),
-            )
-            # One click does both, Granola-style: start recording *and* join.
-            meeting_url = str(data.get("meeting_url") or "")
-            if meeting_url:
-                self.open_url(meeting_url)
-            self.refresh_sidebar()
-        elif data.get("action") == "stop_recording":
-            self.controller.stop_recording()
-            self.refresh_sidebar()
-        elif data.get("action") == "open_meeting":
-            directory = data.get("meeting_directory")
-            if directory:
-                self.controller.opener(Path(str(directory)))
-        elif data.get("action") == "review_speakers":
-            directory = data.get("meeting_directory")
-            if directory:
-                self.open_speaker_review(Path(str(directory)))
+        dispatch_notification(self, data)
 
     def _send_notification(self, title: str, subtitle: str, message: str, **kwargs) -> None:
         send_notification(self.rumps, title, subtitle, message, LOGGER, **kwargs)
