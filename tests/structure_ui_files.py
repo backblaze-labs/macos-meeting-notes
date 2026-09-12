@@ -27,7 +27,6 @@ REQUIRED_UI_SOURCE_FILES = (
     "ui/sidebar_theme.py",
     "ui/sidebar_prefs.py",
     "ui/sidebar_geometry.py",
-    "ui/sidebar_toggle.py",
     "ui/sidebar_panel.py",
     "ui/sidebar_drag.py",
     "ui/sidebar_tray_wiring.py",

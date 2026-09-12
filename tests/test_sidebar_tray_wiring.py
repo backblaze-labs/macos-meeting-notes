@@ -1,4 +1,4 @@
-"""Tests for SidebarWiring: toggle install, compact content, tick, reveal,
+"""Tests for SidebarWiring: compact content, tick, reveal,
 the hide-while-recording preference, and the visibility rules from
 docs/features/sidebar.md (auto-show once per recording, user closes win)."""
 
@@ -38,28 +38,6 @@ def test_no_panel_when_using_a_fake_rumps_module() -> None:
 def test_an_injected_panel_factory_is_used_even_with_a_fake_rumps_module() -> None:
     wiring = SidebarWiring(FakeRumps(), panel_factory=FakePanel)
     assert isinstance(wiring.panel, FakePanel)
-
-
-def test_install_once_is_a_noop_without_a_panel() -> None:
-    wiring = SidebarWiring(FakeRumps())
-    app = FakeRumps.App(name="Test")
-    wiring.install_once(app, FakeRumps())
-    assert wiring.toggle is None
-
-
-def test_install_once_installs_and_is_idempotent() -> None:
-    wiring = SidebarWiring(None, panel_factory=FakePanel)
-    app = FakeRumps.App(name="Test")
-    rumps_module = FakeRumps()
-
-    wiring.install_once(app, rumps_module)
-    assert wiring.toggle is not None
-    status_item = app._nsapp.nsstatusitem
-    assert status_item.menu is None  # detached by the real install()
-
-    first_toggle = wiring.toggle
-    wiring.install_once(app, rumps_module)
-    assert wiring.toggle is first_toggle
 
 
 def test_rebuild_is_a_noop_without_a_panel() -> None:
@@ -182,26 +160,6 @@ def test_reveal_and_toggle_are_noops_without_a_panel() -> None:
     wiring.reveal()
     wiring.toggle_panel()
     assert wiring.panel is None
-
-
-def test_a_failed_toggle_install_is_retried_a_bounded_number_of_times() -> None:
-    from tray_fakes import FakeClickAppKit
-
-    from meeting_memory.ui.sidebar_tray_wiring import MAX_INSTALL_ATTEMPTS
-
-    failing = FakeClickAppKit(raise_on="install_right_click_monitor")
-    wiring = SidebarWiring(None, panel_factory=FakePanel, click_appkit=failing)
-    app = FakeRumps.App(name="Test")
-    status_item = app._nsapp.nsstatusitem
-
-    for _ in range(MAX_INSTALL_ATTEMPTS + 2):
-        wiring.install_once(app, FakeRumps())
-
-    # Retried exactly MAX times (each attempt detaches then restores the menu),
-    # then parked — and the restored menu is quittable.
-    assert len(status_item.set_menu_calls) == 2 * MAX_INSTALL_ATTEMPTS
-    assert wiring.toggle is not None and wiring.toggle._installed is False
-    assert status_item.menu.items[0][0] == "Quit"
 
 
 def test_hide_while_recording_leaves_a_manually_shown_panel_alone() -> None:

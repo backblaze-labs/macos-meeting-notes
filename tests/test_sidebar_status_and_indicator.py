@@ -1,18 +1,15 @@
-"""Research-driven sidebar refinements (docs/deferred-work.md, 2026-09-06):
-the menu-bar recording dot and the notification "Record" action that also
-opens the call link."""
+"""Menu-bar recording indicator and the notification "Record" action that
+also opens the call link."""
 
 from __future__ import annotations
 
 import queue
+from datetime import UTC, datetime
 from pathlib import Path
 
-from sidebar_view_model_fixtures import idle_view_model
-from sidebar_wiring_fakes import FakePanel, _FakeController
 from test_tray import FakePipeline, FakeRecorder, _settings
-from tray_fakes import FakeClickAppKit, FakeRumps
+from tray_fakes import FakeRumps
 
-from meeting_memory.ui.sidebar_tray_wiring import SidebarWiring
 from meeting_memory.ui.tray import RumpsTrayApp, TrayController
 
 
@@ -43,14 +40,29 @@ def test_record_notification_action_also_opens_the_meeting_link(tmp_path: Path) 
     assert urls == ["https://meet"]
 
 
-def test_menu_bar_dot_tracks_recording_state_without_repeating() -> None:
-    click_appkit = FakeClickAppKit()
-    wiring = SidebarWiring(None, panel_factory=FakePanel, click_appkit=click_appkit)
-    wiring.install_once(FakeRumps.App(name="Test"), FakeRumps())
-    wiring.rebuild(idle_view_model())
+def test_status_bar_shows_a_dot_and_timer_only_while_recording(tmp_path: Path) -> None:
+    started = datetime(2026, 6, 11, 9, 0, tzinfo=UTC)
+    recorder = FakeRecorder(tmp_path)
+    controller = TrayController(
+        settings=_settings(tmp_path),
+        recorder=recorder,
+        pipeline=FakePipeline(),
+        event_queue=queue.Queue(),
+        now=lambda: started.replace(second=7),
+    )
+    app = RumpsTrayApp(controller, rumps_module=FakeRumps())
+    assert app.app.title is None
 
-    wiring.tick(_FakeController(is_recording=True, duration=1))
-    wiring.tick(_FakeController(is_recording=True, duration=2))
-    wiring.tick(_FakeController(is_recording=False))
+    recorder.start("Standup")
+    app.drain_events()
+    assert app.app.title == "\u25cf 00:07"
+    assert app.menu_items.recording.title == "\u25a0 Stop Recording · 00:07"
 
-    assert click_appkit.indicator_states == [True, False]
+    recorder.recording_warning = "microphone missing"
+    app.drain_events()
+    assert app.app.title == "\u26a0\ufe0e 00:07"
+
+    recorder.stop()
+    app.drain_events()
+    assert app.app.title is None
+    assert app.menu_items.recording.title == "\u25b6 Start Recording"

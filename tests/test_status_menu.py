@@ -24,7 +24,7 @@ def _submenu(app_menu, title):
     return next(item for item in app_menu.items if item is not None and item.title == title)
 
 
-def test_menu_order_matches_the_spec_and_puts_the_sidebar_toggle_first() -> None:
+def test_menu_order_matches_the_spec_with_start_recording_first() -> None:
     app_menu = FakeRumps.App(name="Test").menu
 
     rebuild_status_menu(
@@ -32,12 +32,15 @@ def test_menu_order_matches_the_spec_and_puts_the_sidebar_toggle_first() -> None
         FakeRumps(),
         idle_view_model(),
         sidebar_visible=False,
+        on_toggle_recording=lambda: None,
         on_toggle_sidebar=lambda: None,
         on_quit=lambda: None,
     )
 
     assert _titles(app_menu.items) == [
         menu.APP_TITLE,
+        None,
+        "▶ Start Recording",
         None,
         SHOW_SIDEBAR_LABEL,
         None,
@@ -66,16 +69,20 @@ def test_menu_order_matches_the_spec_and_puts_the_sidebar_toggle_first() -> None
     ]
 
 
-def test_no_record_or_screenshot_items_in_the_menu() -> None:
+def test_record_item_is_in_the_menu_but_screenshot_is_not() -> None:
     app_menu = FakeRumps.App(name="Test").menu
-    rebuild_status_menu(
+    calls: list[str] = []
+    items = rebuild_status_menu(
         app_menu,
         FakeRumps(),
         idle_view_model(),
         sidebar_visible=False,
+        on_toggle_recording=lambda: calls.append("record"),
         on_toggle_sidebar=lambda: None,
         on_quit=lambda: None,
     )
+    items.recording.callback(items.recording)
+    assert calls == ["record"]
 
     def all_titles(items):
         for item in items:
@@ -86,7 +93,7 @@ def test_no_record_or_screenshot_items_in_the_menu() -> None:
 
     titles = list(all_titles(app_menu.items))
     assert menu.SCREENSHOT_LABEL not in titles
-    assert not any("Recording" in title for title in titles)
+    assert "▶ Start Recording" in titles
 
 
 def test_actions_and_disabled_rows() -> None:
@@ -107,12 +114,13 @@ def test_actions_and_disabled_rows() -> None:
         FakeRumps(),
         view_model,
         sidebar_visible=True,
+        on_toggle_recording=lambda: None,
         on_toggle_sidebar=lambda: calls.append("toggle"),
         on_quit=lambda: calls.append("quit"),
         sidebar_rows=(
             RowView("Hide sidebar while recording", action=lambda: calls.append("pref")),
         ),
-    )
+    ).sidebar_toggle
 
     assert toggle_item.title == HIDE_SIDEBAR_LABEL
     toggle_item.callback(toggle_item)

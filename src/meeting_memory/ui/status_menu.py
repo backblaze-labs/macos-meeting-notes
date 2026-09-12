@@ -1,16 +1,17 @@
-"""The menu behind the menu bar icon: everything that is not a sidebar button.
+"""The menu behind the menu bar icon.
 
-The sidebar holds only record/stop, screenshot, and quit
-(`docs/features/sidebar.md`). Recent meetings, the meetings folder,
-Configuration, Debugging, and Quit live here, rebuilt from the same
-`SidebarViewModel` snapshot after every state change. The menu is the rumps
-`App.menu`; `ui/sidebar_toggle.py` detaches it from the status item at
-install time and pops it up on a right-click.
+Left- or right-clicking the icon opens this ordinary rumps menu. Start/Stop
+Recording sits at the top so manual recordings always have an entry point;
+the floating sidebar (`docs/features/sidebar.md`) is a companion that appears
+when a recording starts. Recent meetings, the meetings folder,
+Configuration, Debugging, and Quit live here too, rebuilt from the same
+`SidebarViewModel` snapshot after every state change.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from typing import Any
 
 from meeting_memory.ui import menu
@@ -18,7 +19,15 @@ from meeting_memory.ui.sidebar_view_model import RowView, SectionView, SidebarVi
 
 SHOW_SIDEBAR_LABEL = "Show Sidebar"
 HIDE_SIDEBAR_LABEL = "Hide Sidebar"
-SIDEBAR_TOGGLE_TOOLTIP = "The sidebar holds Record, Screenshot, and Quit. Left-click the icon too."
+SIDEBAR_TOGGLE_TOOLTIP = "The floating sidebar holds Record, Screenshot, and Quit."
+
+
+@dataclass(frozen=True)
+class StatusMenuItems:
+    """Menu items the tray retitles live between rebuilds."""
+
+    recording: Any
+    sidebar_toggle: Any
 
 
 def sidebar_toggle_label(visible: bool) -> str:
@@ -31,15 +40,18 @@ def rebuild_status_menu(
     view_model: SidebarViewModel,
     *,
     sidebar_visible: bool,
+    on_toggle_recording: Callable[[], None],
     on_toggle_sidebar: Callable[[], None],
     on_quit: Callable[..., None],
     sidebar_rows: Iterable[RowView] = (),
-) -> Any:
-    """Rebuild `app_menu` in place. Returns the Show/Hide Sidebar item so the
-    caller can retitle it when the panel is toggled from the icon."""
+) -> StatusMenuItems:
+    """Rebuild `app_menu` in place (SPEC F8-01 order) and return the live items."""
 
     app_menu.clear()
     app_menu.add(rumps.MenuItem(menu.APP_TITLE, callback=None))
+    app_menu.add(None)
+    recording_item = _item(rumps, RowView(view_model.recording.label, action=on_toggle_recording))
+    app_menu.add(recording_item)
     app_menu.add(None)
     toggle_item = _item(
         rumps,
@@ -58,7 +70,7 @@ def rebuild_status_menu(
     app_menu.add(_configuration_submenu(rumps, view_model, tuple(sidebar_rows)))
     app_menu.add(_debugging_submenu(rumps, view_model))
     app_menu.add(rumps.MenuItem(menu.QUIT_LABEL, lambda _sender: on_quit()))
-    return toggle_item
+    return StatusMenuItems(recording=recording_item, sidebar_toggle=toggle_item)
 
 
 def _configuration_submenu(

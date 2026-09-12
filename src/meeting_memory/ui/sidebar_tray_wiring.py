@@ -1,8 +1,9 @@
-"""Wires SidebarToggle and the compact panel content into RumpsTrayApp.
+"""Wires the floating panel and its compact content into RumpsTrayApp.
 
 Split out of `ui/tray.py` to keep it under its line budget. The panel shows
 three icon buttons (`ui/sidebar_compact.py`); every other control is in the
-status-item menu (`ui/status_menu.py`).
+ordinary status-item menu (`ui/status_menu.py`). Nothing here touches rumps
+internals: the menu bar icon keeps its normal click behavior.
 """
 
 from __future__ import annotations
@@ -19,29 +20,19 @@ from meeting_memory.ui.sidebar_prefs import (
     hide_while_recording_label,
     set_hide_while_recording,
 )
-from meeting_memory.ui.sidebar_toggle import SidebarToggle
 from meeting_memory.ui.sidebar_view_model import RowView, recording_view_for
 
-# A failed toggle install is retried on later ticks, but not forever: each
-# failure logs a traceback, and a permanent AppKit failure would otherwise
-# log once a second for the life of the process.
-MAX_INSTALL_ATTEMPTS = 3
 HIDE_WHILE_RECORDING_TOOLTIP = (
     "When on, the sidebar does not appear by itself when a recording starts."
 )
 
 
 class SidebarWiring:
-    """None-safe home for the sidebar panel + toggle + content.
+    """None-safe home for the sidebar panel and its content.
 
     The panel exists only in the real app: a non-None `rumps_module` means
     a test fake, and tests that want a panel inject a `panel_factory`
     explicitly. Every method is a no-op without one.
-
-    `install_once()` installs the status-item toggle once. Call it from the
-    first timer tick: `nsstatusitem` doesn't exist until `rumps.App.run()`
-    has started (it is attached inside `applicationDidFinishLaunching_`), so
-    installing from `__init__` or `run()` itself is too early.
     """
 
     def __init__(
@@ -52,13 +43,10 @@ class SidebarWiring:
         on_screenshot: Callable[[], None] = lambda: None,
         on_quit: Callable[[], None] = lambda: None,
         panel_factory: Any = None,
-        click_appkit: Any = None,
     ) -> None:
         self._on_toggle_recording = on_toggle_recording
         self._on_screenshot = on_screenshot
         self._on_quit = on_quit
-        self._click_appkit = click_appkit  # tests inject a fake; None -> real AppKit
-        self._install_attempts = 0
         if panel_factory is None and rumps_module is None:
             panel_factory = SidebarPanel
         self.panel = (
@@ -66,7 +54,6 @@ class SidebarWiring:
             if panel_factory is not None
             else None
         )
-        self.toggle: SidebarToggle | None = None
         self._recording: Any = None
         self._built_recording = False
         self._view_model: Any = None
@@ -77,19 +64,6 @@ class SidebarWiring:
     @property
     def is_visible(self) -> bool:
         return self.panel is not None and self.panel.is_visible
-
-    def install_once(self, app: Any, rumps_module: Any) -> None:
-        if self.panel is None or self.toggle is not None:
-            return
-        self._install_attempts += 1
-        toggle = SidebarToggle(
-            app,
-            _PanelToggleProxy(self),
-            on_quit=rumps_module.quit_application,
-            appkit=self._click_appkit,
-        )
-        if toggle.install() or self._install_attempts >= MAX_INSTALL_ATTEMPTS:
-            self.toggle = toggle  # installed, or given up: either way stop retrying
 
     def rebuild(self, view_model: Any) -> None:
         """Rebuild the panel's content from `view_model` — the same immutable
@@ -143,7 +117,7 @@ class SidebarWiring:
         self.rebuild(self._view_model)
 
     def toggle_panel(self) -> None:
-        """Show/Hide Sidebar from the menu (and, while it exists, the icon click).
+        """Show/Hide Sidebar from the menu.
 
         Visibility is the user's decision from here on: nothing in the wiring
         shows or hides the panel again until the next recording starts.
@@ -165,8 +139,6 @@ class SidebarWiring:
             self.rebuild(replace(self._view_model, recording=view))
         else:
             self._recording.update(view)
-        if self.toggle is not None:
-            self.toggle.set_recording_indicator(view.is_recording)
 
     def reveal(self) -> None:
         """Auto-show when a recording starts (docs/features/sidebar.md).
@@ -180,15 +152,3 @@ class SidebarWiring:
         if self.panel is None or hide_while_recording(self.panel.appkit):
             return
         self.panel.show()
-
-
-class _PanelToggleProxy:
-    """`SidebarToggle`'s `TogglePanel`: forwards the icon click to the wiring
-    (`SidebarWiring.toggle` is the installed `SidebarToggle`, so the wiring
-    itself can't play that role)."""
-
-    def __init__(self, wiring: SidebarWiring) -> None:
-        self._wiring = wiring
-
-    def toggle(self) -> None:
-        self._wiring.toggle_panel()

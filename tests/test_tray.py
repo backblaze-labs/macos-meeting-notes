@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sidebar_wiring_fakes import FakePanel, _all_containers, _label_text
-from tray_fakes import FakeClickAppKit, FakeRumps, submenu_titles
+from tray_fakes import FakeRumps, submenu_titles
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.recorder import RecordingResult, RecordingSession
@@ -153,21 +153,21 @@ def test_rumps_tray_app_updates_recording_duration_label(tmp_path: Path) -> None
         controller,
         rumps_module=FakeRumps(),
         sidebar_panel_factory=FakePanel,
-        sidebar_click_appkit=FakeClickAppKit(),  # keep install_once off real AppKit
     )
 
     current_time = datetime(2026, 6, 11, 9, 1, 5, tzinfo=UTC)
     app.drain_events()
 
     # The tick updates the panel's record button (an icon, not a word) in
-    # place; the menu bar item itself never carries the timer.
+    # place, and the status bar carries the recording dot plus the timer.
     record_button = next(
         sub
         for sub in _all_containers(app.sidebar.panel.content_view)
         if getattr(sub, "update", None) is not None
     )
     assert (record_button.tooltip, _label_text(record_button)) == ("Stop recording · 01:05", None)
-    assert app.app.title is None
+    assert app.app.title == "\u25cf 01:05"
+    assert app.menu_items.recording.title == "\u25a0 Stop Recording · 01:05"
 
 
 def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
@@ -185,14 +185,14 @@ def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
     assert app.app.title is None
     assert app.app.icon.endswith("robot-template.png")
     assert app.app.template is True
-    # The rumps menu is the status item's right-click menu (ui/status_menu.py);
-    # Record and Screenshot live only in the sidebar.
+    # The rumps menu opens on any click of the icon (ui/status_menu.py) and
+    # keeps Start Recording; Screenshot lives only in the sidebar.
     titles = [item.title for item in app.app.menu.items if item is not None]
     assert titles.count(menu.QUIT_LABEL) == 1
     assert titles.count(menu.CONFIGURATION_LABEL) == 1
     assert titles.count(menu.DEBUGGING_LABEL) == 1
     assert menu.SCREENSHOT_LABEL not in titles
-    assert not any("Recording" in title for title in titles)
+    assert titles[1] == menu.recording_label(is_recording=False)
     assert submenu_titles(app, menu.CONFIGURATION_LABEL)[:3] == [
         menu.AUDIO_MODE_HEADER,
         "✓ Full Meeting",

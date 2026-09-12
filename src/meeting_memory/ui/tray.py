@@ -1,9 +1,10 @@
 """macOS tray integration.
 
-The status item is an icon-only toggle for the compact floating sidebar
-(`docs/features/sidebar.md`): left-click shows or hides the three-button
-panel (record/stop, screenshot, quit); right-click pops up the app menu with
-everything else (`ui/status_menu.py`). Every state change funnels through
+Clicking the menu bar icon (either button) opens the ordinary app menu
+(`ui/status_menu.py`) with Start/Stop Recording at the top. While recording
+the status bar shows a dot and the live timer. The compact floating sidebar
+(`docs/features/sidebar.md`) appears when a recording starts and offers
+record/stop, screenshot, and quit. Every state change funnels through
 `refresh_sidebar()`, which rebuilds both from one immutable
 `SidebarViewModel` snapshot.
 
@@ -31,7 +32,7 @@ from meeting_memory.types.events import (
     SidebarRevealRequested,
     TranscriptReady,
 )
-from meeting_memory.ui import load_rumps
+from meeting_memory.ui import load_rumps, menu
 from meeting_memory.ui.audio_modes import AudioModeMenu
 from meeting_memory.ui.configuration_surface import ConfigurationSurfaceUI
 from meeting_memory.ui.controller import TrayController
@@ -59,9 +60,14 @@ from meeting_memory.ui.sidebar_view_model import (
     DebuggingActions,
     SidebarViewModel,
     build_view_model,
+    recording_view_for,
 )
 from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
-from meeting_memory.ui.status_menu import rebuild_status_menu, sidebar_toggle_label
+from meeting_memory.ui.status_menu import (
+    StatusMenuItems,
+    rebuild_status_menu,
+    sidebar_toggle_label,
+)
 from meeting_memory.ui.submenus import configuration_surface_actions
 from meeting_memory.ui.title_prompt import ask_recording_title
 
@@ -77,7 +83,6 @@ class RumpsTrayApp:
         rumps_module=None,
         configuration_surface: ConfigurationSurfaceCoordinator | None = None,
         sidebar_panel_factory: Any = None,
-        sidebar_click_appkit: Any = None,
         screenshot_store: ScreenshotStore | None = None,
         notes_defaults: Any = None,
     ) -> None:
@@ -92,12 +97,9 @@ class RumpsTrayApp:
         register = getattr(self.rumps, "notifications", None)
         if callable(register):
             register(self.handle_notification)
-        # title=None: the menu bar item carries no state — no timer, no
-        # warning glyph. Recording state lives in the sidebar, which
-        # `SidebarRevealRequested` forces visible when a recording starts.
         self.app = self.rumps.App(
             "Meeting Memory",
-            title=None,
+            title=self._tray_title(),
             icon=tray_icon_path(),
             template=True,
             quit_button=None,
@@ -111,10 +113,9 @@ class RumpsTrayApp:
             on_screenshot=self.take_screenshot,
             on_quit=self.rumps.quit_application,
             panel_factory=sidebar_panel_factory,
-            click_appkit=sidebar_click_appkit,
         )
         self.view_model: SidebarViewModel | None = None
-        self.sidebar_menu_item: Any = None
+        self.menu_items: StatusMenuItems | None = None
         self.open_url = webbrowser.open  # swapped out by tests
         # Opt-in automatic Notes after transcription; off means manual review.
         if notes_defaults is None:
@@ -169,11 +170,12 @@ class RumpsTrayApp:
             ),
         )
         self.sidebar.rebuild(self.view_model)
-        self.sidebar_menu_item = rebuild_status_menu(
+        self.menu_items = rebuild_status_menu(
             self.app.menu,
             self.rumps,
             self.view_model,
             sidebar_visible=self.sidebar.is_visible,
+            on_toggle_recording=self.toggle_recording,
             on_toggle_sidebar=self.sidebar.toggle_panel,
             on_quit=self.rumps.quit_application,
             sidebar_rows=(
@@ -214,20 +216,35 @@ class RumpsTrayApp:
         self._send_notification("Meeting Memory test", "", "Notifications are working.")
 
     def drain_events(self, _timer=None) -> None:
-        self.sidebar.install_once(self.app, self.rumps)
         self.recording_health.poll()
         for event in self.controller.drain_events():
             self.handle_event(event)
         self.sidebar.tick(self.controller)
-        self._sync_sidebar_menu_item()
+        self._sync_live_titles()
 
-    def _sync_sidebar_menu_item(self) -> None:
-        """Keep Show/Hide Sidebar honest after an icon click toggled the panel."""
+    def _tray_title(self) -> str | None:
+        recorder = self.controller.recorder
+        return menu.tray_title(
+            is_recording=recorder.is_recording,
+            duration_seconds=self.controller.recording_duration_seconds(),
+            audio_warning=bool(getattr(recorder, "recording_warning", None)),
+        )
 
-        item = self.sidebar_menu_item
+    def _sync_live_titles(self) -> None:
+        """Retitle the status bar and the live menu items without a rebuild."""
+
+        title = self._tray_title()
+        if self.app.title != title:
+            self.app.title = title
+        items = self.menu_items
+        if items is None:
+            return
         label = sidebar_toggle_label(self.sidebar.is_visible)
-        if item is not None and item.title != label:
-            item.title = label
+        if items.sidebar_toggle.title != label:
+            items.sidebar_toggle.title = label
+        recording_label = recording_view_for(self.controller).label
+        if items.recording.title != recording_label:
+            items.recording.title = recording_label
 
     def handle_event(self, event: object) -> None:
         if self.configuration_ui.handle_event(event):

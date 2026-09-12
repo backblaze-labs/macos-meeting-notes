@@ -41,6 +41,24 @@ def recording_label(
     return "▶ Start Recording"
 
 
+def tray_title(
+    *,
+    is_recording: bool,
+    duration_seconds: int = 0,
+    audio_warning: bool = False,
+) -> str | None:
+    """Status-bar text beside the icon: a recording dot plus the live timer.
+
+    None while idle so the menu bar shows only the icon. Change this if the
+    menu bar should carry more or less recording state.
+    """
+
+    if not is_recording:
+        return None
+    prefix = "\u26a0\ufe0e " if audio_warning else "\u25cf "
+    return f"{prefix}{_format_duration(duration_seconds)}"
+
+
 def recent_meeting_label(meeting: RecentMeeting) -> str:
     return f"{meeting.started_at:%Y-%m-%d %H:%M} · {meeting.calendar_title}"
 
