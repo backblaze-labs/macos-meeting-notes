@@ -1,4 +1,4 @@
-"""Tray menu label helpers."""
+"""Label helpers shared by the sidebar view model and the setup tray menu."""
 
 from __future__ import annotations
 
@@ -6,13 +6,15 @@ from meeting_memory.types.meeting import RecentMeeting
 from meeting_memory.types.processing import ProcessingTask
 
 APP_TITLE = "● Meeting Memory"
+SCREENSHOT_SHORTCUT = "⌥⇧S"
+SCREENSHOT_LABEL = f"📷 Take Screenshot ({SCREENSHOT_SHORTCUT})"
 RECENT_HEADER = "Recent Meetings"
 AUDIO_MODE_HEADER = "Audio Mode"
 CONFIGURATION_LABEL = "Configuration"
 DEBUGGING_LABEL = "Debugging"
 NO_MEETINGS_LABEL = "No meetings yet"
-REVIEW_SPEAKERS_HEADER = "Review Speakers"
 PROCESSING_HEADER = "Pending Meeting Tasks"
+CORRECTIONS_HEADER = "Correct Speakers"
 RECOVERED_HEADER = "Interrupted Recordings"
 LEGACY_RECOVERY_SCAN_LABEL = "Find Legacy Recordings..."
 NO_RECOVERED_LABEL = "No recovered recordings"
@@ -21,9 +23,7 @@ SYNC_LABEL = "Retry Pending B2 Backups"
 RETRY_PROCESSING_LABEL = "Retry Failed Transcriptions"
 RUN_DIAGNOSTICS_LABEL = "Check Setup & Dependencies"
 TEST_NOTIFICATION_LABEL = "Test macOS Notifications"
-KNOWN_SPEAKERS_LABEL = "Known Speakers..."
 NOTES_PROMPT_LABEL = "Notes Customization..."
-PREFERENCES_LABEL = "Preferences..."
 IMPORT_LEGACY_LABEL = "Import Legacy Configuration..."
 AUTHORIZE_CALENDAR_LABEL = "Authorize Google Calendar..."
 QUIT_LABEL = "Quit"
@@ -47,18 +47,20 @@ def tray_title(
     duration_seconds: int = 0,
     audio_warning: bool = False,
 ) -> str | None:
+    """Status-bar text beside the icon: a recording dot plus the live timer.
+
+    None while idle so the menu bar shows only the icon. Change this if the
+    menu bar should carry more or less recording state.
+    """
+
     if not is_recording:
         return None
-    prefix = "⚠︎ " if audio_warning else ""
+    prefix = "\u26a0\ufe0e " if audio_warning else "\u25cf "
     return f"{prefix}{_format_duration(duration_seconds)}"
 
 
 def recent_meeting_label(meeting: RecentMeeting) -> str:
     return f"{meeting.started_at:%Y-%m-%d %H:%M} · {meeting.calendar_title}"
-
-
-def review_speakers_label(meeting: RecentMeeting) -> str:
-    return f"{meeting.started_at:%Y-%m-%d %H:%M} · Review speakers · {meeting.calendar_title}"
 
 
 def processing_task_label(task: ProcessingTask) -> str:
@@ -70,7 +72,13 @@ def processing_header_label(count: int) -> str:
     return f"{PROCESSING_HEADER} ({count})"
 
 
+def corrections_header_label(count: int) -> str:
+    return f"{CORRECTIONS_HEADER} ({count})"
+
+
 def processing_task_tooltip(task: ProcessingTask) -> str:
+    if task.label == "Correct speakers":
+        return "Assign names to the kept speaker labels; Notes are generated again."
     if task.action == "review_speakers":
         return "Confirm who each speaker is, then generate notes."
     if task.status in {"failed", "skipped"}:

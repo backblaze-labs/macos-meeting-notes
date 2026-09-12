@@ -1,4 +1,8 @@
-"""Detect resumable post-processing work from local meeting artifacts."""
+"""Detect resumable post-processing work from local meeting artifacts.
+
+Also lists meetings whose speaker review kept the diarized labels (the
+automatic Notes path), so the user can still assign names afterwards.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +16,7 @@ from meeting_memory.types.meeting import RecentMeeting
 from meeting_memory.types.processing import ProcessingStatus, ProcessingTask
 
 RETRYABLE_NOTE_STATUSES = {"failed", "skipped"}
+CORRECT_SPEAKERS_LABEL = "Correct speakers"
 
 
 def list_pending_processing_tasks(meetings_dir: Path, limit: int = 5) -> list[ProcessingTask]:
@@ -26,6 +31,53 @@ def list_pending_processing_tasks(meetings_dir: Path, limit: int = 5) -> list[Pr
         if task is not None
     ]
     return sorted(tasks, key=lambda item: item.meeting.started_at, reverse=True)[:limit]
+
+
+def list_correctable_speaker_reviews(meetings_dir: Path, limit: int = 3) -> list[ProcessingTask]:
+    """Recent confirmed meetings that still carry diarized labels and no aliases.
+
+    These are the outcome of automatic Notes or Keep Speaker Labels. Their
+    transcript accepts one later manual mapping, so they get a review task.
+    Change the limit if the Debugging menu should reach further back.
+    """
+
+    if not meetings_dir.exists():
+        return []
+    tasks = [
+        task
+        for meeting_dir in meetings_dir.iterdir()
+        if meeting_dir.is_dir()
+        for task in [_correction_for_meeting(meeting_dir)]
+        if task is not None
+    ]
+    return sorted(tasks, key=lambda item: item.meeting.started_at, reverse=True)[:limit]
+
+
+def _correction_for_meeting(meeting_dir: Path) -> ProcessingTask | None:
+    try:
+        snapshot = inspect_meeting_snapshot(meeting_dir)
+        if snapshot is None:
+            return None
+        frontmatter = snapshot.frontmatter
+        meeting = _recent_from_frontmatter(
+            meeting_dir, snapshot.artifact.transcript_path, frontmatter
+        )
+    except (KeyError, OSError, TypeError, UnicodeError, ValueError):
+        return None
+    if str(frontmatter.get("speaker_status") or "") != "confirmed":
+        return None
+    aliases = frontmatter.get("speaker_aliases")
+    if isinstance(aliases, dict) and aliases:
+        return None
+    if not SPEAKER_LABEL_RE.search(snapshot.body):
+        return None
+    return ProcessingTask(
+        meeting=meeting,
+        stage="speaker_review",
+        action="review_speakers",
+        status="waiting",
+        label=CORRECT_SPEAKERS_LABEL,
+    )
 
 
 def _task_for_meeting(meeting_dir: Path) -> ProcessingTask | None:

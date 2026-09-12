@@ -77,13 +77,49 @@ def test_confirmed_relabel_is_idempotent_but_alias_change_is_rejected(tmp_path: 
     assert (meeting / "transcript.md").read_bytes() == before
 
 
+def test_kept_labels_can_be_mapped_to_names_once_later(tmp_path: Path) -> None:
+    meeting, _state = _reviewable_meeting(tmp_path, complete_backup=True)
+    confirm_speaker_aliases(meeting, {}, keep_labels=True)
+
+    confirm_speaker_aliases(meeting, {"Speaker A": "Alex", "Speaker B": "Blair"})
+
+    text = (meeting / "transcript.md").read_text(encoding="utf-8")
+    frontmatter = read_frontmatter(meeting / "transcript.md")
+    assert frontmatter["speaker_aliases"] == {"Speaker A": "Alex", "Speaker B": "Blair"}
+    assert frontmatter["participants"] == ["Alex", "Blair"]
+    assert frontmatter["backup_status"] == "pending"
+    assert "**Alex** (0:00:01): One" in text
+    before = (meeting / "transcript.md").read_bytes()
+
+    with pytest.raises(MeetingStateConflict, match="terminal"):
+        confirm_speaker_aliases(meeting, {"Speaker A": "Changed", "Speaker B": "Blair"})
+    with pytest.raises(MeetingStateConflict, match="terminal"):
+        confirm_speaker_aliases(meeting, {}, keep_labels=True)
+    assert (meeting / "transcript.md").read_bytes() == before
+
+
+def test_kept_labels_still_require_every_label_when_corrected(tmp_path: Path) -> None:
+    meeting, _state = _reviewable_meeting(tmp_path)
+    confirm_speaker_aliases(meeting, {}, keep_labels=True)
+    before = (meeting / "transcript.md").read_bytes()
+
+    with pytest.raises(ValueError, match="Speaker B"):
+        confirm_speaker_aliases(meeting, {"Speaker A": "Alex"})
+
+    assert (meeting / "transcript.md").read_bytes() == before
+
+
 def test_not_available_transcript_cannot_be_confirmed(tmp_path: Path) -> None:
     audio = tmp_path / "audio.m4a"
     audio.write_bytes(b"audio")
-    meeting = MeetingStore(tmp_path / "meetings").commit(
-        audio,
-        MeetingMeta("2026-08-10_11-00_empty", datetime(2026, 8, 10, tzinfo=UTC)),
-    ).directory
+    meeting = (
+        MeetingStore(tmp_path / "meetings")
+        .commit(
+            audio,
+            MeetingMeta("2026-08-10_11-00_empty", datetime(2026, 8, 10, tzinfo=UTC)),
+        )
+        .directory
+    )
 
     with pytest.raises(MeetingStateConflict, match="needs_review"):
         MeetingStateStore(meeting.parent).confirm_speakers(meeting, {})
@@ -154,11 +190,15 @@ def _reviewable_meeting(
         "Review",
         3,
     )
-    meeting = MeetingStore(tmp_path / "meetings").commit(
-        audio,
-        meta,
-        PostCommitPolicy(transcription=True, backup=complete_backup),
-    ).directory
+    meeting = (
+        MeetingStore(tmp_path / "meetings")
+        .commit(
+            audio,
+            meta,
+            PostCommitPolicy(transcription=True, backup=complete_backup),
+        )
+        .directory
+    )
     state = MeetingStateStore(meeting.parent)
     state.transition_job(
         meeting,

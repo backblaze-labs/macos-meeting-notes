@@ -15,14 +15,21 @@ from meeting_memory.config.runtime import RuntimeSettings
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.local_commit import LocalRecordingCommitter
 from meeting_memory.service.pipeline import Pipeline
-from meeting_memory.service.processing_state import list_pending_processing_tasks
+from meeting_memory.service.processing_state import (
+    list_correctable_speaker_reviews,
+    list_pending_processing_tasks,
+)
 from meeting_memory.service.recorder import RecorderService, RecordingResult
 from meeting_memory.service.recording_context import context_from_meetings
 from meeting_memory.service.runtime_legacy_recovery import LegacyRecoveryRuntime
-from meeting_memory.service.runtime_notes_gate import RuntimeNotesGate
 from meeting_memory.service.storage import list_recent_meetings
 from meeting_memory.service.transcript_review import confirm_speaker_aliases, load_speaker_review
-from meeting_memory.types.events import MeetingDetected, NotifyEvent, RecordingTitleNeeded
+from meeting_memory.types.events import (
+    MeetingDetected,
+    NotifyEvent,
+    RecordingTitleNeeded,
+    SidebarRevealRequested,
+)
 from meeting_memory.types.meeting import (
     CalendarMeeting,
     MeetingMeta,
@@ -34,10 +41,12 @@ from meeting_memory.types.recovery import RecoveryIndexEntry, RecoveryOrigin
 from meeting_memory.types.transcript import SpeakerReviewState
 from meeting_memory.ui.legacy_processing import launch_legacy_processing
 from meeting_memory.ui.macos import open_in_finder
+from meeting_memory.ui.notes_flow import NotesFlow
 from meeting_memory.ui.recording_duration_guard import RecordingDurationGuard
 from meeting_memory.ui.recording_health import completed_capture_warning
 from meeting_memory.ui.recording_transitions import RecordingTransitions
 from meeting_memory.ui.recovery_actions import is_active_recovery, list_recoveries
+from meeting_memory.ui.stop_reminder import schedule_stop_reminder
 
 EventQueue = queue.Queue[object]
 ThreadFactory = Callable[..., threading.Thread]
@@ -67,14 +76,15 @@ class TrayController:
     _recording_token: object | None = field(default=None, init=False)
     _duration_guard: RecordingDurationGuard = field(init=False)
     _transitions: RecordingTransitions = field(init=False)
-    _notes_runtime: RuntimeNotesGate = field(init=False)
+    _notes: NotesFlow = field(init=False)
 
     def __post_init__(self) -> None:
-        self._notes_runtime = RuntimeNotesGate(
+        self._notes = NotesFlow(
             self.notes_generator,
             self.event_queue.put,
             self.thread_factory,
             self.notes_allowed,
+            lambda path: self.confirm_speaker_aliases(path, {}, keep_labels=True),
         )
         self._transitions = RecordingTransitions(
             self.recorder,
@@ -101,19 +111,29 @@ class TrayController:
         speaker_candidates: tuple[str, ...] = (),
     ) -> None:
         self._transitions.request_start(
-            calendar_title,
-            ends_at=ends_at,
-            speaker_candidates=speaker_candidates,
+            calendar_title, ends_at=ends_at, speaker_candidates=speaker_candidates
         )
 
     def stop_recording(self) -> None:
         self._transitions.request_stop()
 
     def _recording_started(self, title: str, reminder_end: datetime | None) -> None:
+        # Auto-show (docs/features/sidebar.md): queued, never a direct UI
+        # call, and first — before any reminder the same start may queue.
+        self.event_queue.put(SidebarRevealRequested())
         self._recording_token = object()
         token = self._recording_token
         self._duration_guard.start(title, token)
-        self._schedule_stop_reminder(title, reminder_end, token)
+        schedule_stop_reminder(
+            calendar_title=title,
+            ends_at=reminder_end,
+            token=token,
+            now=self.now,
+            sleeper=self.sleeper,
+            thread_factory=self.thread_factory,
+            is_active=lambda t: self._recording_token is t and self.recorder.is_recording,
+            event_sink=self.event_queue.put,
+        )
 
     def _recording_stopped(self, result: RecordingResult) -> None:
         self._recording_token = None
@@ -150,11 +170,7 @@ class TrayController:
             )
             return
         launch_legacy_processing(
-            self.pipeline,
-            self.thread_factory,
-            self.event_queue.put,
-            audio_path,
-            meta,
+            self.pipeline, self.thread_factory, self.event_queue.put, audio_path, meta
         )
 
     def run_local_commit(self, recovery: RecoveryIndexEntry, meta: MeetingMeta) -> bool:
@@ -189,8 +205,14 @@ class TrayController:
     def pending_processing_tasks(self) -> list[ProcessingTask]:
         return list_pending_processing_tasks(self.settings.meetings_dir_path)
 
+    def correctable_speaker_reviews(self) -> list[ProcessingTask]:
+        return list_correctable_speaker_reviews(self.settings.meetings_dir_path)
+
     def load_speaker_review(self, path: Path) -> SpeakerReviewState:
         return load_speaker_review(path)
+
+    def keep_speaker_labels(self, path: Path) -> Path:
+        return self.confirm_speaker_aliases(path, {}, keep_labels=True)
 
     def confirm_speaker_aliases(
         self, path: Path, aliases: dict[str, str], *, keep_labels: bool = False
@@ -202,16 +224,18 @@ class TrayController:
             LOGGER.warning("Could not start Backup after speaker review", exc_info=True)
         return reviewed
 
-    def keep_speaker_labels(self, path: Path) -> Path:
-        return self.confirm_speaker_aliases(path, {}, keep_labels=True)
-
     def generate_notes(self, path: Path) -> None:
-        self._notes_runtime.start(path)
+        self._notes.generate(path)
+
+    @property
+    def notes_available(self) -> bool:
+        return self._notes.available
+
+    def auto_generate_notes(self, path: Path) -> None:
+        self._notes.auto_generate(path)
 
     def set_notes_enabled(self, enabled: bool) -> None:
-        """Stop new Notes generations without interrupting one already in flight."""
-
-        self._notes_runtime.set_enabled(enabled)
+        self._notes.set_enabled(enabled)
 
     def recovered_recordings(self) -> list[RecoveryIndexEntry]:
         return list_recoveries(self.recorder, self.legacy_recovery)
@@ -274,27 +298,3 @@ class TrayController:
                 events.append(self.event_queue.get_nowait())
             except queue.Empty:
                 return events
-
-    def _schedule_stop_reminder(
-        self,
-        calendar_title: str,
-        ends_at: datetime | None,
-        token: object,
-    ) -> None:
-        if ends_at is None or ends_at <= self.now():
-            return
-        self.thread_factory(
-            target=self._send_stop_reminder, args=(calendar_title, ends_at, token), daemon=True
-        ).start()
-
-    def _send_stop_reminder(self, calendar_title: str, ends_at: datetime, token: object) -> None:
-        self.sleeper(max(0, (ends_at - self.now()).total_seconds()))
-        if self._recording_token is token and self.recorder.is_recording:
-            self.event_queue.put(
-                NotifyEvent(
-                    title="Meeting ending",
-                    body=f"{calendar_title} is ending now. Stop recording?",
-                    action_label="Stop",
-                    action="stop_recording",
-                )
-            )

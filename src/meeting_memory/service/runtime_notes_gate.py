@@ -35,6 +35,19 @@ class RuntimeNotesGate:
         with self._lock:
             self._enabled = enabled and self._generator is not None
 
+    @property
+    def available(self) -> bool:
+        """Return whether a Notes generation started now could run.
+
+        False when Notes is unconfigured or paused for this session. Callers
+        that would change durable meeting state before generating must check
+        this first; change it if the pause model gains more states.
+        """
+
+        allowed = self._allowed()
+        with self._lock:
+            return self._enabled and allowed
+
     def _run(self, path: Path) -> None:
         allowed = self._allowed()
         with self._lock:

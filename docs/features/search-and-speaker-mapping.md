@@ -26,7 +26,9 @@ processed.
   confirmed names.
 - Calendar attendees populate `speaker_candidates` as hints. Attendees are
   shown by Calendar full name, except aliases explicitly configured in
-  `KNOWN_SPEAKERS` when the attendee name or email matches.
+  `KNOWN_SPEAKERS` when the attendee name or email matches. The tray asks for
+  a speaker review after each transcription unless the opt-in automatic
+  Notes mode is on (`transcription.md`).
 - Relabeling is local deterministic code; it does not infer names from audio or
   use an LLM.
 

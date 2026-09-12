@@ -96,22 +96,22 @@ class LocalRecordingCommitter:
                 result = exc.result
             except RecoveryCommitDurabilityUncertain as exc:
                 LOGGER.warning("Meeting publication durability is uncertain")
-                self.event_sink(RecordingPublicationUncertain(_meeting_ref(exc.result)))
+                self.event_sink(RecordingPublicationUncertain(_meeting_ref(exc.result, current)))
                 return None
 
         binding = load_recovery_binding(self.store.meetings_dir, current)
         if binding is None or binding.entry.publication is None:
             LOGGER.error("Published recovery binding could not be reconciled")
-            self.event_sink(RecordingCleanupPending(_meeting_ref(result)))
+            self.event_sink(RecordingCleanupPending(_meeting_ref(result, current)))
             return None
         if not self._cleanup(result):
-            self.event_sink(RecordingCleanupPending(_meeting_ref(result)))
+            self.event_sink(RecordingCleanupPending(_meeting_ref(result, current)))
             return None
         try:
             clear_recovery_binding(self.store.meetings_dir, binding)
         except Exception:
             LOGGER.exception("Cleaned recovery left an inert journal binding")
-        self.event_sink(RecordingCommitted(_meeting_ref(result)))
+        self.event_sink(RecordingCommitted(_meeting_ref(result, current)))
         if self.post_commit_launcher is not None:
             self.post_commit_launcher(result.files, policy)
         return result.files
@@ -126,9 +126,20 @@ class LocalRecordingCommitter:
         return True
 
 
-def _meeting_ref(result: RecoveryCommitResult) -> MeetingRef:
+def _meeting_ref(result: RecoveryCommitResult, entry: RecoveryIndexEntry) -> MeetingRef:
+    """Name the published meeting plus the capture session it was staged under.
+
+    Change this if artifacts staged before publication ever need a different
+    correlation key than the recovery session directory name.
+    """
+
     files = result.files
-    return MeetingRef(files.meta.slug, files.meta.calendar_title, files.directory)
+    return MeetingRef(
+        files.meta.slug,
+        files.meta.calendar_title,
+        files.directory,
+        recording_session=entry.session_directory.name,
+    )
 
 
 def _pinned_or_pin(entry: RecoveryIndexEntry) -> RecoveryIndexEntry:

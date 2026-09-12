@@ -259,3 +259,158 @@ Notifications: `when mirroring or sharing the display`. Then verify the app was
 launched through the official `Meeting Memory.app`, Google Calendar auth is
 valid, `GOOGLE_CALENDAR_ID=all` unless intentionally narrowed, and the calendar
 event has a Meet/Zoom URL within the notification window.
+
+## 2026-09-05 Sidebar Cutover
+
+Request: replace the runtime dropdown menu with a draggable, edge-snapping
+sidebar panel (`docs/features/sidebar.md`, plans in
+`docs/features/sidebar/completed/`).
+
+Outcome: shipped. Decisions that were considered and deliberately not taken,
+so they are not re-litigated by accident:
+
+- **Vertical-only was rejected** in favor of reorientation: a bar snapped to
+  the top or bottom edge is horizontal, with the section stack behind an
+  overflow popover. Without plan 06 the panel would still snap to all four
+  edges in one shape; the owner chose the reorienting version.
+- **The setup tray is intentionally not converted.** First run is a poor
+  moment for a novel control, and keeping the plain menu halves the surface.
+  `ui/submenus.py` now exists only for it.
+- **Toggle visibility is intentionally not persisted** across launches; the
+  panel starts hidden every time. Position and anchor are persisted.
+- **Auto-show fires on every recording start**, including notification- and
+  recovery-initiated ones (plan 07 gotcha 4). Not scoped to user-initiated
+  starts: the point is that recording state is never invisible.
+
+Deferred from the manual pass:
+
+- The baseline `00-menu-*.png` screenshots of the retired dropdown were never
+  captured (no accessibility access to click the status item from the agent
+  shell). The substitute record is the label snapshot in
+  `tests/test_sidebar_view_model.py`, which lists every row the dropdown
+  showed and asserts the sidebar view model still renders each one.
+- The real-mouse drag gesture, the setup-tray walk-through, VoiceOver, and
+  the light/dark check were not exercised by hand. The drag path was verified
+  in-process instead: `hitTest_` over the whole `⠿` strip resolves to the
+  drag view, and the demo harness drives `SidebarPanel._handle_drag_end`
+  through the real reorientation and popover code.
+
+First thing to check if this comes up again: launch the installed bundle,
+left-click the icon, drag the panel by the `⠿` strip to the top edge, and
+confirm it becomes the horizontal bar with `⋯` opening a popover downward.
+If the status item does nothing, check `ui/sidebar_toggle.py`'s install log
+line first — it restores the rumps menu on failure.
+
+## 2026-09-06 Sidebar Refinements From Competitor Research
+
+Request: research comparable macOS meeting recorders (Granola, Krisp, Otter,
+Fireflies, Fathom, Notion AI Meeting Notes, MacWhisper, Superwhisper, Cleft,
+tl;dv, Apple Notes/FaceTime) and improve the sidebar accordingly.
+
+Implemented (see `docs/features/sidebar.md`):
+
+- A red dot on the menu bar icon while recording. *(Superseded 2026-09-12:
+  the status bar shows `● mm:ss` again through the plain rumps title, so no
+  rumps internals are needed.)*
+- A post-stop status row (Fireflies "instant summary" / Notion auto-generate
+  pattern): the latest lifecycle message with a click-through to reveal the
+  meeting or review speakers.
+- The pre-meeting notification's **Record** action also opens the meeting
+  link (Granola's one-click join + record).
+
+Deliberately not implemented yet, in value order:
+
+- **Global start/stop hotkey** (Superwhisper, MacWhisper, Cleft). Needs a
+  Carbon `RegisterEventHotKey` binding or an `NSEvent` global monitor; the
+  latter requires Input Monitoring permission. Worth a small plan of its own.
+- **Meeting-app detection** ("Zoom call detected — Record", Notion/Granola/
+  MacWhisper). Needs mic-in-use polling; belongs with the calendar watcher in
+  `service/`, not the sidebar.
+- **Pause/Resume** (Otter, Apple Notes). The recorder has no pause; backend.
+- **Live transcript peek** and a **collapsed timer pill** for the
+  hide-while-recording mode. Both UI-only but medium-sized; the red dot
+  covers the indicator need for now.
+
+First thing to check if this comes up again: the status row is driven by
+`RumpsTrayApp.last_status` (every `NotifyEvent`, including runtime-mapped
+ones); if a message is missing from the row, check that the event reaches
+`handle_event` rather than only `handle_notification`.
+
+## 2026-09-08 Screenshots, Compact Sidebar, and Automatic Notes
+
+Requests, in the order they arrived on the `screenshot-functionality` branch:
+
+1. A screenshot button and key that files images with the meeting (one image
+   loose in the meeting folder, several in a `screenshots/` subfolder).
+2. The sidebar reduced to start/resume/stop, screenshot, and quit, with every
+   other option moved to the menu behind the menu bar icon.
+3. A rounded, as-small-as-possible sidebar whose controls are icons, not words.
+4. Participant names taken from Google Meet/Zoom or the Calendar so nothing
+   has to be typed after a meeting, and the post-meeting "pending tasks" gate
+   removed.
+
+Outcome: all four shipped (`docs/features/screenshots.md`,
+`docs/features/sidebar.md`, `docs/features/transcription.md`). Decisions:
+
+- **Meet/Zoom integration was not built.** Neither Google Meet nor Zoom
+  exposes an API a local menu-bar app can use to learn who is on the call or
+  speaking without a Workspace/Zoom developer app and OAuth grant. The
+  Calendar invite's attendee list (already `speaker_candidates`) is the
+  participant source; the summarizer receives it ahead of the transcript and
+  names owners only where the conversation makes the mapping clear.
+- **Speaker review is retired from the UI**, not from the data model.
+  *(Superseded 2026-09-12: manual review is the default again and automatic
+  Notes is an opt-in; the deleted modules were restored. See the review
+  entry below.)*
+- **"Resume" recording is not implemented.** The recorder has no pause, so
+  the sidebar's record button toggles start/stop only (see the 2026-09-06
+  note on Pause/Resume). Adding it is backend work in `service/recorder.py`
+  and the native helper first.
+- **The sidebar shows a timer while recording.** It is digits, not words, and
+  it is the only text on the panel; the panel grows by one small slot while
+  recording so the timer never overlaps a button.
+- **Right-click, not left-click, opens the menu.** *(Superseded 2026-09-12:
+  either click opens the menu; see the review entry below.)*
+
+First thing to check if this comes up again: `ui/status_menu.py` for what the
+menu holds, `ui/sidebar_compact.py` for the three buttons and their tooltips,
+`service/screenshots.py:attach` for the one-file-vs-folder rule, and
+`ui/controller.py:auto_generate_notes` for the transcript-to-notes handoff.
+The global shortcut lives in `ui/screenshot_hotkey.py`; if it stops firing
+after a macOS update, check `app.log` for the "Global screenshot hotkey"
+line first.
+
+## 2026-09-12 PR 18 Review Follow-Up
+
+Request (review on PR 18): open the normal menu on any icon click and keep
+Start Recording in it; make the sidebar auto-show on recording start and
+otherwise leave visibility to the user; keep manual speaker review as the
+default with automatic Notes as an explicit opt-in that cannot lock out a
+later correction; never start or fail Notes when it is unavailable; key
+screenshot staging by the durable capture session; synchronize the docs.
+
+Outcome: all implemented. The `rumps` pin returned to `>=0.4` because the
+status item toggle module and its internals are gone. Decisions:
+
+- **Automatic Notes lives in `NSUserDefaults`** (`ui/notes_mode.py`) next to
+  the sidebar preferences, as session UI behavior rather than a Phase 4
+  preference-document field. Move it there if it ever needs migration or
+  disclosure through the capability forms.
+- **Attendee context only for kept labels.** The `Calendar attendees:` line
+  reaches the summarizer only when the review stored no aliases, so the
+  manual flow sends exactly what it sent before.
+- **One correction for kept labels.** A confirmed transcript with empty
+  `speaker_aliases` accepts one full alias map; named aliases stay terminal.
+  Recent kept-label meetings appear under **Debugging › Correct Speakers**.
+- **Screenshot staging key** is the recovery session directory name carried
+  on `MeetingRef.recording_session` by the local-commit events.
+
+Still open from the review's manual checklist: a real-mouse pass of the
+menu, the auto-show and close rules, a same-minute double recording with
+screenshots, and one automatic-mode meeting followed by a correction.
+
+First thing to check if this comes up again: `ui/status_menu.py` for the menu
+order, `ui/sidebar_tray_wiring.py:reveal` for the only automatic show,
+`ui/notes_mode.py` and `ui/tray.py:handle_event` for the transcript-ready
+routing, `service/speaker_state.py:_confirm_locked` for the kept-label rule,
+and `service/screenshots.py` for the session key.

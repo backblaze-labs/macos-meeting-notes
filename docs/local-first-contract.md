@@ -32,7 +32,7 @@ work.
 | **Transcription** | Produce a diarized `transcript.md` | Recording Core, network, AssemblyAI credential | No |
 | **Backup** | Copy owned meeting artifacts to B2 | Local artifact, network, B2 destination credentials | **Configuration only** |
 | **Calendar** | Detect meeting context and reminders | Network, Google credentials and OAuth grant | No |
-| **Notes** | Produce derived `notes.md` after speaker review | Completed transcript, network, Anthropic credential | No |
+| **Notes** | Produce derived `notes.md` after speaker review, or right after transcription in the opt-in automatic mode | Completed transcript, network, Anthropic credential | No |
 
 Recording Core is always present. Backup credentials and destination settings
 are required to leave setup; Transcription, Calendar, and Notes are opt-in.
@@ -222,7 +222,7 @@ egress before an integration is enabled:
 | AssemblyAI | Completed meeting audio | Diarized transcription |
 | Backblaze B2 | `recording.m4a` and `transcript.md` for eligible schema-v2 meetings | Durable private backup |
 | Google Calendar | OAuth/API requests; event metadata is received locally | Context and reminders |
-| Anthropic | The fixed output-schema instructions, the editable instruction block, and only a speaker-confirmed transcript excerpt capped at 60,000 characters; the Markdown layout remains local | Derived notes |
+| Anthropic | The fixed output-schema instructions, the editable instruction block, and only a speaker-confirmed transcript excerpt capped at 60,000 characters; in the opt-in automatic Notes mode, the Calendar attendee names from `speaker_candidates` precede that excerpt. The Markdown layout remains local | Derived notes |
 
 No provider receives data merely because the app launched or Recording Core
 ran. Configuration is consent to make the integration available for new

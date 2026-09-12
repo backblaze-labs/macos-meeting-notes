@@ -8,6 +8,7 @@ from pathlib import Path
 import structure_distribution_files as distribution
 from structure_d2_files import REQUIRED_D2_SOURCE_FILES
 from structure_native_files import REQUIRED_NATIVE_SOURCE_FILES
+from structure_ui_files import REQUIRED_UI_SOURCE_FILES
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = ROOT / "src" / "meeting_memory"
@@ -49,6 +50,7 @@ REQUIRED_SOURCE_FILES = (
     "types/egress.py",
     "types/recovery.py",
     "types/speakers.py",
+    "types/processing.py",
     "config/__init__.py",
     "config/notes_template.py",
     "config/settings.py",
@@ -71,6 +73,7 @@ REQUIRED_SOURCE_FILES = (
     "repo/google_http.py",
     "repo/native_audio.py",
     "repo/native_audio_validation.py",
+    "repo/screen_capture.py",
     "service/__init__.py",
     "service/storage.py",
     "service/stage_integrity.py",
@@ -141,23 +144,9 @@ REQUIRED_SOURCE_FILES = (
     "service/calendar_watcher.py",
     "service/calendar_authorization.py",
     "service/sync.py",
-    "ui/__init__.py",
-    "ui/tray.py",
-    "ui/menu.py",
-    "ui/audio_modes.py",
-    "ui/notes_prompt.py",
-    "ui/processing_launch.py",
-    "ui/legacy_processing.py",
-    "ui/recovery_actions.py",
-    "ui/runtime_events.py",
-    "ui/setup_readiness.py",
-    "ui/runtime_app.py",
-    "ui/recording_health.py",
-    "ui/recording_duration_guard.py",
-    "ui/recording_transitions.py",
-    "ui/submenus.py",
-    "ui/preferences.py",
-    "ui/preference_forms.py",
+    "service/screenshots.py",
+    "service/processing_state.py",
+    *REQUIRED_UI_SOURCE_FILES,
 )
 
 REQUIRED_REPO_FILES = (
@@ -181,12 +170,8 @@ REQUIRED_REPO_FILES = (
 )
 
 
-def python_files() -> list[Path]:
-    return sorted([*SRC_ROOT.rglob("*.py"), *TESTS_ROOT.rglob("*.py")])
-
-
 def source_files() -> list[Path]:
-    return sorted([*python_files(), *SRC_ROOT.rglob("*.swift")])
+    return sorted([*SRC_ROOT.rglob("*.py"), *TESTS_ROOT.rglob("*.py"), *SRC_ROOT.rglob("*.swift")])
 
 
 def parse(path: Path) -> ast.Module:
@@ -213,16 +198,11 @@ def import_from_modules(node: ast.ImportFrom, path: Path) -> list[str]:
     if node.level == 0:
         return [node.module] if node.module else []
 
-    package = current_package(path)
+    package = ["meeting_memory", *path.relative_to(SRC_ROOT).parts[:-1]]
     base = package[: len(package) - node.level + 1]
     if node.module:
         return [".".join([*base, *node.module.split(".")])]
     return [".".join([*base, alias.name]) for alias in node.names]
-
-
-def current_package(path: Path) -> list[str]:
-    relative = path.relative_to(SRC_ROOT)
-    return ["meeting_memory", *relative.parts[:-1]]
 
 
 def imported_layer(module_name: str) -> str | None:

@@ -1,4 +1,4 @@
-"""Tray menu actions for switching recording audio modes."""
+"""Switching the recording audio mode from the sidebar."""
 
 from __future__ import annotations
 
@@ -10,37 +10,28 @@ from meeting_memory.service.audio_modes import (
     apply_audio_mode,
 )
 from meeting_memory.types.events import NotifyEvent
-from meeting_memory.ui import menu
 from meeting_memory.ui.controller import TrayController
 
 AudioModeApplier = Callable[[AudioMode, object], None]
 
 
 class AudioModeMenu:
+    """Tracks the selected mode and applies a change; `sidebar_view_model.py`
+    turns it into rows and `on_change` refreshes the panel afterwards."""
+
     def __init__(
         self,
         rumps_module,
         controller: TrayController,
         *,
-        rebuild_menu: Callable[[], None],
+        on_change: Callable[[], None],
         applier: AudioModeApplier = apply_audio_mode,
     ) -> None:
         self.rumps = rumps_module
         self.controller = controller
-        self.rebuild_menu = rebuild_menu
+        self.on_change = on_change
         self.applier = applier
         self.current_mode_key = getattr(controller.recorder, "capture_mode", AUDIO_MODES[0].key)
-
-    def add_items(self, app_menu) -> None:
-        app_menu.add(self.rumps.MenuItem(menu.AUDIO_MODE_HEADER, callback=None))
-        for mode in AUDIO_MODES:
-            app_menu.add(
-                self.rumps.MenuItem(
-                    self._mode_label(mode),
-                    callback=lambda _sender, item=mode: self.select_mode(item),
-                )
-            )
-        app_menu.add(None)
 
     def select_mode(self, mode: AudioMode) -> None:
         try:
@@ -58,11 +49,12 @@ class AudioModeMenu:
                 f"{mode.label}: {mode.description}.",
             )
         )
-        self.rebuild_menu()
+        self.on_change()
 
     def _mode_label(self, mode: AudioMode) -> str:
         prefix = "✓ " if mode.key == self.current_mode_key else ""
         return f"{prefix}{mode.label}"
+
 
 def _format_exception(exc: Exception) -> str:
     return str(exc).strip() or exc.__class__.__name__

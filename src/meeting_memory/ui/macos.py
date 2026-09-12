@@ -76,9 +76,7 @@ def allow_foreground_notifications(logger: logging.Logger) -> None:
         from Foundation import NSSelectorFromString
         from rumps.rumps import NSApp
 
-        selector = NSSelectorFromString(
-            "userNotificationCenter:shouldPresentNotification:"
-        )
+        selector = NSSelectorFromString("userNotificationCenter:shouldPresentNotification:")
         if NSApp.instancesRespondToSelector_(selector):
             return
 

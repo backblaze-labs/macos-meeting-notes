@@ -16,8 +16,8 @@ without its credential; a complete legacy environment group opts it in.
 - Optional `KNOWN_SPEAKERS`, used to normalize configured people in Calendar
   speaker suggestions
 - Optional `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, and `SUMMARY_PROMPT_FILE` for
-  automatic notes after speaker review or the `meeting-memory summarize` retry
-  command
+  notes after speaker review (or right after transcription in the opt-in
+  automatic mode) and the `meeting-memory summarize` retry command
 
 ## Outputs
 
@@ -30,15 +30,16 @@ without its credential; a complete legacy environment group opts it in.
   - `speaker_status`
   - diarized transcript lines
 - `notes.md`, carrying the same AI-transcription warning, after confirmed
-  speaker review starts notes generation, or after `meeting-memory summarize`
-  is run manually
+  speaker review starts notes generation, right after transcription when the
+  automatic mode is on, or after `meeting-memory summarize` is run manually
 
 ## Threading
 
 Transcription runs inside a dedicated background worker. It must not run on the
 tray UI thread. Speaker review relabeling is local deterministic code. Notes
 generation runs in a background thread from the tray, or through the local
-`meeting-memory summarize` command.
+`meeting-memory summarize` command. In the automatic mode the controller
+confirms the diarized labels as-is on a worker thread before starting Notes.
 
 ## Behavior Notes
 
@@ -59,17 +60,33 @@ generation runs in a background thread from the tray, or through the local
   Anthropic and does not write summaries or decisions.
 - Google Calendar attendees populate `speaker_candidates`. Attendees are shown
   by Calendar full name, except aliases explicitly configured in
-  `KNOWN_SPEAKERS` through the tray's **Configuration › Known Speakers...**
-  editor. This is a local hint, not automatic identification.
-- The user can confirm speaker aliases in the tray UI, or choose **Keep Speaker
-  Labels** when the names are unknown. The latter preserves labels such as
-  `Speaker A`, leaves `speaker_aliases` empty, and still records the review as
-  confirmed. Relabeling is deterministic code, not an LLM step.
-- Either confirmed speaker-review choice starts notes generation
-  automatically. If notes are missing, skipped, or failed, the tray shows a
-  **Debugging › Pending Meeting Tasks** action.
+  `KNOWN_SPEAKERS` through the tray's **Configuration › Calendar...**
+  editor. This is a local hint, not automatic identification. Google Meet and
+  Zoom expose no API a menu-bar app can use to learn who is speaking.
+- By default the user confirms speaker aliases in the tray UI, or chooses
+  **Keep Speaker Labels** when the names are unknown. The latter preserves
+  labels such as `Speaker A`, leaves `speaker_aliases` empty, and still
+  records the review as confirmed. Relabeling is deterministic code, not an
+  LLM step. Either choice starts notes generation automatically. If notes are
+  missing, skipped, or failed, the tray shows a **Debugging › Pending Meeting
+  Tasks** action.
+- **Configuration › Automatic Notes from Calendar attendees** is off by
+  default. Enabling it shows the tradeoff first. When on and Notes is
+  available, a successful transcription keeps the diarized labels
+  (`speaker_status: confirmed`, `speaker_aliases` empty) and starts Notes;
+  the summarizer receives a `Calendar attendees:` line ahead of the
+  transcript and names owners only where the conversation makes the mapping
+  clear. When Notes is unconfigured or paused nothing happens and the
+  transcript stays open for manual review.
+- A transcript confirmed with kept labels accepts one later full alias map.
+  **Debugging › Correct Speakers** lists recent such meetings; confirming
+  names there relabels the transcript and regenerates Notes. Named aliases are
+  terminal.
+- If Notes is unconfigured or fails, the transcript stays complete and
+  `meeting-memory summarize` regenerates `notes.md` later.
 - Anthropic receives the fixed output-schema instructions, the configured
-  editable instruction block, and only a speaker-confirmed transcript excerpt clipped to
+  editable instruction block, the attendee names when the review kept the
+  diarized labels, and only a speaker-confirmed transcript excerpt clipped to
   at most 60,000 characters. Notes reserve up to 4,096 output tokens so longer
   meetings can complete the structured response; a response that still stops
   at the output limit is rejected rather than parsed or published. Anthropic

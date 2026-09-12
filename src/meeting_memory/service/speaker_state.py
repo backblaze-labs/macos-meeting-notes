@@ -58,16 +58,18 @@ def _confirm_locked(
 ) -> Path:
     current_status = str(frontmatter.get("speaker_status") or "not_available")
     if expected_status is not None and current_status != expected_status:
-        raise MeetingStateConflict(
-            f"speaker state is {current_status}, expected {expected_status}"
-        )
+        raise MeetingStateConflict(f"speaker state is {current_status}, expected {expected_status}")
     cleaned = _clean_aliases(aliases)
     if current_status == "confirmed":
         stored = _stored_aliases(frontmatter)
         if cleaned == stored:
             return document.path / "transcript.md"
-        raise MeetingStateConflict("confirmed speaker aliases are terminal")
-    if current_status != "needs_review":
+        if stored or keep_labels or not cleaned:
+            raise MeetingStateConflict("confirmed speaker aliases are terminal")
+        # Labels were kept (the automatic Notes path, or an explicit Keep
+        # Speaker Labels): the body still carries diarized labels, so one
+        # later manual mapping is allowed. Named aliases stay terminal.
+    elif current_status != "needs_review":
         raise MeetingStateConflict(f"speaker state is {current_status}, expected needs_review")
     labels = _transcript_labels(body)
     if not labels:
@@ -103,9 +105,7 @@ def _confirm_locked(
 
 
 def _transcript_labels(body: str) -> tuple[str, ...]:
-    return tuple(
-        dict.fromkeys(match.group("label") for match in TRANSCRIPT_LINE_RE.finditer(body))
-    )
+    return tuple(dict.fromkeys(match.group("label") for match in TRANSCRIPT_LINE_RE.finditer(body)))
 
 
 def _stored_aliases(frontmatter: dict[str, object]) -> dict[str, str]:
@@ -146,9 +146,7 @@ def _replace_label(match: re.Match[str], aliases: dict[str, str]) -> str:
 def _replace_body(markdown: str, body: str) -> str:
     lines = markdown.splitlines(keepends=True)
     closing = next(
-        index
-        for index, line in enumerate(lines[1:], start=1)
-        if line.rstrip("\r\n") == "---"
+        index for index, line in enumerate(lines[1:], start=1) if line.rstrip("\r\n") == "---"
     )
     frontmatter = "".join(lines[: closing + 1]).rstrip("\r\n")
     return f"{frontmatter}\n{body}"

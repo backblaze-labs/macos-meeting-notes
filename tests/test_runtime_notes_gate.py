@@ -21,3 +21,17 @@ def test_notes_failure_logs_a_safe_error_type(tmp_path, caplog) -> None:
     assert events[0].title == "Notes generation failed"
     assert caplog.records[0].message == "Notes generation failed error_type=RuntimeError"
     assert caplog.records[0].exc_info is None
+
+
+def test_gate_is_unavailable_without_a_generator_or_while_paused(tmp_path) -> None:
+    unconfigured = RuntimeNotesGate(None, lambda _e: None, ImmediateThread, lambda: True)
+    paused = RuntimeNotesGate(lambda p: p, lambda _e: None, ImmediateThread, lambda: False)
+    ready = RuntimeNotesGate(lambda p: p, lambda _e: None, ImmediateThread, lambda: True)
+
+    assert unconfigured.available is False
+    assert paused.available is False
+    assert ready.available is True
+
+    ready.set_enabled(False)
+
+    assert ready.available is False

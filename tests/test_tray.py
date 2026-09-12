@@ -7,12 +7,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from sidebar_wiring_fakes import FakePanel, _all_containers, _label_text
 from tray_fakes import FakeRumps, submenu_titles
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.recorder import RecordingResult, RecordingSession
-from meeting_memory.types.capabilities import Capability
-from meeting_memory.types.events import MeetingDetected, NotifyEvent
+from meeting_memory.types.events import MeetingDetected, NotifyEvent, SidebarRevealRequested
 from meeting_memory.types.meeting import MeetingMeta
 from meeting_memory.ui import menu
 from meeting_memory.ui.tray import RumpsTrayApp, TrayController
@@ -37,7 +37,8 @@ def test_tray_controller_runs_pipeline_after_stop(tmp_path: Path) -> None:
     assert recorder.started_candidates == ()
     assert pipeline.calls == [(recorder.result.audio_path, recorder.result.meta)]
     assert controller.drain_events() == [
-        NotifyEvent("Recording saved", "Product Sync · processing queued", show_notification=False)
+        SidebarRevealRequested(),
+        NotifyEvent("Recording saved", "Product Sync · processing queued", show_notification=False),
     ]
 
 
@@ -148,13 +149,25 @@ def test_rumps_tray_app_updates_recording_duration_label(tmp_path: Path) -> None
         event_queue=queue.Queue(),
         now=lambda: current_time,
     )
-    app = RumpsTrayApp(controller, rumps_module=FakeRumps())
+    app = RumpsTrayApp(
+        controller,
+        rumps_module=FakeRumps(),
+        sidebar_panel_factory=FakePanel,
+    )
 
     current_time = datetime(2026, 6, 11, 9, 1, 5, tzinfo=UTC)
     app.drain_events()
 
-    assert app.recording_item.title == "■ Stop Recording · 01:05"
-    assert app.app.title == "01:05"
+    # The tick updates the panel's record button (an icon, not a word) in
+    # place, and the status bar carries the recording dot plus the timer.
+    record_button = next(
+        sub
+        for sub in _all_containers(app.sidebar.panel.content_view)
+        if getattr(sub, "update", None) is not None
+    )
+    assert (record_button.tooltip, _label_text(record_button)) == ("Stop recording · 01:05", None)
+    assert app.app.title == "\u25cf 01:05"
+    assert app.menu_items.recording.title == "\u25a0 Stop Recording · 01:05"
 
 
 def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
@@ -172,29 +185,18 @@ def test_rumps_tray_app_disables_default_quit_button(tmp_path: Path) -> None:
     assert app.app.title is None
     assert app.app.icon.endswith("robot-template.png")
     assert app.app.template is True
+    # The rumps menu opens on any click of the icon (ui/status_menu.py) and
+    # keeps Start Recording; Screenshot lives only in the sidebar.
     titles = [item.title for item in app.app.menu.items if item is not None]
-    configuration_titles = submenu_titles(app, menu.CONFIGURATION_LABEL)
-    debugging_titles = submenu_titles(app, menu.DEBUGGING_LABEL)
     assert titles.count(menu.QUIT_LABEL) == 1
     assert titles.count(menu.CONFIGURATION_LABEL) == 1
     assert titles.count(menu.DEBUGGING_LABEL) == 1
-    assert menu.AUDIO_MODE_HEADER not in titles
-    assert configuration_titles == [
+    assert menu.SCREENSHOT_LABEL not in titles
+    assert titles[1] == menu.recording_label(is_recording=False)
+    assert submenu_titles(app, menu.CONFIGURATION_LABEL)[:3] == [
         menu.AUDIO_MODE_HEADER,
         "✓ Full Meeting",
         "Silent System Only",
-        *(f"{capability.label}..." for capability in Capability),
-        menu.NOTES_PROMPT_LABEL,
-        menu.AUTHORIZE_CALENDAR_LABEL,
-        menu.IMPORT_LEGACY_LABEL,
-    ]
-    assert debugging_titles == [
-        menu.processing_header_label(0),
-        menu.LEGACY_RECOVERY_SCAN_LABEL,
-        menu.SYNC_LABEL,
-        menu.RETRY_PROCESSING_LABEL,
-        menu.RUN_DIAGNOSTICS_LABEL,
-        menu.TEST_NOTIFICATION_LABEL,
     ]
 
 

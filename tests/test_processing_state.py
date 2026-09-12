@@ -6,7 +6,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from meeting_memory.service.markdown import render_notes_markdown
-from meeting_memory.service.processing_state import list_pending_processing_tasks
+from meeting_memory.service.processing_state import (
+    list_correctable_speaker_reviews,
+    list_pending_processing_tasks,
+)
 from meeting_memory.service.storage import read_frontmatter, write_meeting_dir
 from meeting_memory.service.transcript_review import confirm_speaker_aliases
 from meeting_memory.types.meeting import MeetingMeta
@@ -43,6 +46,24 @@ def test_processing_tasks_retry_failed_or_skipped_notes(tmp_path: Path) -> None:
         (skipped.meta.slug, "skipped", "Retry notes"),
         (failed.meta.slug, "failed", "Retry notes"),
     ]
+
+
+def test_kept_label_meetings_are_listed_for_correction_but_not_as_pending(tmp_path: Path) -> None:
+    kept = _write_meeting(tmp_path, "2026-06-22_10-00_kept", "Kept")
+    named = _write_meeting(tmp_path, "2026-06-22_11-00_named", "Named")
+    unreviewed = _write_meeting(tmp_path, "2026-06-22_12-00_open", "Open")
+    confirm_speaker_aliases(kept.directory, {}, keep_labels=True)
+    confirm_speaker_aliases(named.directory, {"Speaker A": "Alex"})
+    for files in (kept, named):
+        _write_notes(files.directory, SummaryResult(summary="Done."))
+
+    corrections = list_correctable_speaker_reviews(tmp_path / "meetings")
+    pending = list_pending_processing_tasks(tmp_path / "meetings")
+
+    assert [(task.meeting.slug, task.action, task.label) for task in corrections] == [
+        (kept.meta.slug, "review_speakers", "Correct speakers"),
+    ]
+    assert [task.meeting.slug for task in pending] == [unreviewed.meta.slug]
 
 
 def test_corrupt_owned_v2_is_contained_per_artifact(tmp_path: Path) -> None:

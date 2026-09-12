@@ -52,3 +52,21 @@ def test_runtime_events_map_to_exact_local_first_copy_and_actions(tmp_path: Path
         "review_speakers",
         "open_meeting",
     ]
+
+
+def test_transcript_ready_reports_automatic_notes_when_opted_in(tmp_path: Path) -> None:
+    meeting = MeetingRef("2026-08-10_10-00_sync", "Product Sync", tmp_path)
+
+    manual = runtime_notification(TranscriptReady(meeting))
+    automatic = runtime_notification(TranscriptReady(meeting), automatic_notes=True)
+
+    assert (manual.body, manual.action_label, manual.action) == (
+        "Product Sync · review speakers",
+        "Review Speakers",
+        "review_speakers",
+    )
+    assert (automatic.body, automatic.action_label, automatic.action) == (
+        "Product Sync · generating notes",
+        "Open",
+        "open_meeting",
+    )
