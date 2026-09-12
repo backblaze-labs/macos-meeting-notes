@@ -80,6 +80,7 @@ class SidebarViewModel:
     audio_modes: tuple[RowView, ...]
     recent: SectionView
     processing: SectionView  # Pending Meeting Tasks; header always shown with its count
+    corrections: SectionView  # Correct Speakers for kept-label meetings; rows empty -> hidden
     recovered: SectionView  # rows empty -> section hidden
     readiness: tuple[RowView, ...]
     configuration: tuple[RowView, ...]
@@ -101,6 +102,7 @@ def build_view_model(
         audio_modes=_audio_mode_rows(audio_mode_menu),
         recent=_recent_section(controller),
         processing=_processing_section(controller, debugging_actions),
+        corrections=_corrections_section(controller, debugging_actions),
         recovered=_recovered_section(controller, debugging_actions),
         readiness=_readiness_rows(readiness_report),
         configuration=_configuration_rows(configuration_actions),
@@ -163,18 +165,32 @@ def _processing_section(controller: TrayController, actions: DebuggingActions) -
     tasks = controller.pending_processing_tasks()
     return SectionView(
         title=menu.processing_header_label(len(tasks)),
-        rows=tuple(
-            RowView(
-                label=menu.processing_task_label(task),
-                tooltip=menu.processing_task_tooltip(task),
-                action=lambda task=task: run_processing_task(
-                    task,
-                    review_speakers=actions.review_speakers,
-                    generate_notes=actions.generate_notes,
-                ),
-            )
-            for task in tasks
-        ),
+        rows=_task_rows(tasks, actions),
+    )
+
+
+def _corrections_section(controller: TrayController, actions: DebuggingActions) -> SectionView:
+    """Recent meetings whose kept labels can still be mapped to names."""
+
+    tasks = controller.correctable_speaker_reviews()
+    return SectionView(
+        title=menu.corrections_header_label(len(tasks)),
+        rows=_task_rows(tasks, actions),
+    )
+
+
+def _task_rows(tasks, actions: DebuggingActions) -> tuple[RowView, ...]:
+    return tuple(
+        RowView(
+            label=menu.processing_task_label(task),
+            tooltip=menu.processing_task_tooltip(task),
+            action=lambda task=task: run_processing_task(
+                task,
+                review_speakers=actions.review_speakers,
+                generate_notes=actions.generate_notes,
+            ),
+        )
+        for task in tasks
     )
 
 

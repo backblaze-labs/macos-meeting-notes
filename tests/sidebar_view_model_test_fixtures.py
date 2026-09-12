@@ -50,6 +50,9 @@ def flatten_view_model(view) -> list[str]:
     labels.append(menu.DEBUGGING_LABEL)
     labels.append(view.processing.title)
     labels += [row.label for row in view.processing.rows]
+    if view.corrections.rows:
+        labels.append(view.corrections.title)
+        labels += [row.label for row in view.corrections.rows]
     labels += [row.label for row in view.readiness]
     if view.recovered.rows:
         labels.append(view.recovered.title)

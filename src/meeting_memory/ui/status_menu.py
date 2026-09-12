@@ -78,6 +78,9 @@ def _debugging_submenu(rumps: Any, view_model: SidebarViewModel) -> Any:
     submenu = rumps.MenuItem(menu.DEBUGGING_LABEL)
     _add_section(submenu, rumps, view_model.processing)
     submenu.add(None)
+    if view_model.corrections.rows:
+        _add_section(submenu, rumps, view_model.corrections)
+        submenu.add(None)
     for row in view_model.readiness:
         submenu.add(_item(rumps, row))
     if view_model.readiness:

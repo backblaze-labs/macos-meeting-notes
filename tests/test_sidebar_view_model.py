@@ -136,3 +136,16 @@ def test_pending_speaker_review_shows_as_a_debugging_task(tmp_path: Path) -> Non
     labels = flatten_view_model(app.view_model)
     assert "Pending Meeting Tasks (1)" in labels
     assert "2026-06-11 09:00 · Review speakers · Standup" in labels
+
+
+def test_kept_label_meetings_offer_a_speaker_correction(tmp_path: Path) -> None:
+    # Automatic Notes keep the diarized labels; the user can still map names.
+    app = _build_populated_app(tmp_path)
+    meeting = recent_meeting(tmp_path, 2, "Product Sync")
+    app.controller.correctable_speaker_reviews = lambda: [
+        ProcessingTask(meeting, "speaker_review", "review_speakers", "waiting", "Correct speakers")
+    ]
+    app.refresh_sidebar()
+    labels = flatten_view_model(app.view_model)
+    assert "Correct Speakers (1)" in labels
+    assert "2026-06-12 09:00 · Correct speakers · Product Sync" in labels

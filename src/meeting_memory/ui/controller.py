@@ -15,7 +15,10 @@ from meeting_memory.config.runtime import RuntimeSettings
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.local_commit import LocalRecordingCommitter
 from meeting_memory.service.pipeline import Pipeline
-from meeting_memory.service.processing_state import list_pending_processing_tasks
+from meeting_memory.service.processing_state import (
+    list_correctable_speaker_reviews,
+    list_pending_processing_tasks,
+)
 from meeting_memory.service.recorder import RecorderService, RecordingResult
 from meeting_memory.service.recording_context import context_from_meetings
 from meeting_memory.service.runtime_legacy_recovery import LegacyRecoveryRuntime
@@ -201,6 +204,9 @@ class TrayController:
 
     def pending_processing_tasks(self) -> list[ProcessingTask]:
         return list_pending_processing_tasks(self.settings.meetings_dir_path)
+
+    def correctable_speaker_reviews(self) -> list[ProcessingTask]:
+        return list_correctable_speaker_reviews(self.settings.meetings_dir_path)
 
     def load_speaker_review(self, path: Path) -> SpeakerReviewState:
         return load_speaker_review(path)

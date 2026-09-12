@@ -14,6 +14,7 @@ CONFIGURATION_LABEL = "Configuration"
 DEBUGGING_LABEL = "Debugging"
 NO_MEETINGS_LABEL = "No meetings yet"
 PROCESSING_HEADER = "Pending Meeting Tasks"
+CORRECTIONS_HEADER = "Correct Speakers"
 RECOVERED_HEADER = "Interrupted Recordings"
 LEGACY_RECOVERY_SCAN_LABEL = "Find Legacy Recordings..."
 NO_RECOVERED_LABEL = "No recovered recordings"
@@ -53,7 +54,13 @@ def processing_header_label(count: int) -> str:
     return f"{PROCESSING_HEADER} ({count})"
 
 
+def corrections_header_label(count: int) -> str:
+    return f"{CORRECTIONS_HEADER} ({count})"
+
+
 def processing_task_tooltip(task: ProcessingTask) -> str:
+    if task.label == "Correct speakers":
+        return "Assign names to the kept speaker labels; Notes are generated again."
     if task.action == "review_speakers":
         return "Confirm who each speaker is, then generate notes."
     if task.status in {"failed", "skipped"}:

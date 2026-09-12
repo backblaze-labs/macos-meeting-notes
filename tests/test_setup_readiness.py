@@ -181,6 +181,9 @@ class FakeController:
     def pending_processing_tasks(self) -> list[object]:
         return []
 
+    def correctable_speaker_reviews(self) -> list[object]:
+        return []
+
     def recovered_recordings(self) -> list[object]:
         return []
 

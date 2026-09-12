@@ -192,6 +192,9 @@ class FakeController:
     def pending_processing_tasks(self) -> list[object]:
         return []
 
+    def correctable_speaker_reviews(self) -> list[object]:
+        return []
+
     def recording_duration_seconds(self) -> int:
         return 0
 

@@ -32,6 +32,7 @@ def idle_view_model() -> SidebarViewModel:
             rows=(RowView("2026-09-05 14:00 · Standup", tooltip="Open notes"),),
         ),
         processing=SectionView("Pending Meeting Tasks (0)", rows=()),
+        corrections=SectionView("Correct Speakers (0)", rows=()),
         recovered=SectionView("Interrupted Recordings", rows=()),
         readiness=(
             RowView("Calendar: connected", enabled=False, tooltip="Google Calendar linked"),
