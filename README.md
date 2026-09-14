@@ -241,6 +241,10 @@ and recovered warning history are saved as `capture_diagnostics` in
 `transcript.md` and are also logged in
 `~/Library/Logs/meeting-memory/app.log` under the meeting slug.
 
+If you switch the default macOS microphone during a Full Meeting recording,
+Meeting Memory refreshes that source in place. A rejected refresh leaves the
+recording running, shows a warning, and records the event in diagnostics.
+
 You can stop one call and immediately start the next. Conversion, local commit,
 transcription, backup, and notes for the earlier call continue independently;
 the next recording does not wait for its transcript.

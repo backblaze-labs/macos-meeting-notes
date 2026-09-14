@@ -404,6 +404,11 @@ contiguous 1,600-frame run; isolated resampling-rounding trims MUST NOT warn.
 An expected source that continues to arrive at a zero peak for 90 seconds MUST
 also warn. A live warning MUST clear after its condition recovers.
 
+**REQ-F3-12a** During Full Meeting capture, a change to the default macOS input
+device MUST trigger an in-place refresh of the active microphone configuration.
+The refresh MUST NOT mute playback or stop system-audio capture. If macOS
+rejects it, the recording MUST continue and surface a recovery warning.
+
 **REQ-F3-13** Every successfully stopped native recording MUST retain final
 per-source diagnostics in its recovery index and schema-v2 transcript metadata,
 including callback count, captured frames, peak level, total discarded frames,

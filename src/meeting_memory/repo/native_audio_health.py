@@ -33,6 +33,9 @@ class HelperStatus:
 
     def observe(self, event: dict[str, Any]) -> None:
         event_name = event.get("event")
+        if event_name == "microphone-route-refresh-failed":
+            self._observe_microphone_route_failure(event)
+            return
         if event_name in {"error", "fatal"}:
             message = str(event.get("message") or "native helper reported an error")
             with self._lock:
@@ -79,6 +82,18 @@ class HelperStatus:
     def final_diagnostics(self) -> CaptureDiagnostics | None:
         with self._lock:
             return self._final_diagnostics
+
+    def _observe_microphone_route_failure(self, event: dict[str, Any]) -> None:
+        detail = str(event.get("message") or "macOS rejected the microphone route refresh")
+        warning = CaptureHealthWarning(
+            code="microphone_route_refresh_failed",
+            message=f"{detail} Stop and restart this recording if the microphone stays silent.",
+        )
+        with self._lock:
+            if warning.code not in self._warning_codes:
+                self._warning_codes.append(warning.code)
+                self._pending_warnings.append(warning)
+            self._active_warnings = (warning,)
 
 
 def diagnostic_warnings(
