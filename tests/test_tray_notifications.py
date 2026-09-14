@@ -114,6 +114,24 @@ def test_transcript_ready_starts_notes_when_automatic_mode_is_on(tmp_path: Path)
     }
 
 
+def test_transcript_ready_falls_back_to_review_when_notes_are_unavailable(tmp_path: Path) -> None:
+    fake_rumps = FakeRumps()
+    controller = FakeController(tmp_path, notes_available=False)
+    app = RumpsTrayApp(controller, rumps_module=fake_rumps)
+    app.automatic_notes = lambda: True
+    meeting = MeetingRef("2026-06-11_09-00_product-sync", "Product Sync", tmp_path)
+
+    app.handle_event(TranscriptReady(meeting))
+
+    assert controller.auto_notes == []
+    assert fake_rumps.notifications[0][2] == "Product Sync · review speakers"
+    assert fake_rumps.notification_options[0]["action_button"] == "Review Speakers"
+    assert fake_rumps.notification_options[0]["data"] == {
+        "action": "review_speakers",
+        "meeting_directory": str(tmp_path),
+    }
+
+
 def test_open_meeting_notification_reveals_the_directory(tmp_path: Path) -> None:
     controller = FakeController(tmp_path)
     app = RumpsTrayApp(controller, rumps_module=FakeRumps())
@@ -181,6 +199,7 @@ class FakeController:
     started_candidates: tuple[str, ...] = ()
     remembered: list[MeetingDetected] = field(default_factory=list)
     auto_notes: list[Path] = field(default_factory=list)
+    notes_available: bool = True
     opener: object = None
 
     def recent_meetings(self) -> list[RecentMeeting]:
