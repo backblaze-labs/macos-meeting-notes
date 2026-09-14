@@ -85,6 +85,9 @@ workers and emit typed events for the tray main thread to render.
   title and the tray UI prompts for the final title after recording stops.
 - A calendar-backed recording can emit a `Stop` reminder at the event end time;
   it does not fully auto-record meetings.
+- Selecting `Record` from the meeting-start notification dismisses that
+  notification. Calendar reveals the sidebar for the meeting; it hides after
+  the recording stops, while the status-bar timer remains the persistent state.
 - An active recording emits a `Stop` reminder after one hour and every 30
   minutes after that. Reminders stop with the recording and do not duplicate
   the notification at the configured auto-stop boundary.

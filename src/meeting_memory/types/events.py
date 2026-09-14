@@ -48,14 +48,11 @@ class RecordingStateChanged:
 
 
 @dataclass(frozen=True)
-class SidebarRevealRequested:
-    """Ask the UI to force the floating sidebar visible.
+class SidebarHideRequested:
+    """Ask the main-thread UI to hide the floating sidebar after recording.
 
-    Emitted from a worker-thread callback (`controller._recording_started`),
-    so it must stay a pure event the main thread drains — never a direct UI
-    call, per the threading model in ARCHITECTURE.md. Carried by the queue
-    like every other event. See docs/features/sidebar/completed/07-cutover.md
-    (auto-show on record start).
+    Recording shutdown can complete on a worker, so it must not manipulate an
+    AppKit panel directly. The tray drains this event and hides the panel.
     """
 
 

@@ -2,13 +2,14 @@
 
 ## Purpose
 
-A small floating, draggable, edge-snapping panel with exactly three icon
-buttons: record/stop, screenshot, and quit. It is a companion to the normal
+A small floating, draggable, edge-snapping panel with exactly four icon
+buttons: record/stop, screenshot, hide, and quit. It is a companion to the normal
 app menu, not the entry point: clicking the menu bar icon with either button
 opens the menu (`ui/status_menu.py`) with Start/Stop Recording first, then
 Show/Hide Sidebar, recent meetings, the meetings folder, Configuration,
-Debugging, and Quit. The panel appears when a recording starts and stays
-until the user closes it. While recording the status bar shows a dot and the
+Debugging, and Quit. Calendar reveals the panel with its upcoming-meeting
+prompt; it hides when that recording ends or when the user presses its hide
+button. While recording the status bar shows a dot and the
 live timer beside the icon. The setup tray (before Recording Core is
 configured) keeps its plain dropdown menu and is not affected.
 
@@ -20,9 +21,10 @@ configured) keeps its plain dropdown menu and is not affected.
 | Status bar while recording | `● mm:ss` beside the icon (`⚠︎ mm:ss` on an audio warning), so a hidden panel never hides the fact that a recording is running. |
 | Click the record button | Start or stop recording. Idle: teal `record.circle`. Recording: red `stop.circle.fill` plus a small `mm:ss` timer; orange when the audio-health monitor is warning. |
 | Click the camera button, or press **⌥⇧S** anywhere | Take a screenshot for the active recording (`docs/features/screenshots.md`). |
+| Click the eye-slash button | Hide the panel. The app menu can show it again. |
 | Click the power button | Quit. |
-| Start a recording (any source) | The panel is shown (auto-show) and stays visible until the user closes it. With **Hide sidebar while recording** on (Configuration submenu; stored in `NSUserDefaults`) the auto-show is suppressed for the whole session; a panel the user opened is never hidden by the app. |
-| Close the panel during a recording | It stays closed until the next recording starts. Stopping never changes visibility. |
+| Calendar detects an upcoming meeting | The panel is shown with the meeting-start notification. With **Hide sidebar while recording** on (Configuration submenu; stored in `NSUserDefaults`) that auto-show is suppressed for the session. |
+| Stop a recording | The panel hides after capture has actually stopped. Ad-hoc starts never auto-show it. |
 | Drag the panel by its `⠿` grip | Free-float, or snap when one of the panel's edges is released within 64 pt of the matching screen edge. A snapped panel is sticky: it stays on its edge unless dragged more than 160 pt clear of it. |
 
 Every button has a tooltip; there are no words on the panel apart from the
@@ -32,10 +34,10 @@ timer digits.
 
 Four snap anchors: left-center, right-center, top-center, bottom-center.
 Anywhere else the panel free-floats. Left/right show the **vertical** layout
-(44 × 130 pt: the top `⠿` strip, then record, screenshot, quit stacked; the
-timer slot adds 14 pt while recording). Top/bottom and free-floating show the
-**horizontal** layout (134 × 44 pt: a transparent `⠿` grip area, then the three
-buttons in a row; the timer adds 46 pt while recording). Snapping under the
+(44 × 166 pt: the top `⠿` strip, then record, screenshot, hide, quit stacked;
+the timer slot adds 14 pt while recording). Top/bottom and free-floating show
+the **horizontal** layout (170 × 44 pt: a transparent `⠿` grip area, then the
+four buttons in a row; the timer adds 46 pt while recording). Snapping under the
 menu bar respects the display's visible frame.
 
 Position and anchor persist through `NSUserDefaults` (frame autosave name
@@ -49,8 +51,10 @@ Phase 4 preference store. Whether the panel was visible is **not** persisted.
   readiness report, the audio-mode state, and the configuration/debugging
   actions. `ui/tray.py:refresh_sidebar` rebuilds the panel content and the
   status menu from it after every state change.
-- `SidebarRevealRequested` (`types/events.py`) — queued by
-  `TrayController._recording_started`; the tray turns it into `panel.show()`.
+- `MeetingDetected` (`types/events.py`) — the tray turns Calendar's upcoming
+  meeting event into `panel.show()` and the meeting-start notification.
+- `SidebarHideRequested` (`types/events.py`) — queued after recorder shutdown;
+  the tray turns it into `panel.hide()`.
 - The 1 Hz tray timer — `SidebarWiring.tick` updates the record button's
   glyph, tint, tooltip, and timer in place; when the recording state flips
   between ticks it rebuilds so the timer slot resizes the panel.
@@ -67,9 +71,9 @@ Phase 4 preference store. Whether the panel was visible is **not** persisted.
 ## Threading
 
 Main thread only. Background workers never touch the panel: they emit typed
-events into the queue and `RumpsTrayApp.drain_events` renders them. Auto-show
-is the same — the recorder's start callback queues `SidebarRevealRequested`
-rather than calling the panel.
+events into the queue and `RumpsTrayApp.drain_events` renders them. Calendar
+detection reaches the tray through its typed event, while recorder shutdown
+queues `SidebarHideRequested`; neither worker calls the panel.
 
 ## Dependencies and blast radius
 
@@ -98,7 +102,7 @@ text.
 A floating panel is a departure from `PRODUCT.md`'s "prefer familiar macOS
 controls" — a dropdown needs no discovery. The mitigations: the ordinary menu
 stays the entry point with Start Recording, Show/Hide Sidebar, and Quit;
-auto-show when a recording starts so recording state is never hidden; the
+Calendar-triggered show for an upcoming meeting, the status-bar timer, and
 status-bar timer; tooltips on every button; recording and warning state
 carried by glyph shape and tooltip text, not color alone; snap animation
 honors the reduce-motion preference.
@@ -109,7 +113,7 @@ honors the reduce-motion preference.
 - `src/meeting_memory/ui/status_menu.py` — the app menu
 - `src/meeting_memory/ui/sidebar_tray_wiring.py` — panel + content wiring, orientation switch
 - `src/meeting_memory/ui/notes_mode.py` — the automatic Notes opt-in row and its confirmation
-- `src/meeting_memory/ui/sidebar_compact.py` — the three icon buttons in both orientations
+- `src/meeting_memory/ui/sidebar_compact.py` — the four icon buttons in both orientations
 - `src/meeting_memory/ui/sidebar_panel.py` — the `NSPanel` shell: show/hide, drag-to-snap, persistence
 - `src/meeting_memory/ui/sidebar_drag.py` — drag tracking view and the `⠿` grabber
 - `src/meeting_memory/ui/sidebar_geometry.py` — pure snap/orientation math

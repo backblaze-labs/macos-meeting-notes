@@ -11,6 +11,7 @@ from meeting_memory.ui.sidebar_compact import (
     BUTTON,
     GAP,
     GRIP_WIDTH,
+    HIDE_SYMBOL,
     INSET,
     QUIT_SYMBOL,
     RECORD_ACTIVE_SYMBOL,
@@ -37,6 +38,7 @@ def _build(view_model=None, *, orientation=Orientation.VERTICAL, **callbacks):
     view_model = view_model or idle_view_model()
     callbacks.setdefault("on_toggle_recording", lambda: None)
     callbacks.setdefault("on_screenshot", lambda: None)
+    callbacks.setdefault("on_hide_sidebar", lambda: None)
     callbacks.setdefault("on_quit", lambda: None)
     return build_compact(FakeAppKit(), view_model, orientation=orientation, **callbacks)
 
@@ -55,16 +57,21 @@ def _recording(is_recording: bool, duration: int = 0, warning: bool = False) -> 
     )
 
 
-def test_vertical_layout_stacks_record_screenshot_quit_top_to_bottom():
+def test_vertical_layout_stacks_record_screenshot_hide_quit_top_to_bottom():
     views = _build()
 
     buttons = _buttons(views.root)
-    assert [_symbol(b) for b in buttons] == [RECORD_IDLE_SYMBOL, SCREENSHOT_SYMBOL, QUIT_SYMBOL]
+    assert [_symbol(b) for b in buttons] == [
+        RECORD_IDLE_SYMBOL,
+        SCREENSHOT_SYMBOL,
+        HIDE_SYMBOL,
+        QUIT_SYMBOL,
+    ]
     ys = [b.frame().origin.y for b in buttons]
     assert ys == sorted(ys, reverse=True)  # AppKit y grows upward: record is on top
     assert all(b.frame().origin.x == INSET for b in buttons)
     assert (views.width, views.height) == compact_size(Orientation.VERTICAL, is_recording=False)
-    assert views.height == 2 * INSET + 3 * BUTTON + 2 * GAP
+    assert views.height == 2 * INSET + 4 * BUTTON + 3 * GAP
 
 
 def test_horizontal_layout_has_a_grip_then_buttons_left_to_right():
@@ -90,7 +97,12 @@ def test_buttons_are_icons_with_tooltips_not_words():
         assert not isinstance(button.subviews[0], FakeNSTextField)
         assert button.tooltip
     tooltips = [b.tooltip for b in _buttons(views.root)]
-    assert tooltips == ["Start recording", "Take screenshot (⌥⇧S)", "Quit Meeting Memory"]
+    assert tooltips == [
+        "Start recording",
+        "Take screenshot (⌥⇧S)",
+        "Hide sidebar",
+        "Quit Meeting Memory",
+    ]
 
 
 def test_symbol_image_views_pass_hit_testing_through_to_the_button():
@@ -104,13 +116,14 @@ def test_each_button_invokes_its_own_callback_exactly_once():
     views = _build(
         on_toggle_recording=lambda: calls.append("record"),
         on_screenshot=lambda: calls.append("shot"),
+        on_hide_sidebar=lambda: calls.append("hide"),
         on_quit=lambda: calls.append("quit"),
     )
 
     for button in _buttons(views.root):
         button.mouseUp_(None)
 
-    assert calls == ["record", "shot", "quit"]
+    assert calls == ["record", "shot", "hide", "quit"]
 
 
 def test_recording_state_shows_stop_symbol_red_tint_and_timer():
@@ -134,7 +147,7 @@ def test_horizontal_recording_reserves_the_timer_beside_the_record_button():
     view_model = replace(idle_view_model(), recording=_recording(True, 5))
     views = _build(view_model, orientation=Orientation.HORIZONTAL)
 
-    record, screenshot, _quit = _buttons(views.root)
+    record, screenshot, _hide, _quit = _buttons(views.root)
     assert screenshot.frame().origin.x == record.frame().origin.x + BUTTON + TIMER_WIDTH + GAP
     assert views.width == compact_size(Orientation.HORIZONTAL, is_recording=False)[0] + TIMER_WIDTH
 

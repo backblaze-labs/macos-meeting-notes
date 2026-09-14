@@ -1,7 +1,7 @@
 """Wires the floating panel and its compact content into RumpsTrayApp.
 
 Split out of `ui/tray.py` to keep it under its line budget. The panel shows
-three icon buttons (`ui/sidebar_compact.py`); every other control is in the
+four icon buttons (`ui/sidebar_compact.py`); every other control is in the
 ordinary status-item menu (`ui/status_menu.py`). Nothing here touches rumps
 internals: the menu bar icon keeps its normal click behavior.
 """
@@ -41,11 +41,13 @@ class SidebarWiring:
         *,
         on_toggle_recording: Callable[[], None] = lambda: None,
         on_screenshot: Callable[[], None] = lambda: None,
+        on_hide_sidebar: Callable[[], None] = lambda: None,
         on_quit: Callable[[], None] = lambda: None,
         panel_factory: Any = None,
     ) -> None:
         self._on_toggle_recording = on_toggle_recording
         self._on_screenshot = on_screenshot
+        self._on_hide_sidebar = on_hide_sidebar
         self._on_quit = on_quit
         if panel_factory is None and rumps_module is None:
             panel_factory = SidebarPanel
@@ -80,6 +82,7 @@ class SidebarWiring:
             orientation=self.panel.orientation,
             on_toggle_recording=self._on_toggle_recording,
             on_screenshot=self._on_screenshot,
+            on_hide_sidebar=self._on_hide_sidebar,
             on_quit=self._on_quit,
         )
         self.panel.set_content_view(views.root)
@@ -127,6 +130,12 @@ class SidebarWiring:
             return
         self.panel.toggle()
 
+    def hide(self) -> None:
+        """Hide the panel after a recording ends or at the user's request."""
+
+        if self.panel is not None:
+            self.panel.hide()
+
     def tick(self, controller: Any) -> None:
         """The 1 Hz tick: update the record button in place and rebuild when
         the recording state flipped (the timer slot changes the panel size).
@@ -135,18 +144,19 @@ class SidebarWiring:
         if self._recording is None:
             return
         view = recording_view_for(controller)
+        recording_ended = self._built_recording and not view.is_recording
         if view.is_recording != self._built_recording and self._view_model is not None:
             self.rebuild(replace(self._view_model, recording=view))
         else:
             self._recording.update(view)
+        if recording_ended:
+            self.hide()
 
     def reveal(self) -> None:
-        """Auto-show when a recording starts (docs/features/sidebar.md).
+        """Auto-show when Calendar announces an upcoming meeting.
 
-        The controller queues one `SidebarRevealRequested` per recording start,
-        from every start path, so this is the only automatic show. With "Hide
-        sidebar while recording" on it does nothing, and it never hides. A
-        panel the user closed stays closed until the next recording starts.
+        With "Hide sidebar while recording" on it does nothing. The panel is
+        hidden once that recording actually ends, or earlier by its hide button.
         """
 
         if self.panel is None or hide_while_recording(self.panel.appkit):

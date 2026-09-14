@@ -12,7 +12,7 @@ from tray_fakes import FakeRumps, submenu_titles
 
 from meeting_memory.config.settings import Settings
 from meeting_memory.service.recorder import RecordingResult, RecordingSession
-from meeting_memory.types.events import MeetingDetected, NotifyEvent, SidebarRevealRequested
+from meeting_memory.types.events import MeetingDetected, NotifyEvent, SidebarHideRequested
 from meeting_memory.types.meeting import MeetingMeta
 from meeting_memory.ui import menu
 from meeting_memory.ui.tray import RumpsTrayApp, TrayController
@@ -37,7 +37,7 @@ def test_tray_controller_runs_pipeline_after_stop(tmp_path: Path) -> None:
     assert recorder.started_candidates == ()
     assert pipeline.calls == [(recorder.result.audio_path, recorder.result.meta)]
     assert controller.drain_events() == [
-        SidebarRevealRequested(),
+        SidebarHideRequested(),
         NotifyEvent("Recording saved", "Product Sync · processing queued", show_notification=False),
     ]
 

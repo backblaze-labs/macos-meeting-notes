@@ -46,12 +46,12 @@ def test_rebuild_is_a_noop_without_a_panel() -> None:
     assert wiring.panel is None
 
 
-def test_rebuild_sets_compact_content_with_three_buttons() -> None:
+def test_rebuild_sets_compact_content_with_four_buttons() -> None:
     wiring = SidebarWiring(None, panel_factory=FakePanel)
 
     wiring.rebuild(idle_view_model())
 
-    assert len(_buttons(wiring.panel.content_view)) == 3
+    assert len(_buttons(wiring.panel.content_view)) == 4
 
 
 def test_callbacks_are_bound_at_construction() -> None:
@@ -60,6 +60,7 @@ def test_callbacks_are_bound_at_construction() -> None:
         None,
         on_toggle_recording=lambda: calls.append("record"),
         on_screenshot=lambda: calls.append("shot"),
+        on_hide_sidebar=lambda: calls.append("hide"),
         on_quit=lambda: calls.append("quit"),
         panel_factory=FakePanel,
     )
@@ -68,7 +69,7 @@ def test_callbacks_are_bound_at_construction() -> None:
     for button in _buttons(wiring.panel.content_view):
         button.mouseUp_(None)
 
-    assert calls == ["record", "shot", "quit"]
+    assert calls == ["record", "shot", "hide", "quit"]
 
 
 def test_tick_updates_the_record_button_in_place_while_recording() -> None:
@@ -198,7 +199,7 @@ def test_a_panel_closed_during_a_recording_stays_closed_until_the_next_start() -
     assert wiring.panel.show_calls == 2
 
 
-def test_the_panel_stays_visible_until_the_user_closes_it() -> None:
+def test_the_panel_hides_after_recording_stops() -> None:
     wiring = SidebarWiring(None, panel_factory=FakePanel)
     wiring.rebuild(idle_view_model())
 
@@ -207,8 +208,18 @@ def test_the_panel_stays_visible_until_the_user_closes_it() -> None:
     wiring.tick(_FakeController(is_recording=False))
     wiring.tick(_FakeController(is_recording=False))
 
-    assert wiring.is_visible is True
-    assert wiring.panel.hide_calls == 0
+    assert wiring.is_visible is False
+    assert wiring.panel.hide_calls == 1
+
+
+def test_hide_hides_the_panel_on_request() -> None:
+    wiring = SidebarWiring(None, panel_factory=FakePanel)
+    wiring.panel.show()
+
+    wiring.hide()
+
+    assert wiring.is_visible is False
+    assert wiring.panel.hide_calls == 1
 
 
 def _recording(is_recording: bool, duration: int = 0) -> RecordingView:

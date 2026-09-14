@@ -65,6 +65,20 @@ def test_meeting_notification_uses_record_action(tmp_path: Path) -> None:
     assert controller.remembered[0].calendar_title == "Standup"
 
 
+def test_record_action_dismisses_the_meeting_notification(tmp_path: Path, monkeypatch) -> None:
+    import meeting_memory.ui.notification_actions as actions
+
+    app = RumpsTrayApp(FakeController(tmp_path), rumps_module=FakeRumps())
+    dismissed: list[object] = []
+    monkeypatch.setattr(
+        actions, "dismiss_delivered_notification", lambda data, logger: dismissed.append(data)
+    )
+
+    app.handle_notification({"action": "start_recording", "calendar_title": "Standup"})
+
+    assert dismissed == [{"action": "start_recording", "calendar_title": "Standup"}]
+
+
 def test_stop_notification_uses_stop_action(tmp_path: Path) -> None:
     fake_rumps = FakeRumps()
     controller = FakeController(tmp_path)

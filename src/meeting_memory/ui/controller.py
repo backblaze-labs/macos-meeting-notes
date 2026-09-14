@@ -28,7 +28,7 @@ from meeting_memory.types.events import (
     MeetingDetected,
     NotifyEvent,
     RecordingTitleNeeded,
-    SidebarRevealRequested,
+    SidebarHideRequested,
 )
 from meeting_memory.types.meeting import (
     CalendarMeeting,
@@ -118,9 +118,6 @@ class TrayController:
         self._transitions.request_stop()
 
     def _recording_started(self, title: str, reminder_end: datetime | None) -> None:
-        # Auto-show (docs/features/sidebar.md): queued, never a direct UI
-        # call, and first — before any reminder the same start may queue.
-        self.event_queue.put(SidebarRevealRequested())
         self._recording_token = object()
         token = self._recording_token
         self._duration_guard.start(title, token)
@@ -137,6 +134,9 @@ class TrayController:
 
     def _recording_stopped(self, result: RecordingResult) -> None:
         self._recording_token = None
+        # This callback may run off the UI thread. Ask the tray to hide the
+        # meeting panel only after capture has actually stopped.
+        self.event_queue.put(SidebarHideRequested())
         if warning := completed_capture_warning(result.meta.capture_diagnostics):
             self.event_queue.put(warning)
         if result.meta.needs_title_prompt:
