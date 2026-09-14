@@ -50,7 +50,7 @@ from meeting_memory.types.events import (
     RecordingCommitted,
     RecordingStateChanged,
     RecordingTitleNeeded,
-    SidebarRevealRequested,
+    SidebarHideRequested,
     TranscriptionFailed,
     TranscriptReady,
 )
@@ -107,7 +107,7 @@ __all__ = [
     "RecordingCommitted",
     "RecordingStateChanged",
     "RecordingTitleNeeded",
-    "SidebarRevealRequested",
+    "SidebarHideRequested",
     "PostCommitPolicy",
     "ReadinessReport",
     "PreferenceValue",

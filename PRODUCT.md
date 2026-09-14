@@ -50,8 +50,9 @@ that competes with the user's meeting.
   The one deliberate exception is the floating sidebar panel
   (`docs/features/sidebar.md`): a draggable, edge-snapping panel is not a
   stock menu-bar idiom. It is a companion, not the entry point: the menu bar
-  icon opens a normal menu with Start Recording, and the panel appears when a
-  recording starts so recording state is never hidden.
+  icon opens a normal menu with Start Recording, and Calendar reveals the
+  panel for an upcoming meeting while the status-bar timer keeps recording
+  state visible after the panel hides.
 - Keep manual speaker review the default. Automatic Notes from Calendar
   attendees is an explicit opt-in that names its tradeoff before it is
   enabled and never locks the user out of correcting a transcript later.

@@ -29,7 +29,7 @@ from meeting_memory.types.events import (
     NotifyEvent,
     ReadinessChecked,
     RecordingTitleNeeded,
-    SidebarRevealRequested,
+    SidebarHideRequested,
     TranscriptReady,
 )
 from meeting_memory.ui import load_rumps, menu
@@ -111,6 +111,7 @@ class RumpsTrayApp:
             rumps_module,
             on_toggle_recording=self.toggle_recording,
             on_screenshot=self.take_screenshot,
+            on_hide_sidebar=lambda: self.sidebar.hide(),
             on_quit=self.rumps.quit_application,
             panel_factory=sidebar_panel_factory,
         )
@@ -146,12 +147,7 @@ class RumpsTrayApp:
         self.app.run()
 
     def refresh_sidebar(self, _sender=None) -> None:
-        """Rebuild the panel and the status-item menu from a fresh snapshot.
-
-        The only render path. Called after every state change the tray
-        knows about; the 1 Hz timer update goes through `SidebarWiring.tick`
-        instead, without a rebuild.
-        """
+        """Rebuild panel and menu after state changes; the 1 Hz tick updates in place."""
 
         self.view_model = build_view_model(
             self.controller,
@@ -250,8 +246,8 @@ class RumpsTrayApp:
         if self.configuration_ui.handle_event(event):
             return
         self.screenshots.handle_event(event)
-        if isinstance(event, SidebarRevealRequested):
-            self.sidebar.reveal()
+        if isinstance(event, SidebarHideRequested):
+            self.sidebar.hide()
             return
         if isinstance(event, ReadinessChecked) and self.readiness_check.acknowledge(
             event.operation_id
@@ -278,6 +274,7 @@ class RumpsTrayApp:
             self.prompt_for_recording_title(event)
         elif isinstance(event, MeetingDetected):
             self.controller.remember_meeting(event)
+            self.sidebar.reveal()
             self.notify_meeting_detected(event)
 
     def prompt_for_recording_title(self, event: RecordingTitleNeeded) -> None:

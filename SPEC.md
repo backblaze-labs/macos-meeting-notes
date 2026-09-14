@@ -351,7 +351,8 @@ fields contain at least one of:
 **REQ-F2-01** When a meeting is detected (per REQ-F1-04) that starts within `NOTIFY_MINUTES_BEFORE` minutes, the application MUST send a macOS User Notification with:
 - Title: `"Meeting starting soon"`
 - Body: `"<calendar_title> starts in <N> minutes"`
-- Action button: `"Record"` — clicking starts recording immediately
+- Action button: `"Record"` — clicking starts recording immediately and
+  dismisses the meeting-start notification
 
 **REQ-F2-02** The application MUST send the notification no more than once per detected meeting, regardless of how many polling cycles occur before the meeting starts.
 
@@ -363,7 +364,7 @@ fields contain at least one of:
 
 **REQ-F3-02** The application MUST NOT allow more than one recording session to be active at a time. If **Start Recording** is triggered while a session is active, it MUST be ignored.
 
-**REQ-F3-03** The app MUST make recording state visible through the status-bar timer, the **Stop Recording** menu label, and the sidebar's stop button, which shows the live timer and, on an audio warning, the orange warning tint plus a `⚠︎` tooltip. Starting a recording MUST show the sidebar per REQ-F8-14.
+**REQ-F3-03** The app MUST make recording state visible through the status-bar timer, the **Stop Recording** menu label, and the sidebar's stop button, which shows the live timer and, on an audio warning, the orange warning tint plus a `⚠︎` tooltip. The status-bar timer remains visible when the sidebar is hidden.
 
 **REQ-F3-04** The application MUST accept start-recording input from three sources: (a) the app menu item, (b) the sidebar's record button, (c) the "Record" action in a pre-meeting notification. It MUST accept stop-recording input from the menu, the sidebar, and a "Stop" notification action.
 
@@ -580,7 +581,7 @@ snapshot records its result subject to REQ-F7-09; a partial snapshot returns to
 
 > The runtime surface has two parts (`docs/features/sidebar.md`): the native
 > menu below, opened by a left- or right-click on the menu bar icon, and the
-> compact floating sidebar that holds only the record, screenshot, and quit
+> compact floating sidebar that holds only the record, screenshot, hide, and quit
 > buttons (REQ-F8-13 – REQ-F8-17). The setup tray shown before Recording Core
 > is configured keeps its plain dropdown unchanged.
 
@@ -623,8 +624,8 @@ Debugging                          (hover submenu)
 Quit
 ```
 
-The sidebar panel (REQ-F8-13) MUST contain exactly three icon buttons with
-tooltips and no text labels: record/stop, screenshot (REQ-F12), and quit.
+The sidebar panel (REQ-F8-13) MUST contain exactly four icon buttons with
+tooltips and no text labels: record/stop, screenshot (REQ-F12), hide, and quit.
 
 **REQ-F8-02** Clicking a **Recent Meetings** item MUST open the corresponding meeting directory in Finder (not the `transcript.md` file directly, so the user can see all artifacts).
 
@@ -660,11 +661,11 @@ show the file updated after saving.
 
 **REQ-F8-12** **Configuration** and **Debugging** MUST be native hover submenus of the app menu. Audio modes and user-editable settings MUST live under **Configuration**; pending meeting tasks, speaker corrections, readiness results, interrupted recordings, backup/transcription retry, setup checks, and test notifications MUST live under **Debugging**, not at the menu root. Debugging actions MUST use explicit labels and native hover help that describes their scope.
 
-**REQ-F8-13** A left-click and a right-click on the menu bar icon MUST both open the REQ-F8-01 menu through the ordinary status item menu; the app MUST NOT depend on `rumps` internals for click handling. The sidebar panel MUST be as small as its three buttons allow (44 × 130 pt vertical, 134 × 44 pt horizontal, plus a timer slot while recording) with rounded 14 pt corners.
+**REQ-F8-13** A left-click and a right-click on the menu bar icon MUST both open the REQ-F8-01 menu through the ordinary status item menu; the app MUST NOT depend on `rumps` internals for click handling. The sidebar panel MUST be as small as its four buttons allow (44 × 166 pt vertical, 170 × 44 pt horizontal, plus a timer slot while recording) with rounded 14 pt corners.
 
 **REQ-F8-18** The pre-meeting notification's **Record** action MUST also open the meeting link. Recording-lifecycle messages (saved, transcript ready, notes generated, transcription failed, meeting ending) are delivered as macOS notifications with their actions; the sidebar shows no status text.
 
-**REQ-F8-14** The sidebar is not an entry point while idle. Starting a recording from any source (menu, sidebar, notification action, recovery) MUST show the sidebar, and it MUST then stay visible until the user closes it. **Hide sidebar while recording** (Configuration submenu) MUST suppress that auto-show for the whole session without hiding a panel the user opened. If the user closes the sidebar during a recording, the app MUST NOT show it again until the next recording starts. Stopping MUST NOT change visibility.
+**REQ-F8-14** The sidebar is not an entry point while idle. When Calendar detects an upcoming meeting, it MUST show the sidebar beside the meeting-start notification; ad-hoc starts and manually reopened sidebars do not trigger an additional auto-show. **Hide sidebar while recording** (Configuration submenu) MUST suppress the Calendar-triggered show for the session. The panel MUST hide once capture stops and MAY be hidden sooner with its hide button; the status-bar timer remains the persistent recording indicator.
 
 **REQ-F8-15** The panel MUST be draggable and MUST snap to the left-center, right-center, top-center, or bottom-center of the screen when one of the panel's edges is released within 64 pt of the matching screen edge, free-floating otherwise. A snapped panel MUST stay snapped unless released more than 160 pt clear of its edge. Left/right anchors render the vertical button stack; top/bottom anchors (and free-floating) render the horizontal button row.
 

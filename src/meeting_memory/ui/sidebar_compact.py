@@ -1,6 +1,6 @@
-"""Compact icon-only sidebar content: record/stop, screenshot, quit.
+"""Compact icon-only sidebar content: record/stop, screenshot, hide, quit.
 
-Three SF Symbol buttons and nothing else, so the panel is as small as it can
+Four SF Symbol buttons and nothing else, so the panel is as small as it can
 be while every function stays one click away. Snapped to the left or right
 edge the buttons stack vertically; snapped to the top or bottom (or floating
 free) they sit in a row behind a `⠿` grip. While recording the record button
@@ -34,15 +34,18 @@ RECORD_IDLE_SYMBOL = "record.circle"
 RECORD_ACTIVE_SYMBOL = "stop.circle.fill"
 SCREENSHOT_SYMBOL = "camera.fill"
 QUIT_SYMBOL = "power"
+HIDE_SYMBOL = "eye.slash"
 FALLBACK_GLYPHS = {
     RECORD_IDLE_SYMBOL: "●",
     RECORD_ACTIVE_SYMBOL: "■",
     SCREENSHOT_SYMBOL: "📷",
+    HIDE_SYMBOL: "×",
     QUIT_SYMBOL: "⏻",
 }
 RECORD_IDLE_TOOLTIP = "Start recording"
 SCREENSHOT_TOOLTIP = f"Take screenshot ({menu.SCREENSHOT_SHORTCUT})"
 QUIT_TOOLTIP = "Quit Meeting Memory"
+HIDE_TOOLTIP = "Hide sidebar"
 
 _symbol_view_classes: dict[int, type] = {}
 
@@ -56,7 +59,7 @@ class CompactViews:
 
 
 def compact_size(orientation: Orientation, *, is_recording: bool) -> tuple[float, float]:
-    buttons = 3 * BUTTON + 2 * GAP
+    buttons = 4 * BUTTON + 3 * GAP
     if orientation is Orientation.HORIZONTAL:
         timer = TIMER_WIDTH if is_recording else 0.0
         return GRIP_WIDTH + INSET + buttons + timer + INSET, BUTTON + 2 * INSET
@@ -71,6 +74,7 @@ def build_compact(
     orientation: Orientation,
     on_toggle_recording: Callable[[], None],
     on_screenshot: Callable[[], None],
+    on_hide_sidebar: Callable[[], None],
     on_quit: Callable[[], None],
 ) -> CompactViews:
     view = view_model.recording
@@ -80,7 +84,7 @@ def build_compact(
     if horizontal:
         root.addSubview_(_grip(appkit, height))
 
-    record_origin, timer_frame, shot_origin, quit_origin = _layout(
+    record_origin, timer_frame, shot_origin, hide_origin, quit_origin = _layout(
         horizontal, height, view.is_recording
     )
     record = _icon_button(appkit, record_origin, on_toggle_recording)
@@ -92,6 +96,10 @@ def build_compact(
     _set_symbol(appkit, screenshot, SCREENSHOT_SYMBOL, appkit.NSColor.labelColor())
     screenshot.setToolTip_(SCREENSHOT_TOOLTIP)
     root.addSubview_(screenshot)
+    hide_button = _icon_button(appkit, hide_origin, on_hide_sidebar)
+    _set_symbol(appkit, hide_button, HIDE_SYMBOL, appkit.NSColor.secondaryLabelColor())
+    hide_button.setToolTip_(HIDE_TOOLTIP)
+    root.addSubview_(hide_button)
     quit_button = _icon_button(appkit, quit_origin, on_quit)
     _set_symbol(appkit, quit_button, QUIT_SYMBOL, appkit.NSColor.secondaryLabelColor())
     quit_button.setToolTip_(QUIT_TOOLTIP)
@@ -126,18 +134,26 @@ def timer_text(view: Any) -> str:
 
 def _layout(
     horizontal: bool, height: float, is_recording: bool
-) -> tuple[tuple[float, float], Any, tuple[float, float], tuple[float, float]]:
+) -> tuple[tuple[float, float], Any, tuple[float, float], tuple[float, float], tuple[float, float]]:
     if horizontal:
         x = GRIP_WIDTH + INSET
         timer_width = TIMER_WIDTH if is_recording else 0.0
         timer = (x + BUTTON, INSET, timer_width, BUTTON)
         shot_x = x + BUTTON + timer_width + GAP
-        return (x, INSET), timer, (shot_x, INSET), (shot_x + BUTTON + GAP, INSET)
+        hide_x = shot_x + BUTTON + GAP
+        return (x, INSET), timer, (shot_x, INSET), (hide_x, INSET), (hide_x + BUTTON + GAP, INSET)
     quit_y = INSET
-    shot_y = quit_y + BUTTON + GAP
+    hide_y = quit_y + BUTTON + GAP
+    shot_y = hide_y + BUTTON + GAP
     timer_height = TIMER_HEIGHT if is_recording else 0.0
     timer = (0.0, shot_y + BUTTON + GAP, BUTTON + 2 * INSET, timer_height)
-    return (INSET, shot_y + BUTTON + GAP + timer_height), timer, (INSET, shot_y), (INSET, quit_y)
+    return (
+        (INSET, shot_y + BUTTON + GAP + timer_height),
+        timer,
+        (INSET, shot_y),
+        (INSET, hide_y),
+        (INSET, quit_y),
+    )
 
 
 def _icon_button(appkit: Any, origin: tuple[float, float], on_click: Callable[[], None]) -> Any:

@@ -19,7 +19,7 @@ types <- config <- repo <- service <- ui
 | config | `config/` | Capability-scoped settings, typed schema, pure precedence resolution, and isolated legacy validation. |
 | repo | `repo/` | External service, hardware, and Keychain adapters. |
 | service | `service/` | Local behavior, orchestration, and private app-owned filesystem stores. |
-| ui | `ui/` | `rumps` status item and menu (Start/Stop Recording first) plus the compact AppKit sidebar (record, screenshot, quit) that appears when a recording starts (`docs/features/sidebar.md`). The menu bar icon keeps rumps' ordinary click behavior; no sidebar module reaches into rumps internals (`ui/macos.py` does, for notifications and app identity). `ui/screenshot_hotkey.py` calls Carbon through `ctypes` for the global screenshot shortcut. |
+| ui | `ui/` | `rumps` status item and menu (Start/Stop Recording first) plus the compact AppKit sidebar (record, screenshot, hide, quit) that Calendar reveals for an upcoming meeting and the tray hides after its recording stops (`docs/features/sidebar.md`). The menu bar icon keeps rumps' ordinary click behavior; no sidebar module reaches into rumps internals (`ui/macos.py` does, for notifications and app identity). `ui/screenshot_hotkey.py` calls Carbon through `ctypes` for the global screenshot shortcut. |
 
 Cross-cutting modules live directly under `meeting_memory`: `__main__.py`,
 `doctor.py`, and `logging_config.py`.

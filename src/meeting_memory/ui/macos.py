@@ -127,7 +127,9 @@ def deliver_modern_notification(
     if kwargs.get("sound", True):
         content.setSound_(classes["UNNotificationSound"].defaultSound())
 
+    notification_id = str(uuid.uuid4())
     data = _notification_data(kwargs.get("data"))
+    data["notification_id"] = notification_id
     if data:
         content.setUserInfo_(data)
 
@@ -137,11 +139,22 @@ def deliver_modern_notification(
         content.setCategoryIdentifier_(category_id)
 
     request = classes["UNNotificationRequest"].requestWithIdentifier_content_trigger_(
-        str(uuid.uuid4()),
+        notification_id,
         content,
         None,
     )
     center.addNotificationRequest_(request)
+
+
+def dismiss_delivered_notification(data: object, logger: logging.Logger) -> None:
+    """Remove the acted-on modern notification from Notification Center."""
+    if not isinstance(data, dict) or not isinstance(data.get("notification_id"), str):
+        return
+    try:
+        center = _load_user_notifications()["UNUserNotificationCenter"].currentNotificationCenter()
+        center.removeDeliveredNotificationsWithIdentifiers_([data["notification_id"]])
+    except Exception:
+        logger.debug("Could not dismiss acted-on notification", exc_info=True)
 
 
 def deliver_notification(

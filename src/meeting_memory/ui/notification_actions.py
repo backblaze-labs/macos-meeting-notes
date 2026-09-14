@@ -6,13 +6,17 @@ when a notification gains a new action value.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
+from meeting_memory.ui.macos import dismiss_delivered_notification
 from meeting_memory.ui.notifications import (
     parse_notification_candidates,
     parse_notification_datetime,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 def dispatch_notification(app: Any, data: object) -> None:
@@ -22,6 +26,7 @@ def dispatch_notification(app: Any, data: object) -> None:
         return
     action = data.get("action")
     if action == "start_recording":
+        dismiss_delivered_notification(data, LOGGER)
         app.controller.start_recording(
             str(data.get("calendar_title") or "Untitled"),
             ends_at=parse_notification_datetime(data.get("ends_at")),

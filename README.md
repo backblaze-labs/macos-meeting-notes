@@ -193,9 +193,12 @@ event. Manual start uses only watcher-cached Calendar context; without one,
 the app records under a provisional title and asks for the final title after
 stop.
 
-When a recording starts, a small floating sidebar appears: a pill with three
-icon buttons for record/stop, screenshot, and quit. It stays until you close
-it and can be reopened from the menu at any time.
+When Calendar announces an upcoming meeting, a small floating sidebar appears:
+a pill with icon buttons for record/stop, screenshot, hide, and quit. It
+remains available while you record that meeting, then hides once recording has
+actually stopped. You can hide it sooner with its eye-slash button or reopen
+it from the menu at any time. Ad-hoc recordings do not open the sidebar on
+their own.
 
 While recording, click the camera button or press **⌥⇧S** anywhere to capture
 the screen. A single screenshot is saved next to `recording.m4a`; two or more
@@ -221,7 +224,8 @@ and the menu switches to `Stop Recording`. The sidebar's record button turns
 into a red stop button with the same timer. Drag the panel by its `⠿` grip to
 snap it to any screen edge — top and bottom turn it into a horizontal row.
 Turn on **Configuration › Hide sidebar while recording** if you never want
-the panel to appear on its own; you can still open it from the menu. When a
+the panel to appear on its own; you can still open it from the menu. Selecting
+`Record` dismisses that meeting-start notification. When a
 calendar-backed recording reaches the event end time, the app sends a `Stop`
 reminder action. Long recordings also send a reminder after one hour and
 every 30 minutes after that, until recording stops. After transcription

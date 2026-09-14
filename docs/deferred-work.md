@@ -373,7 +373,7 @@ Outcome: all four shipped (`docs/features/screenshots.md`,
   either click opens the menu; see the review entry below.)*
 
 First thing to check if this comes up again: `ui/status_menu.py` for what the
-menu holds, `ui/sidebar_compact.py` for the three buttons and their tooltips,
+menu holds, `ui/sidebar_compact.py` for the four buttons and their tooltips,
 `service/screenshots.py:attach` for the one-file-vs-folder rule, and
 `ui/controller.py:auto_generate_notes` for the transcript-to-notes handoff.
 The global shortcut lives in `ui/screenshot_hotkey.py`; if it stops firing
