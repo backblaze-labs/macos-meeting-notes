@@ -262,7 +262,7 @@ class RumpsTrayApp:
             )
             self.refresh_sidebar()
             return
-        automatic = bool(self.automatic_notes())
+        automatic = bool(self.automatic_notes()) and self.controller.notes_available
         runtime_event = runtime_notification(event, automatic_notes=automatic)
         if runtime_event is not None:
             if isinstance(event, TranscriptReady) and automatic:
