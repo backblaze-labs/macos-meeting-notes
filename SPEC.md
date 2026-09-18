@@ -311,6 +311,11 @@ B2_BUCKET_NAME
 
 **REQ-EXT-17a** Neither audio mode MAY change the current macOS input or output device. BlackHole, Aggregate Devices, Multi-Output Devices, and per-device environment configuration MUST NOT be required.
 
+**REQ-EXT-17b** During Full Meeting capture, the app MUST observe changes to the
+macOS default input and output devices without changing either selection. It
+MUST retain bounded route-change diagnostics, surface a visible warning, and
+refresh the active native capture configuration after a route change.
+
 **REQ-EXT-18** If native capture cannot start because the helper, hardware, or macOS permissions are unavailable, the application MUST surface a visible, actionable error rather than silently failing.
 
 **REQ-EXT-19** Audio MUST be captured at 16000 Hz sample rate, mono channel,
@@ -407,11 +412,13 @@ also warn. A live warning MUST clear after its condition recovers.
 **REQ-F3-13** Every successfully stopped native recording MUST retain final
 per-source diagnostics in its recovery index and schema-v2 transcript metadata,
 including callback count, captured frames, peak level, total discarded frames,
-largest contiguous discarded run, and first/last callback timing. Unresolved
-warnings MUST determine final capture status; resolved warnings MUST remain in
-bounded warning history without causing a final warning notification. The
-application log MUST identify the meeting slug, capture mode, warning state,
-history, and final diagnostics without recording audio content or credentials.
+largest contiguous discarded run, and first/last callback timing. It MUST also
+retain bounded, name-only default input/output route changes with their elapsed
+offsets. Unresolved warnings MUST determine final capture status; resolved
+warnings MUST remain in bounded warning history without causing a final warning
+notification. The application log MUST identify the meeting slug, capture mode,
+warning state, history, and final diagnostics without recording audio content
+or credentials.
 
 **REQ-F3-14** Stopping one meeting and starting the next MUST NOT wait for the
 previous meeting's conversion, local publication, transcription, backup, or

@@ -11,8 +11,15 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     private let captureQueue = DispatchQueue(label: "com.meeting-memory.native-capture")
     private let systemConverter = PCMConverter()
     private let microphoneConverter = PCMConverter()
+    private lazy var routeMonitor = AudioRouteMonitor { [weak self] snapshot in
+        self?.handleAudioRouteChange(snapshot)
+    }
     private var stream: SCStream?
+    private var streamConfiguration: SCStreamConfiguration?
     private var stopped = false
+    private var startedAt: Double?
+    private var refreshingRoute = false
+    private let routeRefreshQueue = DispatchQueue(label: "com.meeting-memory.route-refresh")
 
     init(
         mixer: TimelineMixer,
@@ -59,16 +66,29 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
             try stream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: captureQueue)
         }
         self.stream = stream
+        self.streamConfiguration = configuration
+        self.startedAt = ProcessInfo.processInfo.systemUptime
         try await stream.startCapture()
+        do {
+            try routeMonitor.start()
+        } catch {
+            try? await stream.stopCapture()
+            self.stream = nil
+            self.streamConfiguration = nil
+            throw error
+        }
         return microphone?.localizedName
     }
 
     func stop() async throws {
         guard !stopped else { return }
         stopped = true
+        routeMonitor.stop()
         try await stream?.stopCapture()
         try captureQueue.sync { try mixer.finish() }
         stream = nil
+        streamConfiguration = nil
+        startedAt = nil
     }
 
     func metrics(startedAt: Double, now: Double) -> [String: Any] {
@@ -110,5 +130,34 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
     func stream(_ stream: SCStream, didStopWithError error: Error) {
         guard !stopped else { return }
         failureHandler(error)
+    }
+
+    private func handleAudioRouteChange(_ snapshot: AudioRouteSnapshot) {
+        let elapsedSeconds = ProcessInfo.processInfo.systemUptime - (startedAt ?? 0)
+        emitJSON(snapshot.eventPayload(elapsedSeconds: elapsedSeconds))
+        let shouldRefresh = routeRefreshQueue.sync { () -> Bool in
+            guard !stopped, !refreshingRoute else { return false }
+            refreshingRoute = true
+            return true
+        }
+        guard shouldRefresh else { return }
+        Task { [weak self] in await self?.refreshCaptureAfterAudioRouteChange(snapshot) }
+    }
+
+    private func refreshCaptureAfterAudioRouteChange(_ snapshot: AudioRouteSnapshot) async {
+        defer {
+            routeRefreshQueue.sync { refreshingRoute = false }
+        }
+        do {
+            guard !stopped, let stream, let streamConfiguration else { return }
+            try await stream.updateConfiguration(streamConfiguration)
+            emitJSON([
+                "event": "audio_route_recovered",
+                "input_device": snapshot.input,
+                "output_device": snapshot.output,
+            ])
+        } catch {
+            failureHandler(error)
+        }
     }
 }

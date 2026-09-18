@@ -209,7 +209,10 @@ Choose the audio mode for the next recording under **Configuration › Audio
 Mode** in the right-click menu:
 
 - **Full Meeting** records system audio plus the current macOS microphone. Your
-  current output, including AirPods, keeps playing normally.
+  current output, including AirPods, keeps playing normally. If you change the
+  default route mid-recording (for example, speakers to AirPods), the app
+  refreshes capture and shows a warning so you can immediately confirm the call
+  is still audible.
 - **Silent System Only** records system audio with the microphone off and mutes
   that system audio while recording.
 

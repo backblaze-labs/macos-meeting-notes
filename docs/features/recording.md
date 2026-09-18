@@ -53,6 +53,10 @@ workers and emit typed events for the tray main thread to render.
   completion warning. A warning adds `⚠︎` to the timer and Stop label, sends a macOS
   notification with a Stop action, and clears from the live UI if the source
   recovers.
+- Full Meeting watches the default macOS input and output while it records. A
+  route change (for example, speakers to AirPods) is saved in final capture
+  diagnostics, shown immediately as a macOS warning, and refreshes the active
+  ScreenCaptureKit configuration without changing the user's selected devices.
 - Distributed one-frame resampling trims do not warn. Discard health requires
   at least 1,600 total frames plus either a one-percent ratio or a contiguous
   1,600-frame run, preserving detection of real clock loss without treating
