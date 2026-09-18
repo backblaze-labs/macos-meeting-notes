@@ -71,6 +71,42 @@ class CaptureSourceDiagnostics:
 
 
 @dataclass(frozen=True)
+class CaptureRouteChange:
+    """One default-input/output route observed while native capture was active."""
+
+    elapsed_seconds: float
+    input_device: str
+    output_device: str
+
+    def __post_init__(self) -> None:
+        if not math.isfinite(self.elapsed_seconds) or self.elapsed_seconds < 0:
+            raise ValueError("capture route elapsed time must be finite and non-negative")
+        if not all(isinstance(value, str) and value.strip() for value in self.devices):
+            raise ValueError("capture route device names must be non-blank strings")
+
+    @property
+    def devices(self) -> tuple[str, str]:
+        return self.input_device, self.output_device
+
+    def to_payload(self) -> dict[str, object]:
+        return {
+            "elapsed_seconds": round(self.elapsed_seconds, 3),
+            "input_device": self.input_device,
+            "output_device": self.output_device,
+        }
+
+    @classmethod
+    def from_payload(cls, payload: object) -> CaptureRouteChange:
+        if not isinstance(payload, dict):
+            raise ValueError("capture route change must be an object")
+        return cls(
+            elapsed_seconds=_nonnegative_float(payload.get("elapsed_seconds")),
+            input_device=str(payload.get("input_device") or ""),
+            output_device=str(payload.get("output_device") or ""),
+        )
+
+
+@dataclass(frozen=True)
 class CaptureDiagnostics:
     """Sanitized source evidence retained with one completed recording."""
 
@@ -80,6 +116,7 @@ class CaptureDiagnostics:
     sources: tuple[CaptureSourceDiagnostics, ...]
     warnings: tuple[str, ...] = ()
     warning_history: tuple[str, ...] = ()
+    route_changes: tuple[CaptureRouteChange, ...] = ()
 
     def __post_init__(self) -> None:
         if self.mode not in {"full-meeting", "silent-system-only"}:
@@ -93,6 +130,8 @@ class CaptureDiagnostics:
         warning_codes = (*self.warnings, *self.warning_history)
         if not all(isinstance(code, str) and code for code in warning_codes):
             raise ValueError("capture warning codes must be non-blank strings")
+        if not all(isinstance(change, CaptureRouteChange) for change in self.route_changes):
+            raise ValueError("capture route changes must be typed")
 
     @property
     def status(self) -> str:
@@ -112,6 +151,12 @@ class CaptureDiagnostics:
             warning_history=tuple(dict.fromkeys(warning_history)),
         )
 
+    def with_route_changes(
+        self,
+        route_changes: tuple[CaptureRouteChange, ...],
+    ) -> CaptureDiagnostics:
+        return replace(self, route_changes=route_changes)
+
     def to_payload(self) -> dict[str, object]:
         return {
             "mode": self.mode,
@@ -120,6 +165,7 @@ class CaptureDiagnostics:
             "status": self.status,
             "warnings": list(self.warnings),
             "warning_history": list(self.warning_history),
+            "route_changes": [change.to_payload() for change in self.route_changes],
             "sources": {source.name: source.to_payload() for source in self.sources},
         }
 
@@ -138,6 +184,9 @@ class CaptureDiagnostics:
         raw_warning_history = payload.get("warning_history", raw_warnings)
         if not isinstance(raw_warning_history, list | tuple):
             raise ValueError("capture diagnostics warning history must be a list")
+        raw_route_changes = payload.get("route_changes", ())
+        if not isinstance(raw_route_changes, list | tuple):
+            raise ValueError("capture diagnostics route changes must be a list")
         microphone = payload.get("microphone")
         return cls(
             mode=mode,
@@ -148,6 +197,9 @@ class CaptureDiagnostics:
             ),
             warnings=tuple(str(code) for code in raw_warnings),
             warning_history=tuple(str(code) for code in raw_warning_history),
+            route_changes=tuple(
+                CaptureRouteChange.from_payload(item) for item in raw_route_changes
+            ),
         )
 
 

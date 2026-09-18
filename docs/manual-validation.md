@@ -86,8 +86,12 @@ Pass criteria:
 3. Note the selected macOS input/output devices.
 4. Click `Start Recording`.
 5. Speak into the microphone and play remote or system audio.
-6. Wait at least 30 seconds.
-7. Click `Stop Recording`.
+6. While recording, switch the default output from the speakers to AirPods.
+   Leave the call playing while macOS completes the Bluetooth handoff.
+7. Confirm the app warns that it refreshed capture, then confirm the call is
+   still audible through AirPods.
+8. Wait at least 30 seconds.
+9. Click `Stop Recording`.
 
 Pass criteria:
 
@@ -101,6 +105,9 @@ Pass criteria:
 - The selected macOS input/output devices did not change.
 - Meeting playback remained audible through the selected output while
   recording.
+- The route-change warning names the new output, and final
+  `capture_diagnostics.route_changes` records the input/output pair and its
+  offset into the recording.
 - If the recording maps to a calendar event with an end time, a stop reminder
   appears at the event finish time.
 - `transcript.md` contains `capture_status: healthy` and

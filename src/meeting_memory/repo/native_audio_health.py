@@ -10,6 +10,7 @@ from typing import Any
 from meeting_memory.types.audio import (
     CaptureDiagnostics,
     CaptureHealthWarning,
+    CaptureRouteChange,
     CaptureSourceDiagnostics,
 )
 
@@ -19,6 +20,7 @@ SOURCE_SILENCE_GRACE_SECONDS = 90
 SOURCE_SILENCE_PEAK = 0.00001
 DISCARDED_FRAME_WARNING_MINIMUM = 1_600
 DISCARDED_FRAME_WARNING_RATIO = 0.01
+MAX_ROUTE_CHANGES = 20
 LOGGER = logging.getLogger(__name__)
 
 
@@ -29,6 +31,7 @@ class HelperStatus:
     _warning_codes: list[str] = field(default_factory=list)
     _active_warnings: tuple[CaptureHealthWarning, ...] = ()
     _pending_warnings: list[CaptureHealthWarning] = field(default_factory=list)
+    _route_changes: list[CaptureRouteChange] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def observe(self, event: dict[str, Any]) -> None:
@@ -37,6 +40,9 @@ class HelperStatus:
             message = str(event.get("message") or "native helper reported an error")
             with self._lock:
                 self._failure_message = message
+            return
+        if event_name == "audio_route_changed":
+            self._observe_route_change(event)
             return
         if event_name not in {"health", "stopped"}:
             return
@@ -62,7 +68,28 @@ class HelperStatus:
                 self._final_diagnostics = diagnostics.with_warning_state(
                     tuple(warning.code for warning in warnings),
                     tuple(self._warning_codes),
-                )
+                ).with_route_changes(tuple(self._route_changes))
+
+    def _observe_route_change(self, event: dict[str, Any]) -> None:
+        try:
+            change = CaptureRouteChange.from_payload(event)
+        except (TypeError, ValueError) as exc:
+            LOGGER.warning("Invalid native audio route change: %s", exc)
+            return
+        warning = CaptureHealthWarning(
+            code="audio_route_changed",
+            message=(
+                "macOS changed the audio route during this recording "
+                f"(output: {change.output_device}). Meeting Memory refreshed capture; "
+                "check that you can still hear the call."
+            ),
+        )
+        with self._lock:
+            if len(self._route_changes) < MAX_ROUTE_CHANGES:
+                self._route_changes.append(change)
+            if warning.code not in self._warning_codes:
+                self._warning_codes.append(warning.code)
+            self._pending_warnings.append(warning)
 
     def failure_message(self) -> str | None:
         with self._lock:
