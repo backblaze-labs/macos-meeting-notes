@@ -37,6 +37,7 @@ class ConfigurationActions:
     import_legacy: Callable[[], None]
     authorize_calendar: Callable[[], None]
     open_notes_prompt: Callable[[], None]
+    open_known_speakers: Callable[[], None] = lambda: None
 
 
 @dataclass(frozen=True)
@@ -228,6 +229,7 @@ def _configuration_rows(actions: ConfigurationActions) -> tuple[RowView, ...]:
     )
     return (
         *capability_rows,
+        RowView(label="Known Speakers...", action=actions.open_known_speakers),
         RowView(
             label=menu.NOTES_PROMPT_LABEL,
             tooltip="Customize AI instructions and the local report layout used by Notes.",

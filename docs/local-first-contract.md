@@ -226,6 +226,15 @@ egress before an integration is enabled:
 | Google Calendar | OAuth/API requests; event metadata is received locally | Context and reminders |
 | Anthropic | Notes receive fixed schema/identity instructions, editable guidance, and only the reviewed transcript excerpt capped at 60,000 characters; the Markdown layout stays local, and no Calendar prefix is included. For new transcripts, background review preparation sends a diarized local excerpt capped at 60,000 characters, canonical known attendee names, and relevant roster descriptions to Claude Haiku before confirmation. Historical review actions trigger that request explicitly; matching aliases/emails, frontmatter, and provider IDs stay local | Derived notes and unconfirmed speaker suggestions |
 
+**Configuration › Known Speakers...** also supports a local draft from confirmed
+named history without enabling Calendar or Notes. Startup/addition offers only
+read bounded local history and write private offer-suppression state. The user
+must explicitly choose **Suggest Topics** before Anthropic receives confirmed
+names and their own quotes (4,000 characters per person, 60,000 total). No
+Calendar matching aliases/emails, frontmatter metadata, or audio are sent by that
+action. The editable draft is never persisted automatically; paused/unavailable
+Notes or a failed request preserve names-only editing.
+
 No provider receives data merely because the app launched or Recording Core
 ran. Configuration is consent to make the integration available for new
 recordings; the UI MUST still describe automatic triggers such as post-stop
@@ -250,6 +259,15 @@ Keep Speaker Labels and preserve those reviewed identities. They receive no
 Calendar prefix, and a fixed identity contract forbids reinference from
 mentions or topics while allowing explicitly stated task recipients. The old
 automatic Notes preference is ignored.
+
+Standalone roster Save uses the same private atomic preference document, changes
+only `KNOWN_SPEAKERS`, and requires a matching captured revision. A simultaneous
+Calendar edit fails with a conflict instead of overwriting settings. Saving does
+not enable Calendar, rewrite credentials, or pause a Notes job. Runtime settings
+use the updated base after restart; process overrides keep their normal precedence.
+An explicit empty saved roster is authoritative for subsequent local edits.
+Offer dismissal/suppression lives separately in private atomic
+`speaker-onboarding.json`; the menu remains available for later onboarding.
 
 B2 objects remain private. A dedicated private bucket and least-privilege,
 bucket-scoped credentials are required for supported setup.

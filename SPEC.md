@@ -477,6 +477,42 @@ Identification suggestions under REQ-F4-04.
 
 **REQ-F4-07** `meeting-memory relabel <meeting-folder>` MUST apply `speaker_aliases` from `transcript.md` deterministically by code, without using an LLM or re-transcribing audio.
 
+**REQ-F4-08** **Configuration › Known Speakers...** MUST offer a standalone
+local roster editor independent of Calendar enablement or its Save action,
+including names-only access during setup. It MUST offer explicit import from
+at most 20 confirmed named transcripts within the latest 200 meeting folders,
+with the included/scanned counts disclosed. Each metadata read MUST be bounded
+to 2 MiB and reject symlink/non-regular artifacts. Kept anonymous labels,
+unreviewed transcripts, foreign artifacts, and schema-v2 aliases without explicit
+confirmation MUST NOT supply identities. Imported names MUST be exact confirmed
+values, with no fuzzy matching, inferred identity, or guessed Calendar aliases.
+Existing entries, descriptions, and match aliases/emails MUST remain in the draft
+unless the user explicitly edits them; ordinary editing MUST NOT reimport deleted
+history. Duplicate/case-only names MUST require explicit correction.
+
+**REQ-F4-09** The empty-roster runtime MUST offer onboarding once when usable
+confirmed history exists. After successful speaker confirmation and the Notes
+start attempt, new confirmed names MAY trigger an addition offer. Offers MUST be
+suppressed persistently per name, with private atomic state and sanitized failures;
+no repeated offer or failure modal may interrupt an unrelated draft. Neither
+startup nor an offer MUST make a topics provider request. Topic suggestions MUST
+require an explicit disclosed action, use the existing Notes key and current
+pause, and fixed Haiku 5.5 low effort. Only confirmed per-person names and their
+own excerpts MAY be sent, capped at 4,000 quote characters per person and 60,000
+total with a fair per-person budget. Calendar matches, transcript frontmatter,
+and audio MUST stay local. Descriptions MUST be editable and at most 300
+characters, accepted only for a unique supplied name with an exact quote from
+that person's supplied text. Failure or unavailable/paused Notes MUST preserve
+the usable names-only draft.
+
+**REQ-F4-10** Cancel MUST leave preferences and meeting files unchanged. Save
+MUST compare-and-swap only `KNOWN_SPEAKERS` against the captured preference
+snapshot, preserving capability enablement, secret references, and unrelated
+settings. A concurrent edit MUST fail without overwriting it. Saved empty rosters
+MUST take precedence over stale startup values in subsequent editing. Saving MUST
+report the restart required for effective runtime settings, without pausing Notes
+already started. Process-environment overrides retain their existing precedence.
+
 ### F5: Summarization
 
 **REQ-F5-01** When Notes is `ready`, summarization MUST start automatically
@@ -641,6 +677,7 @@ Configuration                      (hover submenu)
   Transcription…
   Backup…
   Calendar…
+  Known Speakers…
   Notes…
   Notes Customization…
   Authorize Google Calendar…

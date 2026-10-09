@@ -112,9 +112,7 @@ def test_parse_known_speakers_text_accepts_friendly_lines() -> None:
 
 
 def test_parse_known_speakers_text_accepts_json_and_legacy_csv() -> None:
-    assert parse_known_speakers_text('{"Alex":["alex"]}') == (
-        KnownSpeaker("Alex", ("alex",)),
-    )
+    assert parse_known_speakers_text('{"Alex":["alex"]}') == (KnownSpeaker("Alex", ("alex",)),)
     assert parse_known_speakers_text("Alex=alex,Blair=blair") == (
         KnownSpeaker("Alex", ("alex",)),
         KnownSpeaker("Blair", ("blair",)),
@@ -139,7 +137,6 @@ def test_known_speakers_form_rows_use_separate_alias_and_source_fields() -> None
             ("Alex", "alex, alex@example.com"),
             ("Blair", "blair"),
             ("", "ignored@example.com"),
-            ("Alex", "duplicate@example.com"),
         ]
     ) == (
         KnownSpeaker("Alex", ("alex", "alex@example.com")),
@@ -234,3 +231,10 @@ class FakeWindow:
 
     def run(self):
         return self
+
+
+def test_duplicate_names_are_rejected_instead_of_dropping_matches():
+    import pytest
+
+    with pytest.raises(ValueError):
+        speakers_from_form_rows([("Alex", "one@example.com"), ("alex", "two@example.com")])

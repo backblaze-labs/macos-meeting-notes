@@ -36,6 +36,7 @@ CONFIGURATION_TITLES = [
     "Backup...",
     "Calendar...",
     "Notes...",
+    "Known Speakers...",
     "Notes Customization...",
     "Authorize Google Calendar...",
     "Import Legacy Configuration...",

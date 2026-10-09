@@ -341,8 +341,9 @@ action rewrites `.env`, and startup never previews, migrates, authorizes, or
 runs readiness automatically.
 
 `KNOWN_SPEAKERS` is intentionally empty by default. Use the tray's
-**Configuration › Calendar...** structured speaker editor to add local aliases
-for normalizing Calendar speaker candidates. The app stores them in app-owned
+**Configuration › Known Speakers...** editor to build an editable base from
+confirmed named history or add people manually. Add explicit Calendar matches
+when known; no identity linking is guessed. The app stores the roster in app-owned
 preferences at
 `~/Library/Application Support/meeting-memory/preferences.json`, outside the
 repository and with private filesystem permissions. Each row has one display
@@ -445,11 +446,31 @@ session. Canceling and reopening the same review reuses that result. Changed
 transcript text or participants invalidate it; a restart also clears the cache.
 The app does not display a numerical speaker identity-confidence score.
 
-Edit the local roster in **Configuration › Calendar...**: each person has a
-canonical name, Calendar match aliases/emails, and an optional description
-(maximum 300 characters) such as their role and usual projects. Aliases/emails
-remain local and are not included in the Haiku request. No separate KB service
-or voice enrollment is required.
+Build the local people base in **Configuration › Known Speakers...**, available
+independently of Calendar setup:
+
+1. Choose **Create from Previous Meetings** to draft exact names already confirmed
+   in local transcripts, or **Edit Current Base** to maintain the saved roster.
+   The draft reports its count: at most 20 confirmed named meetings within the
+   latest 200 meeting folders. Kept anonymous labels are excluded.
+2. Edit canonical names and optional Calendar match aliases/emails. Similar names
+   stay separate; add a match only when you know it identifies that person.
+   Existing entries, matches, and descriptions are preserved in the draft.
+3. Choose **Save Locally**, or explicitly choose **Suggest Topics** to send the
+   confirmed names and their own bounded quotes to Anthropic Claude Haiku. This
+   optional action uses the existing Notes key and pause. Review and edit the
+   proposed usual topics (maximum 300 characters) before saving. Names-only
+   editing works when Notes is unavailable or paused.
+4. Quit and reopen Meeting Memory to use the saved base. Saving updates only
+   `KNOWN_SPEAKERS`; concurrent configuration edits require reopening the draft.
+
+When the roster is empty and confirmed named history exists, the app offers
+**Create my people base** once. After speaker confirmation starts Notes, a new
+confirmed person can trigger a one-time addition offer. Dismissing offers leaves
+the menu available without repeating the same names every meeting. Topic generation requires choosing **Suggest Topics**. Canceling any draft
+leaves preferences and meeting files unchanged. The same roster is also editable
+inside **Configuration › Calendar...**. Matching aliases/emails remain local;
+no separate KB service or voice enrollment is required.
 
 In the review window, choose **Confirm Names** to apply names or **Keep Speaker
 Labels** when you do not know them. Both choices mark the review as confirmed

@@ -57,6 +57,10 @@ that competes with the user's meeting.
   suggestions for configured known Calendar attendees before offering Review
   Speakers. Unknown or ambiguous assignments remain manual. Opening prepared
   review reuses its result, and Notes preserve the reviewed identities.
+- Make the local people base discoverable through Configuration and a one-time
+  offer from confirmed history or newly confirmed names. Draft names locally,
+  keep unknown matches editable, and ask explicitly before suggesting topics
+  from historical quotes. Saving the draft never changes Calendar setup.
 - Preserve user control over private data, speaker identity, and AI behavior.
 - Explain failures with a concrete recovery action.
 - Let provider failures, including B2 upload failures after setup, preserve and

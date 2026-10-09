@@ -22,6 +22,26 @@ processed.
 
 ## Behavior Notes
 
+- **Configuration › Known Speakers...** exposes the local people base without
+  requiring Calendar setup. Ordinary edits use the saved roster; **Create from
+  Previous Meetings** explicitly adds exact confirmed names to an editable draft.
+  It reads at most 20 confirmed named transcripts in the latest 200 folders,
+  each at most 2 MiB, and reports the included/scanned counts. Kept labels,
+  unreviewed records, and foreign artifacts are excluded. No similarly named
+  people or Calendar aliases are merged by guessing.
+- The empty-roster runtime offers building the base once when confirmed history
+  exists. After speaker confirmation attempts to start Notes, new named people
+  receive a one-time addition offer. Private atomic suppression prevents repeats.
+  Names-only editing works during setup and with Notes paused/unavailable.
+- Optional **Suggest Topics** explicitly discloses sending confirmed names and
+  their own excerpts to Haiku 5.5 low (4,000 characters per person, 60,000 total).
+  Only unique supplied names with exact same-person quote evidence receive
+  proposed descriptions; all descriptions remain editable, capped at 300 chars.
+  Existing descriptions are preserved. Cancellation saves nothing, and failures
+  retain the names-only draft.
+- Saving changes only the private `KNOWN_SPEAKERS` preference via CAS. Concurrent
+  configuration changes require reopening; effective runtime changes require
+  restart. This does not change Calendar enablement or stop ongoing Notes.
 - Search is local and case-insensitive.
 - A search query must match all terms in the normalized meeting title/body text.
 - Search only reads directories identified as Meeting Memory output.
@@ -64,6 +84,11 @@ processed.
 
 - `src/meeting_memory/service/search.py`
 - `src/meeting_memory/service/transcript_review.py`
+- `src/meeting_memory/service/speaker_knowledge.py`
+- `src/meeting_memory/service/speaker_history.py`
+- `src/meeting_memory/service/speaker_knowledge_offers.py`
+- `src/meeting_memory/repo/claude_speaker_topics.py`
+- `src/meeting_memory/ui/speaker_knowledge.py`
 - `src/meeting_memory/service/speaker_suggestions.py`
 - `src/meeting_memory/service/speaker_excerpt.py`
 - `src/meeting_memory/repo/claude_speaker_identification.py`
@@ -81,5 +106,8 @@ processed.
 - `tests/test_speaker_suggestions_ui.py`
 - `tests/test_claude_speaker_identification.py`
 - `tests/test_speaker_knowledge.py`
+- `tests/test_speaker_history.py`
+- `tests/test_speaker_knowledge_ui.py`
+- `tests/test_claude_speaker_topics.py`
 - `tests/test_speaker_mapping.py`
 - `tests/test_markdown.py`

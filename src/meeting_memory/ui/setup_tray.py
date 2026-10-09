@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import logging
 import queue
+import threading
+from types import SimpleNamespace
 
 from meeting_memory.service.configuration_surface import ConfigurationSurfaceCoordinator
 from meeting_memory.service.readiness import checking_readiness_report
+from meeting_memory.service.speaker_knowledge_composition import local_speaker_knowledge_service
 from meeting_memory.types.capabilities import ReadinessReport
 from meeting_memory.types.events import NotifyEvent, ReadinessChecked
 from meeting_memory.ui import menu
@@ -24,6 +27,7 @@ from meeting_memory.ui.setup_readiness import (
     readiness_notification_body,
     readiness_tooltip,
 )
+from meeting_memory.ui.speaker_knowledge import SpeakerKnowledgeUI
 from meeting_memory.ui.submenus import configuration_submenu, configuration_surface_actions
 
 LOGGER = logging.getLogger(__name__)
@@ -65,6 +69,11 @@ class RumpsSetupApp:
             self.rumps,
             rebuild_menu=self.rebuild_menu,
         )
+        self.people_base = SpeakerKnowledgeUI(
+            SimpleNamespace(event_queue=self.event_queue, thread_factory=threading.Thread),
+            self.rumps,
+            service_factory=local_speaker_knowledge_service,
+        )
         self.rebuild_menu()
 
     def run(self) -> None:
@@ -81,7 +90,9 @@ class RumpsSetupApp:
         self.app.menu.add(
             configuration_submenu(
                 self.rumps,
-                configuration_surface_actions(self.configuration_ui),
+                configuration_surface_actions(
+                    self.configuration_ui, known_speakers=self.people_base.open
+                ),
                 notes_prompt_available=False,
             )
         )
@@ -111,6 +122,8 @@ class RumpsSetupApp:
                 event = self.event_queue.get_nowait()
             except queue.Empty:
                 return
+            if self.people_base.handle_event(event):
+                continue
             if self.configuration_ui.handle_event(event):
                 continue
             if isinstance(event, ReadinessChecked) and self.readiness_check.acknowledge(

@@ -14,7 +14,8 @@ from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_
 
 
 class SpeakerReviewFlow:
-    def __init__(self, controller, rumps, refresh) -> None:
+    def __init__(self, controller, rumps, refresh, *, after_review=lambda _path: None) -> None:
+        self._after_review = after_review
         self._controller = controller
         self._rumps = rumps
         self._refresh = refresh
@@ -113,9 +114,15 @@ class SpeakerReviewFlow:
                 load_review=lambda _path: state,
                 confirm_aliases=self._controller.confirm_speaker_aliases,
                 keep_labels=self._controller.keep_speaker_labels,
-                generate_notes=self._controller.generate_notes,
+                generate_notes=self._generate_and_offer,
             ),
             rumps_module=self._rumps,
         )
         self._refresh()
         return True
+
+    def _generate_and_offer(self, path):
+        try:
+            self._controller.generate_notes(path)
+        finally:
+            self._after_review(path)

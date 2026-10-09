@@ -52,8 +52,11 @@ def open_preferences_form(fields: tuple[PreferenceFormField, ...]) -> dict[str, 
 
 def open_known_speakers_form(
     speakers: tuple[KnownSpeaker, ...],
+    *,
+    message: str = "Leave name blank to remove a row. Add people on blank rows.",
+    ok_label: str = "Save",
 ) -> tuple[KnownSpeaker, ...] | None:
-    from AppKit import NSAlert, NSMakeRect, NSTextField, NSView
+    from AppKit import NSAlert, NSMakePoint, NSMakeRect, NSScrollView, NSTextField, NSView
 
     row_values = list(speakers)
     blank_rows = max(KNOWN_SPEAKERS_BLANK_ROWS, 1 if not speakers else 0)
@@ -64,7 +67,7 @@ def open_known_speakers_form(
     rows: list[tuple[Any, Any, Any]] = []
 
     header_y = height - 30
-    view.addSubview_(_label_field("Alias to show", 0, header_y, 190, 22))
+    view.addSubview_(_label_field("Canonical name", 0, header_y, 190, 22))
     view.addSubview_(_label_field("Calendar attendee to match", 216, header_y, 474, 22))
 
     for index in range(len(row_values) + blank_rows):
@@ -101,10 +104,17 @@ def open_known_speakers_form(
 
     alert = NSAlert.alloc().init()
     alert.setMessageText_("Known Speakers")
-    alert.setInformativeText_("Leave Alias blank to remove a row. Add people on blank rows.")
-    alert.addButtonWithTitle_("Save")
+    alert.setInformativeText_(message)
+    alert.addButtonWithTitle_(ok_label)
     alert.addButtonWithTitle_("Cancel")
-    alert.setAccessoryView_(view)
+    scroll = NSScrollView.alloc().initWithFrame_(NSMakeRect(0, 0, width, min(height, 560)))
+    scroll.setDocumentView_(view)
+    scroll.setHasVerticalScroller_(height > 560)
+    scroll.setHasHorizontalScroller_(False)
+    clip = scroll.contentView()
+    clip.scrollToPoint_(NSMakePoint(0, max(0, height - 560)))
+    scroll.reflectScrolledClipView_(clip)
+    alert.setAccessoryView_(scroll)
     if not _is_ok_response(run_modal(alert)):
         return None
     return speakers_from_form_rows(
@@ -124,7 +134,7 @@ def speakers_from_form_rows(rows: Any) -> tuple[KnownSpeaker, ...]:
             continue
         key = alias.casefold()
         if key in seen:
-            continue
+            raise ValueError("Duplicate or case-only names require explicit review")
         speakers.append(KnownSpeaker(alias, _split_sources(str(raw_sources)), description))
         seen.add(key)
     return tuple(speakers)

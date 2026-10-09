@@ -44,6 +44,8 @@ def dispatch_notification(app: Any, data: object) -> None:
         directory = data.get("meeting_directory")
         if directory:
             app.controller.opener(Path(str(directory)))
+    elif action == "known_speakers":
+        app.people_base.open(include_history=True)
     elif action == "review_speakers":
         directory = data.get("meeting_directory")
         if directory:
