@@ -480,3 +480,21 @@ No inferred identity, fuzzy person merge, or guessed Calendar alias is added.
 A separate KB service and voice enrollment remain outside this slice. First
 check service/speaker_history.py, service/speaker_knowledge.py, and the native
 Known Speakers entry before changing history limits or roster activation.
+
+
+## 2026-10-09 Speaker Identification Response Budget
+
+A real speaker-identification request reached the previous 4,096-token output
+limit and correctly fell back to manual review. An authorized diagnostic request
+using the same loader, model, low effort, and input with an 8,192-token allowance
+completed and produced validated proposals. That one successful retry does not
+establish deterministic completion or general identity accuracy.
+
+Identification now reserves up to 8,192 response tokens, including model
+reasoning. Notes and topic-description budgets are unchanged. Truncated output
+still fails before parsing, preserves manual review, and does not automatically
+retry. First check the sanitized `stage=truncated` adapter log, provider stop
+reason, and `SPEAKER_MAX_TOKENS` in `repo/claude_speaker_identification.py` before
+changing parsing or evidence validation. A valid-looking partial JSON object
+must never bypass the output-limit check. Further private diagnostics require
+explicit authorization; never record meeting content or provider IDs here.

@@ -468,7 +468,10 @@ MUST NOT be presented as speaker identity confidence. Prepared reviews and succe
 be cached only in memory, bound to transcript text, labels, candidates, review
 status/aliases, provider ID for local invalidation, and relevant roster context.
 The fixed identification model MUST be `claude-haiku-5-5`, independently of
-the configured Notes summary model.
+the configured Notes summary model. Identification requests MUST allow up
+to 8,192 output tokens with low effort. A `max_tokens` stop reason MUST reject
+the response before parsing, even if its partial JSON is valid, and preserve
+manual review without an automatic provider retry.
 
 **REQ-F4-05** After AssemblyAI creates a transcript job, the application MUST record its ID in the meeting's YAML frontmatter (`assemblyai_id` field) for future retrieval. Before then the field MUST remain `null`, never a failure sentinel.
 
