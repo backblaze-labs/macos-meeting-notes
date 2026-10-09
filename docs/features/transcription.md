@@ -61,7 +61,21 @@ confirms the diarized labels as-is on a worker thread before starting Notes.
 - Google Calendar attendees populate `speaker_candidates`. Attendees are shown
   by Calendar full name, except aliases explicitly configured in
   `KNOWN_SPEAKERS` through the tray's **Configuration › Calendar...**
-  editor. This is a local hint, not automatic identification. Google Meet and
+  editor. The local roster also stores an optional 300-character role/topics
+  description. When Review Speakers or Correct Speakers opens and every
+  candidate matches the roster, a background Claude Haiku request sends a
+  diarized local transcript excerpt (at most 60,000 characters), canonical
+  candidate names, and relevant descriptions. It reuses the Notes key and
+  honors the Notes pause; matching emails/aliases and transcript IDs stay local.
+  AssemblyAI remains responsible only for audio transcription and diarization.
+  The selector marks proposed names and shows an exact supporting quote spoken
+  by that label. Only Confirm Names saves aliases. Existing manual selections
+  take precedence, and cancellation changes no files. Unknown attendees,
+  insufficient evidence, ambiguous mappings, and provider failures leave manual
+  review available. Partial proposals do not require every attendee to speak.
+  Successful proposals are cached only for the current session and discarded
+  when transcript or roster context changes. No numerical identity-confidence
+  score is displayed. Google Meet and
   Zoom expose no API a menu-bar app can use to learn who is speaking.
 - By default the user confirms speaker aliases in the tray UI, or chooses
   **Keep Speaker Labels** when the names are unknown. The latter preserves

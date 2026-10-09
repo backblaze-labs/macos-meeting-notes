@@ -36,6 +36,7 @@ from meeting_memory.service.runtime_retry import (
     retry_v2_backups,
     retry_v2_transcriptions,
 )
+from meeting_memory.service.speaker_suggestions_composition import speaker_review_loader
 from meeting_memory.service.sync import sync_pending_meetings
 from meeting_memory.types.capabilities import Capability
 from meeting_memory.types.configuration_resolution import ConfigurationUse
@@ -119,6 +120,10 @@ def run_runtime_app() -> int:
             enabled=lambda: runtime_capabilities.allows(Capability.NOTES),
         ),
         notes_allowed=lambda: runtime_capabilities.allows(Capability.NOTES),
+        speaker_review_loader=speaker_review_loader(
+            configuration,
+            enabled=lambda: runtime_capabilities.allows(Capability.NOTES),
+        ),
         legacy_recovery=legacy_recovery,
     )
     watcher = _calendar_watcher(

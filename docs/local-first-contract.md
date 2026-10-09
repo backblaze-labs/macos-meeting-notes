@@ -224,13 +224,25 @@ egress before an integration is enabled:
 | AssemblyAI | Completed meeting audio | Diarized transcription |
 | Backblaze B2 | `recording.m4a` and `transcript.md` for eligible schema-v2 meetings | Durable private backup |
 | Google Calendar | OAuth/API requests; event metadata is received locally | Context and reminders |
-| Anthropic | The fixed output-schema instructions, the editable instruction block, and only a speaker-confirmed transcript excerpt capped at 60,000 characters; in the opt-in automatic Notes mode, the Calendar attendee names from `speaker_candidates` precede that excerpt. The Markdown layout remains local | Derived notes |
+| Anthropic | The fixed output-schema instructions, the editable instruction block, and only a speaker-confirmed transcript excerpt capped at 60,000 characters; in the opt-in automatic Notes mode, the Calendar attendee names from `speaker_candidates` precede that excerpt. The Markdown layout remains local. Opening Review Speakers or Correct Speakers for known attendees sends a diarized local transcript excerpt capped at 60,000 characters, candidate names, and relevant local roster descriptions to Claude Haiku before speaker confirmation; matching aliases/emails and provider IDs remain local | Derived notes and unconfirmed speaker suggestions |
 
 No provider receives data merely because the app launched or Recording Core
 ran. Configuration is consent to make the integration available for new
 recordings; the UI MUST still describe automatic triggers such as post-stop
 transcription or backup. Historical artifacts require a separate explicit
 backfill action.
+
+Speaker suggestion requests belong to Notes and honor its current-session
+pause immediately before outbound requests, including when reading cached
+proposals. Opening review is the explicit trigger for historical transcripts.
+The local known-speaker roster stores canonical names, matching aliases/emails,
+and optional descriptions in the existing private preference document. Haiku
+receives only relevant canonical names and descriptions with the bounded
+diarized excerpt. No speaker-identification requests are sent to AssemblyAI.
+Suggestions require exact evidence from the indicated speaker and remain only
+in memory. They change no artifacts until the user confirms names. Missing,
+unknown, ambiguous, or failed proposals preserve manual review; ASR confidence
+does not measure speaker identity.
 
 B2 objects remain private. A dedicated private bucket and least-privilege,
 bucket-scoped credentials are required for supported setup.

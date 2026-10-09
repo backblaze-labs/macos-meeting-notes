@@ -424,8 +424,31 @@ speaker_aliases: {"Speaker A": "Alex", "Speaker B": "Ada Lovelace"}
 speaker_status: "needs_review"
 ```
 
-By default the app asks you to review speakers after each transcription. In
-the review window choose **Confirm Names** to apply names or **Keep Speaker
+By default the app asks you to review speakers after each transcription.
+Opening **Review Speakers** or **Correct Speakers** prepares name suggestions
+in a background worker when every Calendar candidate matches the local
+`KNOWN_SPEAKERS` roster. Claude Haiku receives only a diarized local transcript
+excerpt (at most 60,000 characters, ending at a complete utterance), relevant
+canonical attendee names, and their optional role/topics descriptions. The app
+reuses the existing Anthropic key; the Notes pause also pauses suggestions.
+AssemblyAI continues to supply diarized audio transcription only.
+
+The review preselects proposals and shows an exact supporting quote from that
+speaker. Verify each name before choosing **Confirm Names**. Cancel leaves
+meeting files unchanged. Unknown attendees, insufficient evidence, ambiguous
+assignments, paused Notes, or provider failures keep manual review available.
+Partial proposals leave unresolved speakers for manual selection. Successful
+proposals are cached only for the app session; changed transcript text or
+participants invalidate them. Reopen review to retry an unsuccessful request.
+The app does not display a numerical speaker identity-confidence score.
+
+Edit the local roster in **Configuration › Calendar...**: each person has a
+canonical name, Calendar match aliases/emails, and an optional description
+(maximum 300 characters) such as their role and usual projects. Aliases/emails
+remain local and are not included in the Haiku request. No separate KB service
+or voice enrollment is required.
+
+In the review window, choose **Confirm Names** to apply names or **Keep Speaker
 Labels** when you do not know them. Both choices mark the review as confirmed
 and start notes generation; keeping labels leaves `speaker_aliases` empty and
 preserves names such as `Speaker A`.

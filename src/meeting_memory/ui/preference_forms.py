@@ -58,10 +58,10 @@ def open_known_speakers_form(
     row_values = list(speakers)
     blank_rows = max(KNOWN_SPEAKERS_BLANK_ROWS, 1 if not speakers else 0)
     width = 720
-    row_height = 34
+    row_height = 66
     height = 104 + (len(row_values) + blank_rows) * row_height
     view = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, width, height))
-    rows: list[tuple[Any, Any]] = []
+    rows: list[tuple[Any, Any, Any]] = []
 
     header_y = height - 30
     view.addSubview_(_label_field("Alias to show", 0, header_y, 190, 22))
@@ -77,15 +77,20 @@ def open_known_speakers_form(
         if speaker is not None:
             alias_field.setStringValue_(speaker.name)
             source_field.setStringValue_(", ".join(speaker.matches))
+        description = NSTextField.alloc().initWithFrame_(NSMakeRect(0, y - 32, 690, 24))
+        description.setPlaceholderString_("Optional role or usual topics (max 300 characters)")
+        if speaker is not None:
+            description.setStringValue_(speaker.description)
         view.addSubview_(alias_field)
         view.addSubview_(source_field)
-        rows.append((alias_field, source_field))
+        view.addSubview_(description)
+        rows.append((alias_field, source_field, description))
 
     view.addSubview_(
         _hint_field(
             (
-                "This only cleans up speaker suggestions. Alias is the name you want shown. "
-                "Match can be an invite email, email username, or Calendar display name."
+                "Match normalizes Calendar attendees. Optional role/topics provide local "
+                "context for Claude Haiku name suggestions, sent only when opening review."
             ),
             0,
             8,
@@ -103,21 +108,24 @@ def open_known_speakers_form(
     if not _is_ok_response(run_modal(alert)):
         return None
     return speakers_from_form_rows(
-        (str(alias.stringValue()), str(source.stringValue())) for alias, source in rows
+        (str(alias.stringValue()), str(source.stringValue()), str(description.stringValue()))
+        for alias, source, description in rows
     )
 
 
 def speakers_from_form_rows(rows: Any) -> tuple[KnownSpeaker, ...]:
     speakers: list[KnownSpeaker] = []
     seen: set[str] = set()
-    for raw_alias, raw_sources in rows:
+    for row in rows:
+        raw_alias, raw_sources = row[:2]
+        description = str(row[2]).strip() if len(row) > 2 else ""
         alias = str(raw_alias).strip()
         if not alias:
             continue
         key = alias.casefold()
         if key in seen:
             continue
-        speakers.append(KnownSpeaker(alias, _split_sources(str(raw_sources))))
+        speakers.append(KnownSpeaker(alias, _split_sources(str(raw_sources)), description))
         seen.add(key)
     return tuple(speakers)
 

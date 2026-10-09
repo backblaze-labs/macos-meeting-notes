@@ -62,7 +62,7 @@ from meeting_memory.ui.sidebar_view_model import (
     build_view_model,
     recording_view_for,
 )
-from meeting_memory.ui.speaker_review import SpeakerReviewActions, open_speaker_review_window
+from meeting_memory.ui.speaker_review_flow import SpeakerReviewFlow
 from meeting_memory.ui.status_menu import (
     StatusMenuItems,
     rebuild_status_menu,
@@ -106,6 +106,7 @@ class RumpsTrayApp:
         )
         self.timer = self.rumps.Timer(self.drain_events, 1)
         self.screenshots = ScreenshotActions(controller, screenshot_store)
+        self.speaker_review = SpeakerReviewFlow(controller, self.rumps, self.refresh_sidebar)
         self.screenshot_hotkey = None if rumps_module else GlobalHotkey(self.take_screenshot)
         self.sidebar = SidebarWiring(
             rumps_module,
@@ -191,17 +192,7 @@ class RumpsTrayApp:
         self.screenshots.take()
 
     def open_speaker_review(self, meeting_path: Path) -> None:
-        open_speaker_review_window(
-            meeting_path,
-            SpeakerReviewActions(
-                load_review=self.controller.load_speaker_review,
-                confirm_aliases=self.controller.confirm_speaker_aliases,
-                keep_labels=self.controller.keep_speaker_labels,
-                generate_notes=self.controller.generate_notes,
-            ),
-            rumps_module=self.rumps,
-        )
-        self.refresh_sidebar()
+        self.speaker_review.open(meeting_path)
 
     def run_diagnostics(self, _sender=None) -> None:
         if self.readiness_check.start() is not None:
@@ -244,6 +235,8 @@ class RumpsTrayApp:
 
     def handle_event(self, event: object) -> None:
         if self.configuration_ui.handle_event(event):
+            return
+        if self.speaker_review.handle_event(event):
             return
         self.screenshots.handle_event(event)
         if isinstance(event, SidebarHideRequested):

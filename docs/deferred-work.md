@@ -414,3 +414,19 @@ order, `ui/sidebar_tray_wiring.py:reveal` for the only automatic show,
 `ui/notes_mode.py` and `ui/tray.py:handle_event` for the transcript-ready
 routing, `service/speaker_state.py:_confirm_locked` for the kept-label rule,
 and `service/screenshots.py` for the session key.
+
+## 2026-10-09 Speaker Name Suggestions
+
+Opening Review Speakers or Correct Speakers now requests unconfirmed Claude
+Haiku assignments from a bounded local diarized transcript excerpt when every
+Calendar candidate matches the local known-person roster. This reuses the
+Notes key/pause and requires explicit confirmation. The local roster reuses
+`KNOWN_SPEAKERS` with an optional role/topics description; matching aliases and
+emails stay local. AssemblyAI continues to provide diarization only.
+
+A separate KB service, voice enrollment, automatic application without user
+confirmation, and numerical identity-confidence thresholds remain outside
+this slice. Proposals need exact supporting evidence from the indicated
+speaker; uncertain assignments remain manual. First check
+`service/speaker_suggestions.py`, the native Known Speakers editor, and its
+private preference JSON before expanding the automation or context.

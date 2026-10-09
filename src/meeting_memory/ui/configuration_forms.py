@@ -75,7 +75,10 @@ DISCLOSURES = {
         "Anthropic receives the fixed output-schema instructions, the instruction block, "
         "and only a speaker-confirmed transcript excerpt capped at 60,000 characters. "
         "The editable Markdown layout stays local. Notes generation starts after explicit "
-        "speaker confirmation."
+        "speaker confirmation. Opening Review Speakers or Correct Speakers for known "
+        "attendees also sends a diarized local transcript excerpt (at most 60,000 characters), "
+        "candidate names and local known-person context to Claude Haiku for suggestions. "
+        "These require confirmation before names or Notes change."
     ),
 }
 
@@ -236,7 +239,14 @@ def _secret_placeholder(availability: SecretAvailability) -> str:
 
 def _known_speakers_value(speakers) -> str:
     return json.dumps(
-        [{"name": speaker.name, "matches": list(speaker.matches)} for speaker in speakers],
+        [
+            {
+                "name": speaker.name,
+                "matches": list(speaker.matches),
+                "description": speaker.description,
+            }
+            for speaker in speakers
+        ],
         separators=(",", ":"),
     )
 
