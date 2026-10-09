@@ -65,6 +65,10 @@ processed.
 - Proposed names preselect the existing controls and show exact supporting
   quotes spoken by that label. Users must verify and confirm them. Existing
   manual selections take precedence; Cancel changes no meeting files.
+- Speaker identification allows up to 8,192 response tokens, including model
+  reasoning, with fixed Haiku 5.5 low effort. Output-limit responses are rejected
+  before JSON parsing and expose a sanitized incomplete-response fallback. This
+  does not change the Notes or topic-description response budget or add retries.
 - Unknown attendees, insufficient evidence, ambiguous duplicates, paused Notes,
   and provider failures retain manual review. Partial proposals may leave
   speakers unresolved; every invited person need not have spoken.

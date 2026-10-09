@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import pytest
 
 from meeting_memory.repo.claude_speaker_identification import (
+    SPEAKER_MAX_TOKENS,
     SPEAKER_MODEL,
     ClaudeSpeakerIdentificationClient,
 )
@@ -44,7 +45,7 @@ def test_request_uses_fixed_haiku_and_no_email_ids_or_frontmatter():
     result = adapter.identify(request())
     kwargs = sdk.messages.create.call_args.kwargs
     assert kwargs["model"] == SPEAKER_MODEL == "claude-haiku-5-5"
-    assert kwargs["max_tokens"] == 4096
+    assert kwargs["max_tokens"] == SPEAKER_MAX_TOKENS == 8192
     payload = json.loads(kwargs["messages"][0]["content"])
     assert payload == {
         "known_people": [{"name": "Alex", "description": "Launch planning"}],

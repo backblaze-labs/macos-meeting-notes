@@ -444,7 +444,10 @@ Partial proposals leave unresolved speakers for manual selection. Prepared
 reviews, including empty or failed proposals, are cached only for the app
 session. Canceling and reopening the same review reuses that result. Changed
 transcript text or participants invalidate it; a restart also clears the cache.
-The app does not display a numerical speaker identity-confidence score.
+The app does not display a numerical speaker identity-confidence score. Identification allows up
+to 8,192 response tokens, including model reasoning. A response that reaches
+that limit is rejected and leaves manual review available; no automatic retry
+is made.
 
 Build the local people base in **Configuration › Known Speakers...**, available
 independently of Calendar setup:
