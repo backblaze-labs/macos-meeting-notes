@@ -121,7 +121,11 @@ class Settings(BaseSettings):
             return (value,)
         if isinstance(value, Mapping):
             return cls._dedupe_known_speakers(
-                KnownSpeaker(str(name), cls._known_speaker_matches(matches))
+                KnownSpeaker(
+                    str(name),
+                    cls._known_speaker_matches(matches),
+                    matches.get("description", "") if isinstance(matches, Mapping) else "",
+                )
                 for name, matches in value.items()
             )
         if isinstance(value, Iterable) and not isinstance(value, (bytes, str)):
@@ -142,7 +146,9 @@ class Settings(BaseSettings):
             if name is None:
                 raise ValueError("known speaker objects must include a name")
             matches = value.get("matches", value.get("aliases", value.get("emails", ())))
-            return KnownSpeaker(str(name), cls._known_speaker_matches(matches))
+            return KnownSpeaker(
+                str(name), cls._known_speaker_matches(matches), value.get("description", "")
+            )
         display, matches = cls._split_legacy_known_speaker(str(value))
         return KnownSpeaker(display, matches) if display else None
 

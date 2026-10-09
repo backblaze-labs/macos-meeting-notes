@@ -164,9 +164,20 @@ Pass criteria after stopping recording:
 
 ## 6. Speaker Review
 
-1. Open the tray speaker-review flow.
-2. Assign every detected speaker a name and choose **Confirm Names**, or choose
-   **Keep Speaker Labels** when the names are unknown.
+1. In **Configuration › Calendar...**, save known-speaker canonical names,
+   Calendar match aliases/emails, and optional role/topics descriptions, then
+   restart. Configure Notes with the existing Anthropic key if it is not enabled.
+2. Use a Calendar-backed transcript whose candidates all match the roster and
+   whose speakers introduce themselves or discuss recognizable work. Open
+   **Review Speakers** (or **Correct Speakers** for a kept-label transcript).
+3. Confirm that the preparation notification appears, the review says
+   **Suggested by Claude Haiku**, and each proposed name has a supporting quote.
+   Choose **Cancel** and verify that the transcript aliases/status and Notes did
+   not change. Reopen the review and verify each proposed or manual name.
+4. Choose **Confirm Names**, or choose **Keep Speaker Labels** for unknown names.
+5. Repeat with an unknown attendee or with Notes paused. Review must remain
+   manual, without preselected inferred names. A provider failure must likewise
+   leave manual controls available with a clear fallback message.
 
 Pass criteria:
 
@@ -404,8 +415,10 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
   notarization, stapling, and clean-user evidence pass.
 - Recording requires an explicit user start; fully automatic recording is out of
   scope.
-- Speaker names are not inferred automatically; Calendar attendee candidates
-  are hints, and aliases are confirmed manually.
+- Claude Haiku name proposals use only known Calendar candidates and local
+  role/topics context. Insufficient or ambiguous evidence remains manual, and
+  inferred names always require user confirmation. No numerical identity
+  confidence score is available.
 - Calendar watching uses all accessible calendars unless `GOOGLE_CALENDAR_ID`
   is set to a specific calendar ID.
 - Failed work is retryable from the tray, but retries are not yet automatically

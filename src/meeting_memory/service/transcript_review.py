@@ -13,6 +13,7 @@ from meeting_memory.service.frontmatter import dump_frontmatter, split_frontmatt
 from meeting_memory.service.markdown import render_notes_markdown
 from meeting_memory.service.meeting_state import MeetingStateStore
 from meeting_memory.service.ownership import classify_ownership
+from meeting_memory.service.speaker_excerpt import speaker_excerpt
 from meeting_memory.service.speaker_state import confirm_v2_speakers, reviewed_speaker_names
 from meeting_memory.service.storage import (
     NOTES_MARKDOWN,
@@ -42,9 +43,9 @@ def resolve_transcript_path(path: Path) -> Path:
     candidate = path.expanduser()
     if candidate.is_dir():
         candidate = candidate / TRANSCRIPT_MARKDOWN
-    if not candidate.exists():
-        raise FileNotFoundError(f"transcript not found: {candidate}")
-    return candidate
+    if candidate.exists():
+        return candidate
+    raise FileNotFoundError(f"transcript not found: {candidate}")
 
 
 def load_speaker_review(path: Path) -> SpeakerReviewState:
@@ -59,6 +60,8 @@ def load_speaker_review(path: Path) -> SpeakerReviewState:
         speaker_aliases=_optional_aliases(frontmatter.get("speaker_aliases")),
         speaker_status=str(frontmatter.get("speaker_status") or "needs_review"),
         speaker_longest_lines=_speaker_longest_lines(body),
+        assemblyai_id=str(frontmatter.get("assemblyai_id") or "") or None,
+        speaker_utterances=speaker_excerpt(body),
     )
 
 
@@ -232,8 +235,7 @@ def _speaker_labels(frontmatter: dict[str, object], body: str) -> tuple[str, ...
 def _speaker_longest_lines(body: str) -> dict[str, str]:
     longest: dict[str, str] = {}
     for match in TRANSCRIPT_LINE_RE.finditer(body):
-        label = match.group("label").strip()
-        text = match.group("text").strip()
+        label, text = match.group("label").strip(), match.group("text").strip()
         if label and text and len(text) > len(longest.get(label, "")):
             longest[label] = text
     return longest

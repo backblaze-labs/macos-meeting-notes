@@ -249,7 +249,7 @@ Notes profile and its general guidance are a separate private file at
 repository prompt is only the versioned built-in fallback and is never the
 destination of an app-managed edit. The profile declares ordered section IDs,
 titles, audience, Markdown format, section guidance, metadata choices, and
-non-secret reusable fields. Anthropic receives the general guidance, exact
+non-secret reusable fields. For Notes generation, Anthropic receives the general guidance, exact
 section contract, and speaker-confirmed transcript; it never receives the
 local report wrapper or private storage markers.
 `repo/secret_store.py` writes provider payloads under immutable generated
@@ -338,3 +338,17 @@ Environment. It verifies every nested signature and Team ID, inspects the
 accepted Apple notarization log, staples and re-verifies each thin app, and
 publishes ZIPs plus SHA-256 files only after both architectures pass. The
 workflow definition does not imply that owner credentials or approval exist.
+
+## Speaker Suggestion Review
+
+`repo/claude_speaker_identification.py` uses the existing Anthropic key with a
+fixed Claude Haiku model. `service/speaker_excerpt.py` extracts bounded whole
+utterances without transcript frontmatter. `service/speaker_suggestions.py`
+gates requests on the local known-person roster, validates exact same-speaker
+evidence, and caches proposals only for the session. The roster reuses the
+private `KNOWN_SPEAKERS` preference with optional descriptions; matching
+aliases/emails remain local. `ui/speaker_review_flow.py` prepares review on a
+worker and delivers a typed `SpeakerReviewReady` event to the main-thread
+selector, which re-reads local state before presenting. Only the existing
+confirmation transaction rewrites labels and permits Notes. Notes pause also
+applies to suggestions and cached proposals.

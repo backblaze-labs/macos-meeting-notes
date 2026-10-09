@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+from meeting_memory.types.speakers import SpeakerUtterance
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,11 @@ class SpeakerReviewState:
     speaker_aliases: dict[str, str]
     speaker_status: str
     speaker_longest_lines: dict[str, str]
+    assemblyai_id: str | None = None
+    speaker_suggestions: dict[str, str] = field(default_factory=dict)
+    suggestion_message: str = ""
+    speaker_evidence: dict[str, str] = field(default_factory=dict)
+    speaker_utterances: tuple[SpeakerUtterance, ...] = ()
 
 
 def format_timestamp(seconds: float) -> str:

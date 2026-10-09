@@ -280,10 +280,11 @@ its configured section IDs in the configured order.
 
 **REQ-EXT-11** If the Claude API call fails or times out, the application MUST leave `transcript.md` untouched and write a failed/skipped derived-notes state without blocking transcript completion.
 
-**REQ-EXT-12** Each Anthropic request MUST contain the fixed output-schema
+**REQ-EXT-12** Each Anthropic Notes-generation request MUST contain the fixed output-schema
 instructions, the configured editable instruction block, and only
 speaker-confirmed transcript text. It MUST NOT include the local Markdown
-layout or more than the first 60,000 transcript characters.
+layout or more than the first 60,000 transcript characters. Speaker-identification
+requests instead follow the fixed Haiku input/output contract in REQ-F4-04.
 
 ### 3.4 Backblaze B2 (S3-Compatible API)
 
@@ -435,11 +436,30 @@ completion.
 
 **REQ-F4-03** Transcript segments MUST be formatted as `**<Speaker Label>** (<HH:MM:SS>): <text>` in `transcript.md`.
 
-**REQ-F4-04** Speaker labels returned by AssemblyAI (e.g. "Speaker A", "Speaker B") MUST be preserved until the user either confirms local `speaker_aliases` or explicitly confirms that the detected labels should be kept. Keeping labels MUST leave `speaker_aliases` empty, set `speaker_status` to `confirmed`, and MUST NOT prevent Notes generation. The application MUST NOT infer real attendee names automatically.
+**REQ-F4-04** Speaker labels returned by AssemblyAI (e.g. "Speaker A", "Speaker B") MUST be preserved until the user either confirms local `speaker_aliases` or explicitly confirms that the detected labels should be kept. Keeping labels MUST leave `speaker_aliases` empty, set `speaker_status` to `confirmed`, and MUST NOT prevent Notes generation. The application MAY fetch unconfirmed Claude Haiku name suggestions in a
+background worker when the user opens Review Speakers or Correct Speakers,
+but MUST NOT apply them or start Notes without explicit user confirmation.
+The request MUST reuse the Notes Anthropic key and honor its current-session
+pause. It MUST include only diarized local transcript text (at most 60,000
+characters, at a whole-utterance boundary), relevant candidate names, and local
+known-person descriptions. Calendar matching aliases/emails and frontmatter metadata (including local
+paths, meeting dates, and provider transcript IDs) MUST NOT be sent for identification.
+Every candidate MUST match a canonical name in configured `KNOWN_SPEAKERS`;
+unknown candidates or an empty roster MUST leave review manual. Suggestions
+MUST accept only supplied labels and exact candidate names with an exact
+evidence quote spoken by that label, reject ambiguous duplicate assignments,
+and preserve existing manual selections. Missing or invalid proposals, paused
+Notes, and provider failures MUST leave manual review available. ASR confidence
+MUST NOT be presented as speaker identity confidence. Successful proposals MAY
+be cached only in memory, bound to transcript text, labels, candidates, review
+status/aliases, provider ID for local invalidation, and relevant roster context.
+The fixed identification model MUST be `claude-haiku-5-5`, independently of
+the configured Notes summary model.
 
 **REQ-F4-05** After AssemblyAI creates a transcript job, the application MUST record its ID in the meeting's YAML frontmatter (`assemblyai_id` field) for future retrieval. Before then the field MUST remain `null`, never a failure sentinel.
 
-**REQ-F4-06** Google Calendar attendees MAY populate `speaker_candidates`. Candidates SHOULD use the attendee's Calendar full name, except aliases explicitly configured in `KNOWN_SPEAKERS`. These candidates are hints for manual review, not automatic speaker identification.
+**REQ-F4-06** Google Calendar attendees MAY populate `speaker_candidates`. Candidates SHOULD use the attendee's Calendar full name, except aliases explicitly configured in `KNOWN_SPEAKERS`. These candidates are hints for review and MAY be sent for unconfirmed Speaker
+Identification suggestions under REQ-F4-04.
 
 **REQ-F4-07** `meeting-memory relabel <meeting-folder>` MUST apply `speaker_aliases` from `transcript.md` deterministically by code, without using an LLM or re-transcribing audio.
 
@@ -1186,7 +1206,7 @@ explicitly. No reachable native UI action writes `.env`.
 | `ANTHROPIC_API_KEY` | Notes | — | Claude key for the `summarize` command |
 | `ANTHROPIC_MODEL` | Notes | `claude-sonnet-5` | Summarization model override (OQ-5) |
 | `SUMMARY_PROMPT_FILE` | Notes | `~/Library/Application Support/meeting-memory/prompts/summary.md` | Personal Notes instructions plus local Markdown layout; editable from **Configuration › Notes Customization...**. An explicit process or legacy override may select another path. |
-| `KNOWN_SPEAKERS` | Calendar | `{}` | Optional JSON object mapping speaker display names to Calendar attendee match hints; app-managed values live in the private Application Support preference document. |
+| `KNOWN_SPEAKERS` | Calendar | `{}` | Optional JSON roster of speaker names, Calendar match aliases/emails, and a 300-character role/topics description; app-managed values live in the private Application Support preference document. |
 | `GOOGLE_CALENDAR_CREDENTIALS_FILE` | Calendar | `credentials.json` | Path to OAuth client secrets |
 | `GOOGLE_CALENDAR_ID` | Calendar | `all` | Calendar scope to watch: `all`, `primary`, or a specific calendar ID |
 | `MEETINGS_DIR` | Recording Core | `~/Meetings` | Local directory for meeting files |
@@ -1206,7 +1226,9 @@ explicitly. No reachable native UI action writes `.env`.
 
 **C4** Meetings that are not tracked in Google Calendar (ad-hoc calls, manual sessions) can still be recorded manually via the tray menu. The UI prompts for a title when no nearby calendar context exists; `"Untitled"` is the fallback.
 
-**C5** The application does not infer speaker names. It suggests known Calendar attendees and applies user-confirmed `speaker_aliases` from `transcript.md` with deterministic local code.
+**C5** The application may propose speaker names from Claude Haiku when opening
+review for configured known Calendar attendees. It applies only user-confirmed
+`speaker_aliases` from `transcript.md` with deterministic local code.
 
 **C6** Internet connectivity is required only while an enabled remote capability performs network work. Recording itself works offline. Failed B2 uploads can be retried with **Retry Pending B2 Backups**; failed transcription states can be retried with **Retry Failed Transcriptions**.
 

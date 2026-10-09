@@ -68,6 +68,8 @@ def known_speakers_text(settings: Settings) -> str:
 
 
 def render_known_speakers(speakers: tuple[KnownSpeaker, ...]) -> str:
+    if any(speaker.description for speaker in speakers):
+        return known_speakers_env_value(speakers)
     lines: list[str] = []
     for speaker in speakers:
         if speaker.matches:
@@ -95,7 +97,12 @@ def parse_known_speakers_text(text: str) -> tuple[KnownSpeaker, ...]:
 
 def known_speakers_env_value(speakers: tuple[KnownSpeaker, ...]) -> str:
     return json.dumps(
-        {speaker.name: list(speaker.matches) for speaker in speakers},
+        {
+            speaker.name: {"matches": list(speaker.matches), "description": speaker.description}
+            if speaker.description
+            else list(speaker.matches)
+            for speaker in speakers
+        },
         separators=(",", ":"),
     )
 

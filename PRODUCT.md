@@ -53,7 +53,10 @@ that competes with the user's meeting.
   icon opens a normal menu with Start Recording, and Calendar reveals the
   panel for an upcoming meeting while the status-bar timer keeps recording
   state visible after the panel hides.
-- Keep manual speaker review the default. Automatic Notes from Calendar
+- Keep user-confirmed speaker review the default. When all Calendar attendees
+  match the configured known-speaker roster, opening review offers Claude Haiku
+  name suggestions for the user to verify. Unknown or ambiguous assignments
+  remain manual. Automatic Notes from Calendar
   attendees is an explicit opt-in that names its tradeoff before it is
   enabled and never locks the user out of correcting a transcript later.
 - Preserve user control over private data, speaker identity, and AI behavior.

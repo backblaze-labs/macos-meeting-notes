@@ -65,6 +65,7 @@ class TrayController:
     backup_runner: Callable[[Path], None] = field(default_factory=lambda: lambda _p: None)
     processing_retry_runner: Callable[[], object] | None = None
     notes_generator: Callable[[Path], Path] | None = None
+    speaker_review_loader: Callable[[Path], SpeakerReviewState] | None = None
     notes_allowed: Callable[[], bool] = field(default_factory=lambda: lambda: True)
     legacy_recovery: LegacyRecoveryRuntime | None = None
     thread_factory: ThreadFactory = threading.Thread
@@ -134,8 +135,7 @@ class TrayController:
 
     def _recording_stopped(self, result: RecordingResult) -> None:
         self._recording_token = None
-        # This callback may run off the UI thread. Ask the tray to hide the
-        # meeting panel only after capture has actually stopped.
+        # Ask the tray to hide the panel after capture stops, even on a worker thread.
         self.event_queue.put(SidebarHideRequested())
         if warning := completed_capture_warning(result.meta.capture_diagnostics):
             self.event_queue.put(warning)
@@ -209,7 +209,7 @@ class TrayController:
         return list_correctable_speaker_reviews(self.settings.meetings_dir_path)
 
     def load_speaker_review(self, path: Path) -> SpeakerReviewState:
-        return load_speaker_review(path)
+        return (self.speaker_review_loader or load_speaker_review)(path)
 
     def keep_speaker_labels(self, path: Path) -> Path:
         return self.confirm_speaker_aliases(path, {}, keep_labels=True)

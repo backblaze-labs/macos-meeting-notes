@@ -10,6 +10,7 @@ from meeting_memory.types.capabilities import ReadinessReport
 from meeting_memory.types.configuration_editing import ConfigurationOperationId
 from meeting_memory.types.meeting import MeetingMeta, MeetingRef
 from meeting_memory.types.recovery import RecoveryIndexEntry
+from meeting_memory.types.transcript import SpeakerReviewState
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,14 @@ class TranscriptReady:
     """A committed meeting now has a successful transcript."""
 
     meeting: MeetingRef
+
+
+@dataclass(frozen=True)
+class SpeakerReviewReady:
+    """A background review read and optional suggestion request completed."""
+
+    state: SpeakerReviewState
+    requested_path: Path | None = None
 
 
 @dataclass(frozen=True)

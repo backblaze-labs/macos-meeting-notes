@@ -205,7 +205,8 @@ def _alert(
 def _review_message(state: SpeakerReviewState) -> str:
     candidates = ", ".join(state.speaker_candidates) or "No candidates found"
     speakers = ", ".join(_display_label(label) for label in state.speaker_labels)
-    return f"Detected speakers: {speakers}\nCandidates: {candidates}"
+    message = f"Detected speakers: {speakers}\nCandidates: {candidates}"
+    return f"{message}\n{state.suggestion_message}" if state.suggestion_message else message
 
 
 def _options_for(state: SpeakerReviewState, label: str) -> list[str]:
@@ -218,7 +219,7 @@ def _options_for(state: SpeakerReviewState, label: str) -> list[str]:
 
 
 def _selected_option(state: SpeakerReviewState, label: str, options: list[str]) -> str:
-    alias = state.speaker_aliases.get(label, "")
+    alias = state.speaker_aliases.get(label) or state.speaker_suggestions.get(label, "")
     return alias if alias in options else MANUAL_OPTION
 
 
@@ -252,6 +253,9 @@ def _aliases_from_rows(rows: list[tuple[str, Any, Any]]) -> dict[str, str]:
 
 
 def _speaker_hint(state: SpeakerReviewState, label: str) -> str:
+    evidence = state.speaker_evidence.get(label)
+    if evidence and not state.speaker_aliases.get(label):
+        return f"Suggested name evidence: {_truncate(evidence, 155)}"
     text = state.speaker_longest_lines.get(label, "")
     if not text:
         return "Longest line unavailable"
@@ -265,16 +269,14 @@ def _truncate(text: str, limit: int) -> str:
 
 
 def _alias_text(state: SpeakerReviewState) -> str:
-    lines = []
-    for label in state.speaker_labels:
-        lines.append(f"{label}={state.speaker_aliases.get(label, '')}")
-    return "\n".join(lines)
+    return "\n".join(
+        f"{label}={state.speaker_aliases.get(label) or state.speaker_suggestions.get(label, '')}"
+        for label in state.speaker_labels
+    )
 
 
 def _display_label(label: str) -> str:
-    if re.fullmatch(r"[A-Z]+", label):
-        return f"Speaker {label}"
-    return label
+    return f"Speaker {label}" if re.fullmatch(r"[A-Z]+", label) else label
 
 
 def _parse_alias_text(text: str) -> dict[str, str]:
