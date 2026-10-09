@@ -149,7 +149,14 @@ def test_app_launch_never_uploads_the_backup_backlog(tmp_path: Path, monkeypatch
     class Tray:
         controller = None
 
-        def __init__(self, controller, *, readiness_report, configuration_surface=None) -> None:
+        def __init__(
+            self,
+            controller,
+            *,
+            readiness_report,
+            configuration_surface=None,
+            speaker_knowledge=None,
+        ) -> None:
             type(self).controller = controller
 
         def run(self) -> None:

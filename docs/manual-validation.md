@@ -196,6 +196,34 @@ Pass criteria:
 For CLI backfill, edit `speaker_aliases` in `transcript.md` and run
 `meeting-memory relabel <meeting-folder>`.
 
+### Build the Local People Base
+
+1. Start with an empty people base and an owned transcript with confirmed named
+   aliases. Verify the one-time **Create my people base** offer appears and opens
+   a local history draft. A fresh installation with no named history must not
+   open an empty onboarding modal.
+2. Use **Configuration › Known Speakers...** independently of Calendar Save,
+   including in setup. Verify **Edit Current Base** and explicit **Create from
+   Previous Meetings** are available when named history exists. Check the
+   disclosed included/scanned counts and exclusion of kept anonymous labels.
+3. Edit names, exact known Calendar matches, and descriptions. A long roster must
+   scroll from its first row without dropping entries. Duplicate/case-only names
+   must prompt correction. Cancel leaves preferences and meeting artifacts intact.
+4. Choose **Save Locally** with Notes unconfigured/paused: no provider request
+   occurs. Restart and verify the saved roster. Delete a person through ordinary
+   editing and reopen; it must stay deleted until explicit history import.
+5. Explicitly choose **Suggest Topics** with synthetic data. Verify the disclosure
+   precedes the request, only supplied names and their own bounded quotes are
+   sent, and the returned descriptions can be edited before Save. Provider
+   failure retains the draft. Never use private history for this validation
+   without separate authorization.
+6. Confirm a new manually named speaker. Verify Notes starts before the addition
+   offer and dismissing it prevents the same-name offer on later meetings. A
+   failed Notes start must not suppress the local people-base offer.
+7. Save a concurrent Calendar edit while a people draft is open. Saving the stale
+   draft must report a conflict; it must not overwrite Calendar settings or
+   credentials or pause Notes already started.
+
 ## 7. Summarization
 
 With `ANTHROPIC_API_KEY` set:

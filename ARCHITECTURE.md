@@ -367,3 +367,34 @@ Notes send the reviewed body without a Calendar prefix. A fixed identity
 contract in `config/defaults.py` prevents the configured Notes model from
 reinferring anonymous identities; explicitly named task recipients remain
 allowed. The former automatic Notes mode and its UI preference are retired.
+
+## Known Speakers Onboarding
+
+`service/speaker_history.py` reads bounded, owned confirmed transcript records
+through no-follow descriptors. It takes exact alias names and only their own
+utterances; kept labels and unconfirmed records supply no identities. The latest
+200 folders supply at most 20 named meetings. Per-person excerpt allocation
+prevents earlier speakers from consuming the entire 60,000-character budget.
+`types/speaker_knowledge.py` carries local drafts, person excerpts, topic proposals,
+and sanitized UI events. `repo/claude_speaker_topics.py` performs only the explicit
+Haiku request; the service checks unique names, description bounds, and exact
+same-person quote evidence before presenting editable topics.
+
+`service/speaker_knowledge.py` binds each draft to an atomic preference snapshot.
+Ordinary editing uses the stored roster, including an explicitly empty list;
+importing confirmed history is a separate action. Save replaces only
+`KNOWN_SPEAKERS` using the existing preference-store CAS and preserves all other
+settings and credential references. A competing Calendar or configuration save
+produces a conflict. Runtime composition remains immutable until restart, while
+an already-started Notes job is unaffected by a roster save.
+
+`ui/speaker_knowledge.py` owns native main-thread forms and launches local I/O and
+optional topic work on workers. The runtime and setup menus expose the same entry;
+setup composes a local names-only service on explicit use. Startup offers only
+when an empty roster has confirmed names; post-review offers follow the Notes
+start attempt. `speaker-onboarding.json`, stored privately beside app preferences,
+atomically records offer suppression using hashes of exact names. Offer-only
+failures are sanitized and do not alter an open edit or show startup modals.
+The native roster form scrolls without dropping entries and starts at the first
+row. `service/runtime_retry_sweeps.py` contains the existing explicit runtime
+retry composition, extracted to keep the entrypoint within the source size limit.

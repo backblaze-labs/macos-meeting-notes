@@ -60,6 +60,7 @@ from meeting_memory.ui.sidebar_view_model import (
     build_view_model,
     recording_view_for,
 )
+from meeting_memory.ui.speaker_knowledge import SpeakerKnowledgeUI
 from meeting_memory.ui.speaker_review_flow import SpeakerReviewFlow
 from meeting_memory.ui.status_menu import (
     StatusMenuItems,
@@ -82,6 +83,7 @@ class RumpsTrayApp:
         configuration_surface: ConfigurationSurfaceCoordinator | None = None,
         sidebar_panel_factory: Any = None,
         screenshot_store: ScreenshotStore | None = None,
+        speaker_knowledge=None,
     ) -> None:
         self.rumps = rumps_module or load_rumps()
         self.controller = controller
@@ -103,7 +105,10 @@ class RumpsTrayApp:
         )
         self.timer = self.rumps.Timer(self.drain_events, 1)
         self.screenshots = ScreenshotActions(controller, screenshot_store)
-        self.speaker_review = SpeakerReviewFlow(controller, self.rumps, self.refresh_sidebar)
+        self.people_base = SpeakerKnowledgeUI(controller, self.rumps, service=speaker_knowledge)
+        self.speaker_review = SpeakerReviewFlow(
+            controller, self.rumps, self.refresh_sidebar, after_review=self.people_base.after_review
+        )
         self.screenshot_hotkey = None if rumps_module else GlobalHotkey(self.take_screenshot)
         self.sidebar = SidebarWiring(
             rumps_module,
@@ -135,6 +140,7 @@ class RumpsTrayApp:
         if self.screenshot_hotkey is not None:
             self.screenshot_hotkey.install()
         self.timer.start()
+        self.people_base.startup()
         # The setup tray and the right-click menu still track menus.
         keep_timer_running_during_menu_tracking(self.timer, LOGGER)
         self.app.run()
@@ -146,7 +152,9 @@ class RumpsTrayApp:
             self.controller,
             readiness_report=self.readiness_report,
             audio_mode_menu=self.audio_mode_menu,
-            configuration_actions=configuration_surface_actions(self.configuration_ui),
+            configuration_actions=configuration_surface_actions(
+                self.configuration_ui, known_speakers=self.people_base.open
+            ),
             debugging_actions=DebuggingActions(
                 review_speakers=self.open_speaker_review,
                 generate_notes=self.controller.generate_notes,
@@ -223,6 +231,8 @@ class RumpsTrayApp:
             items.recording.title = recording_label
 
     def handle_event(self, event: object) -> None:
+        if self.people_base.handle_event(event):
+            return
         if self.configuration_ui.handle_event(event):
             return
         if self.speaker_review.handle_event(event):

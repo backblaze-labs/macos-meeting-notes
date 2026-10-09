@@ -459,3 +459,24 @@ confirmation, and numerical identity-confidence thresholds remain outside
 this slice. First check `ui/speaker_review_flow.py`,
 `service/speaker_suggestions.py`, the native Known Speakers editor, and its
 private preference JSON before expanding automation or context.
+
+
+## 2026-10-09 Known Speakers Onboarding
+
+The standalone Configuration entry now offers an editable local base from
+confirmed named transcripts and names-only editing during setup. Startup offers
+only when an empty base has confirmed history; new names can trigger an offer
+after the Notes start attempt. Private atomic suppression prevents repeated
+same-name offers. Import is explicit and bounded to 20 named meetings within
+200 folders; ordinary edits do not resurrect removed historical people.
+
+Optional Suggest Topics uses fixed Haiku 5.5 low with the existing Notes key and
+pause, only after disclosure and an explicit action. It sends confirmed names
+and bounded same-person quotes, validates exact quote evidence, and leaves all
+descriptions editable. A provider failure retains the usable local draft.
+Narrow preference CAS saves only KNOWN_SPEAKERS; runtime changes require restart.
+No inferred identity, fuzzy person merge, or guessed Calendar alias is added.
+
+A separate KB service and voice enrollment remain outside this slice. First
+check service/speaker_history.py, service/speaker_knowledge.py, and the native
+Known Speakers entry before changing history limits or roster activation.

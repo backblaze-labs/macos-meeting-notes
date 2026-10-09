@@ -20,7 +20,9 @@ class Tray:
     controller = None
     ran = False
 
-    def __init__(self, controller, *, readiness_report, configuration_surface=None) -> None:
+    def __init__(
+        self, controller, *, readiness_report, configuration_surface=None, speaker_knowledge=None
+    ) -> None:
         assert readiness_report is None
         self.__class__.controller = controller
         self.__class__.configuration_surface = configuration_surface
@@ -257,44 +259,3 @@ def test_unavailable_required_backup_routes_composed_configuration_to_setup(
     assert runtime_app.run_runtime_app() == 0
     assert setup.ran is True
     assert calls == []
-
-
-def test_explicit_retry_actions_combine_v2_and_isolated_legacy_scanners(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    settings = RuntimeSettings(meetings_dir=tmp_path / "meetings")
-    calls: list[str] = []
-    jobs = SimpleNamespace(transcription_enabled=True, backup_enabled=True)
-    transcription = object()
-    backup = object()
-    monkeypatch.setattr(
-        runtime_app,
-        "retry_v2_transcriptions",
-        lambda meetings, runtime_jobs: calls.append("v2-transcription"),
-    )
-    monkeypatch.setattr(
-        runtime_app,
-        "retry_failed_processing",
-        lambda meetings, client, **_kwargs: calls.append("legacy-transcription"),
-    )
-    monkeypatch.setattr(
-        runtime_app,
-        "retry_v2_backups",
-        lambda meetings, runtime_jobs: calls.append("v2-backup"),
-    )
-    monkeypatch.setattr(
-        runtime_app,
-        "sync_pending_meetings",
-        lambda meetings, client, **_kwargs: calls.append("legacy-backup"),
-    )
-
-    runtime_app._retry_transcriptions(settings, jobs, transcription)
-    runtime_app._retry_backups(settings, jobs, backup)
-
-    assert calls == [
-        "v2-transcription",
-        "legacy-transcription",
-        "v2-backup",
-        "legacy-backup",
-    ]

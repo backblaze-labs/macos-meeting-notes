@@ -63,7 +63,11 @@ prepared state; historical review actions prepare on demand.
 - Google Calendar attendees populate `speaker_candidates`. Attendees are shown
   by Calendar full name, except aliases explicitly configured in
   `KNOWN_SPEAKERS` through the tray's **Configuration › Calendar...**
-  editor. The local roster also stores an optional 300-character role/topics
+  editor. The standalone **Configuration › Known Speakers...** entry can build
+  an editable local base from existing confirmed names and optionally suggest
+  usual topics through an explicit Haiku action. A one-time offer also follows
+  newly confirmed names after Notes starts. The local roster stores an optional
+  300-character role/topics
   description. When preparing review and every candidate matches the roster, a
   background Claude Haiku request sends a diarized local transcript excerpt (at most 60,000 characters), canonical
   candidate names, and relevant descriptions. It reuses the Notes key and

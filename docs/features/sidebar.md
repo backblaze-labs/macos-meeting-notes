@@ -17,7 +17,7 @@ configured) keeps its plain dropdown menu and is not affected.
 
 | Gesture | Result |
 |---|---|
-| Click the menu bar icon (either button) | The app menu: Start/Stop Recording, Show/Hide Sidebar, Recent Meetings, Open Meetings Folder, Configuration (audio mode, capability forms, notes customization, calendar auth, legacy import, hide-while-recording), Debugging (pending tasks, speaker corrections, readiness, interrupted recordings, retries, diagnostics), Quit. The panel starts hidden on every launch. |
+| Click the menu bar icon (either button) | The app menu: Start/Stop Recording, Show/Hide Sidebar, Recent Meetings, Open Meetings Folder, Configuration (audio mode, capability forms, notes customization, calendar auth, legacy import, Known Speakers, hide-while-recording), Debugging (pending tasks, speaker corrections, readiness, interrupted recordings, retries, diagnostics), Quit. The panel starts hidden on every launch. |
 | Status bar while recording | `● mm:ss` beside the icon (`⚠︎ mm:ss` on an audio warning), so a hidden panel never hides the fact that a recording is running. |
 | Click the record button | Start or stop recording. Idle: teal `record.circle`. Recording: red `stop.circle.fill` plus a small `mm:ss` timer; orange when the audio-health monitor is warning. |
 | Click the camera button, or press **⌥⇧S** anywhere | Take a screenshot for the active recording (`docs/features/screenshots.md`). |

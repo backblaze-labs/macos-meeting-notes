@@ -25,7 +25,6 @@ from meeting_memory.service.configuration_loader import (
 from meeting_memory.service.configuration_surface import ConfigurationSurfaceCoordinator
 from meeting_memory.service.local_commit import LocalRecordingCommitter
 from meeting_memory.service.meeting_store import MeetingStore
-from meeting_memory.service.processing_retry import retry_failed_processing
 from meeting_memory.service.recorder import RecorderService
 from meeting_memory.service.runtime_capabilities import RuntimeCapabilityPause
 from meeting_memory.service.runtime_jobs import RuntimeJobs
@@ -33,11 +32,10 @@ from meeting_memory.service.runtime_legacy_recovery import LegacyRecoveryRuntime
 from meeting_memory.service.runtime_notes import generate_owned_notes
 from meeting_memory.service.runtime_retry import (
     retry_v2_backup,
-    retry_v2_backups,
-    retry_v2_transcriptions,
 )
+from meeting_memory.service.runtime_retry_sweeps import _retry_backups, _retry_transcriptions
+from meeting_memory.service.speaker_knowledge_composition import speaker_knowledge_service
 from meeting_memory.service.speaker_suggestions_composition import speaker_review_loader
-from meeting_memory.service.sync import sync_pending_meetings
 from meeting_memory.types.capabilities import Capability
 from meeting_memory.types.configuration_resolution import ConfigurationUse
 from meeting_memory.types.meeting import PostCommitPolicy
@@ -159,6 +157,9 @@ def run_runtime_app() -> int:
         controller,
         readiness_report=None,
         configuration_surface=configuration_surface,
+        speaker_knowledge=speaker_knowledge_service(
+            configuration, enabled=lambda: runtime_capabilities.allows(Capability.NOTES)
+        ),
     ).run()
     return 0
 
@@ -267,31 +268,6 @@ def _legacy_recovery_marker(settings: RuntimeSettings):
         / "legacy-recovery"
         / "legacy-recovery-scan.json"
     )
-
-
-def _retry_transcriptions(settings, jobs, client) -> None:
-    if client is None or not jobs.transcription_enabled:
-        return
-    retry_v2_transcriptions(settings.meetings_dir_path, jobs)
-    if jobs.transcription_enabled:
-        retry_failed_processing(
-            settings.meetings_dir_path,
-            client,
-            enabled=lambda: jobs.transcription_enabled,
-        )
-
-
-def _retry_backups(settings, jobs, client) -> None:
-    if client is None or not jobs.backup_enabled:
-        return
-    try:
-        retry_v2_backups(settings.meetings_dir_path, jobs)
-        if jobs.backup_enabled:
-            sync_pending_meetings(
-                settings.meetings_dir_path, client, enabled=lambda: jobs.backup_enabled
-            )
-    except Exception:
-        LOGGER.warning("Pending Backup sweep failed", exc_info=True)
 
 
 def _run_setup_app() -> int:
