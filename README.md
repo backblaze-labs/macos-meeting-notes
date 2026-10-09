@@ -19,8 +19,7 @@ The app is local-first: each completed recording creates a directory under
 
 - `recording.m4a`
 - `transcript.md`
-- `notes.md` after you review speakers, or right after transcription when the
-  optional automatic Notes mode is on
+- `notes.md` after you confirm speaker names or explicitly keep the detected labels
 - `screenshot-*.png` (or a `screenshots/` folder) when you captured the screen
   during the recording
 
@@ -424,10 +423,13 @@ speaker_aliases: {"Speaker A": "Alex", "Speaker B": "Ada Lovelace"}
 speaker_status: "needs_review"
 ```
 
-By default the app asks you to review speakers after each transcription.
-Opening **Review Speakers** or **Correct Speakers** prepares name suggestions
-in a background worker when every Calendar candidate matches the local
-`KNOWN_SPEAKERS` roster. Claude Haiku receives only a diarized local transcript
+After each transcription, the app prepares speaker review in a background
+worker before sending the **Transcript ready** notification. When every
+Calendar candidate matches the local `KNOWN_SPEAKERS` roster, it prepares
+unconfirmed name suggestions. Clicking **Review Speakers** opens that prepared
+review, including a manual fallback when no proposals were accepted, without
+another API request. Historical **Debugging** review actions prepare review
+on demand. Claude Haiku receives only a diarized local transcript
 excerpt (at most 60,000 characters, ending at a complete utterance), relevant
 canonical attendee names, and their optional role/topics descriptions. The app
 reuses the existing Anthropic key; the Notes pause also pauses suggestions.
@@ -437,9 +439,10 @@ The review preselects proposals and shows an exact supporting quote from that
 speaker. Verify each name before choosing **Confirm Names**. Cancel leaves
 meeting files unchanged. Unknown attendees, insufficient evidence, ambiguous
 assignments, paused Notes, or provider failures keep manual review available.
-Partial proposals leave unresolved speakers for manual selection. Successful
-proposals are cached only for the app session; changed transcript text or
-participants invalidate them. Reopen review to retry an unsuccessful request.
+Partial proposals leave unresolved speakers for manual selection. Prepared
+reviews, including empty or failed proposals, are cached only for the app
+session. Canceling and reopening the same review reuses that result. Changed
+transcript text or participants invalidate it; a restart also clears the cache.
 The app does not display a numerical speaker identity-confidence score.
 
 Edit the local roster in **Configuration › Calendar...**: each person has a
@@ -453,16 +456,14 @@ Labels** when you do not know them. Both choices mark the review as confirmed
 and start notes generation; keeping labels leaves `speaker_aliases` empty and
 preserves names such as `Speaker A`.
 
-**Configuration › Automatic Notes from Calendar attendees** is an optional
-mode, off by default. When on, the app skips the review, keeps the diarized
-labels, hands the attendee list to the summarizer ahead of the transcript,
-and generates `notes.md` right away. It does not assign names in the
-transcript, and Notes can still attribute a statement to the wrong person;
-turning it on asks you to accept that tradeoff. A meeting handled this way is
-listed under **Debugging › Correct Speakers** so you can map names later and
-regenerate Notes. Google Meet and Zoom expose no API a menu-bar app can use
-to learn who is speaking, so the Calendar invite is the only participant
-source.
+Notes use the reviewed transcript labels as their sole speaker identity source.
+They do not receive a Calendar attendee prefix or infer who an anonymous
+speaker is from mentions or topics. An explicitly named task recipient can
+still appear as the task owner. The former Automatic Notes toggle is removed;
+its saved preference is ignored. A kept-label meeting remains available under
+**Debugging › Correct Speakers** for one later name correction and Notes
+regeneration. The configured Notes model remains independent of Haiku speaker
+suggestions.
 
 For CLI backfill or repair, edit `speaker_aliases` and apply the
 deterministic relabel step (then `meeting-memory summarize` to regenerate

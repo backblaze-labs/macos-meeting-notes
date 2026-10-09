@@ -349,6 +349,9 @@ Requests, in the order they arrived on the `screenshot-functionality` branch:
    has to be typed after a meeting, and the post-meeting "pending tasks" gate
    removed.
 
+The automatic Notes and Calendar-based summarizer attribution described below
+were superseded by the single confirmed review flow on 2026-10-09.
+
 Outcome: all four shipped (`docs/features/screenshots.md`,
 `docs/features/sidebar.md`, `docs/features/transcription.md`). Decisions:
 
@@ -375,7 +378,8 @@ Outcome: all four shipped (`docs/features/screenshots.md`,
 First thing to check if this comes up again: `ui/status_menu.py` for what the
 menu holds, `ui/sidebar_compact.py` for the four buttons and their tooltips,
 `service/screenshots.py:attach` for the one-file-vs-folder rule, and
-`ui/controller.py:auto_generate_notes` for the transcript-to-notes handoff.
+`ui/speaker_review_flow.py` for the current transcript-to-review handoff
+(the former `auto_generate_notes` path is retired).
 The global shortcut lives in `ui/screenshot_hotkey.py`; if it stops firing
 after a macOS update, check `app.log` for the "Global screenshot hotkey"
 line first.
@@ -388,6 +392,10 @@ otherwise leave visibility to the user; keep manual speaker review as the
 default with automatic Notes as an explicit opt-in that cannot lock out a
 later correction; never start or fail Notes when it is unavailable; key
 screenshot staging by the durable capture session; synchronize the docs.
+
+The automatic Notes toggle, its `notes_mode.py` implementation, and Calendar
+prefix described below were superseded by the single confirmed review flow
+on 2026-10-09; the saved toggle preference is now ignored.
 
 Outcome: all implemented. The `rumps` pin returned to `>=0.4` because the
 status item toggle module and its internals are gone. Decisions:
@@ -407,26 +415,47 @@ status item toggle module and its internals are gone. Decisions:
 
 Still open from the review's manual checklist: a real-mouse pass of the
 menu, the auto-show and close rules, a same-minute double recording with
-screenshots, and one automatic-mode meeting followed by a correction.
+screenshots. The automatic-mode check is superseded; validate prepared review
+and explicit confirmation with `docs/manual-validation.md` instead.
 
 First thing to check if this comes up again: `ui/status_menu.py` for the menu
 order, `ui/sidebar_tray_wiring.py:reveal` for the only automatic show,
-`ui/notes_mode.py` and `ui/tray.py:handle_event` for the transcript-ready
-routing, `service/speaker_state.py:_confirm_locked` for the kept-label rule,
+`ui/speaker_review_flow.py` and `ui/tray.py:handle_event` for the current
+transcript-ready routing, `service/speaker_state.py:_confirm_locked` for the kept-label rule,
 and `service/screenshots.py` for the session key.
 
-## 2026-10-09 Speaker Name Suggestions
+## 2026-10-09 Unified Speaker Review and Name Suggestions
 
-Opening Review Speakers or Correct Speakers now requests unconfirmed Claude
-Haiku assignments from a bounded local diarized transcript excerpt when every
-Calendar candidate matches the local known-person roster. This reuses the
-Notes key/pause and requires explicit confirmation. The local roster reuses
-`KNOWN_SPEAKERS` with an optional role/topics description; matching aliases and
-emails stay local. AssemblyAI continues to provide diarization only.
+After successful transcription, a worker prepares unconfirmed Claude Haiku
+assignments from a bounded local diarized excerpt when all Calendar candidates
+match the local roster. Only after proposals or a manual fallback are ready
+does the tray offer Review Speakers. Prepared state, including empty/error
+fallbacks, remains in memory for clicking, cancellation, and reopening without
+another request. Historical Debugging actions prepare on demand. Changed
+transcript identity reloads before display, and Notes pause suppresses proposals.
+
+The fixed Haiku 5.5 low-effort request reuses Notes credentials and the private
+`KNOWN_SPEAKERS` roster with optional role/topics descriptions; matching emails
+and aliases stay local. Fenced JSON uses the existing Notes object normalizer,
+then strict fields and exact same-speaker evidence validation. Request,
+response-format, and output-limit failures expose only sanitized diagnostics.
+AssemblyAI continues to provide diarization only.
+
+Confirm Names or Keep Speaker Labels is the sole identity-confirmation action
+before Notes. The old automatic Notes toggle and Calendar summarizer prefix
+are retired. A fixed Notes contract preserves reviewed labels without inferring
+anonymous identities; explicit task recipients remain allowed. The configured
+Notes model is unchanged and independent of speaker proposals.
+
+A bounded comparison across 29 reviewed label positions favored this proposal
+flow: 12 correct, zero incorrect, and 17 abstentions versus eight correct,
+12 incorrect, and nine abstentions for a Calendar-only map-output adaptation
+of the former attribution idea. This was a controlled mapping proxy, not a
+benchmark of production Notes accuracy or a general accuracy guarantee; both
+model and context differed. No private meeting content belongs in this record.
 
 A separate KB service, voice enrollment, automatic application without user
 confirmation, and numerical identity-confidence thresholds remain outside
-this slice. Proposals need exact supporting evidence from the indicated
-speaker; uncertain assignments remain manual. First check
+this slice. First check `ui/speaker_review_flow.py`,
 `service/speaker_suggestions.py`, the native Known Speakers editor, and its
-private preference JSON before expanding the automation or context.
+private preference JSON before expanding automation or context.

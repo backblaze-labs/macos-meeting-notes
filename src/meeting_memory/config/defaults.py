@@ -23,9 +23,8 @@ NOTES_PROFILE_MARKER = "<!-- meeting-memory:notes-profile -->"
 DEFAULT_NOTES_INSTRUCTIONS_TEMPLATE = """Privacy rules:
 - Omit personal information that is not needed to understand the work.
 - Do not include emails, phone numbers, addresses, account IDs, or personal anecdotes.
-- A `Calendar attendees:` line may precede the transcript. Name an owner only when the
-  transcript makes clear which attendee spoke; otherwise prefer speaker labels, roles,
-  or null instead of guessing a full name.
+- Speaker identities come from the reviewed transcript. Preserve anonymous speaker
+  labels when names were not confirmed; do not infer their names from context.
 - Do not quote casual/private conversation unless it directly affects a work decision.
 
 Content rules:
@@ -61,3 +60,8 @@ DEFAULT_MEETINGS_DIR = "~/Meetings"
 DEFAULT_NOTIFY_MINUTES_BEFORE = 5
 DEFAULT_MAX_RECORDING_MINUTES = 180
 DEFAULT_CALENDAR_POLL_INTERVAL = 120
+
+IDENTITY_CONTRACT = """Speaker identity contract (required and not editable):
+Use the supplied transcript labels as speaker identities. Never replace an anonymous
+speaker label with a person's name inferred from mentions, topics, or Calendar context.
+A task may name an explicitly stated recipient, but that does not identify the speaker."""

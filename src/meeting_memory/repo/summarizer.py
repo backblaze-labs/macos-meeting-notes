@@ -12,6 +12,7 @@ from meeting_memory.config.defaults import (
     DEFAULT_ANTHROPIC_MODEL,
     DEFAULT_SUMMARY_PROMPT_FILE,
     DEFAULT_SUMMARY_PROMPT_TEMPLATE,
+    IDENTITY_CONTRACT,
 )
 from meeting_memory.config.notes_limits import model_output_tokens
 from meeting_memory.config.notes_profile_formatting import normalize_section_content
@@ -216,9 +217,12 @@ def profile_result_from_json(text: str, profile: NotesProfile) -> SummaryResult:
 
 def _output_contract(profile: NotesProfile | None) -> str:
     if profile is None:
-        return SUMMARY_OUTPUT_CONTRACT
+        return f"{SUMMARY_OUTPUT_CONTRACT}\n{IDENTITY_CONTRACT}"
     identifiers = json.dumps([section.key for section in profile.sections])
-    return f"{PROFILE_OUTPUT_CONTRACT}\nRequested section IDs, in order: {identifiers}"
+    return (
+        f"{PROFILE_OUTPUT_CONTRACT}\n{IDENTITY_CONTRACT}\n"
+        f"Requested section IDs, in order: {identifiers}"
+    )
 
 
 def _profile_recipe(profile: NotesProfile) -> str:

@@ -32,7 +32,7 @@ work.
 | **Transcription** | Produce a diarized `transcript.md` | Recording Core, network, AssemblyAI credential | No |
 | **Backup** | Copy owned meeting artifacts to B2 | Local artifact, network, B2 destination credentials | **Configuration only** |
 | **Calendar** | Detect meeting context and reminders | Network, Google credentials and OAuth grant | No |
-| **Notes** | Produce derived `notes.md` after speaker review, or right after transcription in the opt-in automatic mode | Completed transcript, network, Anthropic credential | No |
+| **Notes** | Prepare unconfirmed speaker suggestions and produce derived `notes.md` after explicit speaker review | Completed transcript, network, Anthropic credential | No |
 
 Recording Core is always present. Backup credentials and destination settings
 are required to leave setup; Transcription, Calendar, and Notes are opt-in.
@@ -224,7 +224,7 @@ egress before an integration is enabled:
 | AssemblyAI | Completed meeting audio | Diarized transcription |
 | Backblaze B2 | `recording.m4a` and `transcript.md` for eligible schema-v2 meetings | Durable private backup |
 | Google Calendar | OAuth/API requests; event metadata is received locally | Context and reminders |
-| Anthropic | The fixed output-schema instructions, the editable instruction block, and only a speaker-confirmed transcript excerpt capped at 60,000 characters; in the opt-in automatic Notes mode, the Calendar attendee names from `speaker_candidates` precede that excerpt. The Markdown layout remains local. Opening Review Speakers or Correct Speakers for known attendees sends a diarized local transcript excerpt capped at 60,000 characters, candidate names, and relevant local roster descriptions to Claude Haiku before speaker confirmation; matching aliases/emails and provider IDs remain local | Derived notes and unconfirmed speaker suggestions |
+| Anthropic | Notes receive fixed schema/identity instructions, editable guidance, and only the reviewed transcript excerpt capped at 60,000 characters; the Markdown layout stays local, and no Calendar prefix is included. For new transcripts, background review preparation sends a diarized local excerpt capped at 60,000 characters, canonical known attendee names, and relevant roster descriptions to Claude Haiku before confirmation. Historical review actions trigger that request explicitly; matching aliases/emails, frontmatter, and provider IDs stay local | Derived notes and unconfirmed speaker suggestions |
 
 No provider receives data merely because the app launched or Recording Core
 ran. Configuration is consent to make the integration available for new
@@ -233,8 +233,11 @@ transcription or backup. Historical artifacts require a separate explicit
 backfill action.
 
 Speaker suggestion requests belong to Notes and honor its current-session
-pause immediately before outbound requests, including when reading cached
-proposals. Opening review is the explicit trigger for historical transcripts.
+pause immediately before outbound requests and before displaying cached
+proposals. New transcripts prepare review before offering the notification;
+opening review is the explicit trigger for historical transcripts. Prepared
+reviews, including manual fallbacks, remain in memory for the session so
+clicking or reopening unchanged review does not repeat a paid request.
 The local known-speaker roster stores canonical names, matching aliases/emails,
 and optional descriptions in the existing private preference document. Haiku
 receives only relevant canonical names and descriptions with the bounded
@@ -242,7 +245,11 @@ diarized excerpt. No speaker-identification requests are sent to AssemblyAI.
 Suggestions require exact evidence from the indicated speaker and remain only
 in memory. They change no artifacts until the user confirms names. Missing,
 unknown, ambiguous, or failed proposals preserve manual review; ASR confidence
-does not measure speaker identity.
+does not measure speaker identity. Notes start only after Confirm Names or
+Keep Speaker Labels and preserve those reviewed identities. They receive no
+Calendar prefix, and a fixed identity contract forbids reinference from
+mentions or topics while allowing explicitly stated task recipients. The old
+automatic Notes preference is ignored.
 
 B2 objects remain private. A dedicated private bucket and least-privilege,
 bucket-scoped credentials are required for supported setup.

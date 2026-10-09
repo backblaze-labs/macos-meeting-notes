@@ -1,11 +1,4 @@
-"""Pinned schema-v2 Notes generation for a speaker-confirmed transcript.
-
-When the review kept the diarized labels (no aliases stored, which is what
-the opt-in automatic mode does), the Calendar attendees in
-`speaker_candidates` are prepended to the text the summarizer sees so it has
-context for naming owners. A transcript the user relabeled with real names
-already carries them, so it is sent as-is.
-"""
+"""Pinned Notes generation using only user-confirmed transcript identities."""
 
 from __future__ import annotations
 
@@ -61,9 +54,9 @@ def generate_v2_notes(
 ) -> Path:
     """Summarize a stable confirmed snapshot, then publish only if still current."""
 
-    snapshot, body, meta, identity, frontmatter = _confirmed_snapshot(meetings_dir, meeting_dir)
+    snapshot, body, meta, identity = _confirmed_snapshot(meetings_dir, meeting_dir)
     source_revision = normalize_transcript_for_backup(snapshot)
-    summary = summarizer.summarize(notes_input_text(frontmatter, body))
+    summary = summarizer.summarize(body)
     rendered = render_notes_markdown(
         meta,
         summary,
@@ -92,7 +85,7 @@ def _generate_legacy_notes(
         if snapshot.frontmatter.get("speaker_status") != "confirmed":
             raise ValueError("speaker review must be confirmed before generating notes")
         _, body = split_frontmatter(snapshot.metadata_text)
-        summary = summarizer.summarize(notes_input_text(snapshot.frontmatter, body))
+        summary = summarizer.summarize(body)
         rendered = render_notes_markdown(
             snapshot.meta,
             summary,
@@ -106,7 +99,7 @@ def _generate_legacy_notes(
 def _confirmed_snapshot(
     meetings_dir: Path,
     meeting_dir: Path,
-) -> tuple[str, str, MeetingMeta, tuple[int, int], dict[str, object]]:
+) -> tuple[str, str, MeetingMeta, tuple[int, int]]:
     with open_meeting_document(meetings_dir, meeting_dir) as document:
         if document.frontmatter.get("speaker_status") != "confirmed":
             raise ValueError("speaker review must be confirmed before generating notes")
@@ -117,28 +110,7 @@ def _confirmed_snapshot(
             body,
             _meta(document.frontmatter),
             (info.st_dev, info.st_ino),
-            dict(document.frontmatter),
         )
-
-
-def notes_input_text(frontmatter: dict[str, object], body: str) -> str:
-    """Prefix a label-only transcript with the Calendar attendee list.
-
-    A transcript with stored speaker aliases already names its speakers and
-    is returned unchanged. Change this if attendee context should also reach
-    the summarizer for manually relabeled transcripts.
-    """
-
-    aliases = frontmatter.get("speaker_aliases")
-    if isinstance(aliases, dict) and aliases:
-        return body
-    raw = frontmatter.get("speaker_candidates")
-    if not isinstance(raw, list):
-        return body
-    names = [str(item).strip() for item in raw if str(item).strip()]
-    if not names:
-        return body
-    return f"Calendar attendees: {', '.join(dict.fromkeys(names))}\n\n{body}"
 
 
 def _reject_unsafe_notes(directory_fd: int) -> None:

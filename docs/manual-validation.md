@@ -164,20 +164,26 @@ Pass criteria after stopping recording:
 
 ## 6. Speaker Review
 
-1. In **Configuration › Calendar...**, save known-speaker canonical names,
-   Calendar match aliases/emails, and optional role/topics descriptions, then
-   restart. Configure Notes with the existing Anthropic key if it is not enabled.
-2. Use a Calendar-backed transcript whose candidates all match the roster and
-   whose speakers introduce themselves or discuss recognizable work. Open
-   **Review Speakers** (or **Correct Speakers** for a kept-label transcript).
-3. Confirm that the preparation notification appears, the review says
-   **Suggested by Claude Haiku**, and each proposed name has a supporting quote.
-   Choose **Cancel** and verify that the transcript aliases/status and Notes did
-   not change. Reopen the review and verify each proposed or manual name.
-4. Choose **Confirm Names**, or choose **Keep Speaker Labels** for unknown names.
-5. Repeat with an unknown attendee or with Notes paused. Review must remain
-   manual, without preselected inferred names. A provider failure must likewise
-   leave manual controls available with a clear fallback message.
+1. In **Configuration › Calendar...**, save canonical names, Calendar match
+   aliases/emails, and optional role/topics descriptions, then restart. Configure
+   Notes with the existing Anthropic key if it is not enabled.
+2. Record a Calendar-backed meeting whose candidates all match the roster. After
+   transcription, verify that the actionable **Transcript ready** notification
+   arrives only after speaker proposals or a manual fallback have been prepared.
+3. Click **Review Speakers**. Verify that it opens the prepared state without a
+   new provider request. Accepted proposals say **Suggested by Claude Haiku**
+   and show supporting quotes. Cancel and verify that aliases/status and Notes
+   did not change; reopen and verify that the same result is reused.
+4. Choose **Confirm Names**, or **Keep Speaker Labels** for unknown names. Verify
+   Notes starts only after that action. A historical **Debugging › Correct
+   Speakers** action prepares on demand and permits one later correction.
+5. Repeat with an unknown attendee, Notes paused before review opens, or an
+   empty/error response. Manual controls must remain available without inferred
+   selections. A failed response shows a sanitized fallback reason. Reopening
+   unchanged review reuses that fallback; restart clears the prepared cache.
+6. Change the transcript while preparation is pending. Verify current labels
+   are reloaded on a worker before display, without a provider call on the UI
+   thread. Confirm that the removed Automatic Notes toggle is absent.
 
 Pass criteria:
 
@@ -197,6 +203,9 @@ With `ANTHROPIC_API_KEY` set:
 - Confirm speakers from the tray review flow.
 - `notes.md` is written.
 - `summary_status: ok`
+- Notes preserve confirmed names or anonymous labels, without attributing an
+  anonymous speaker by Calendar names or topics. An explicitly named task
+  recipient may still appear as an owner.
 - With the built-in layout, `## Summary`, `## Decisions`, and `## Action Items`
   are present.
 - After selecting **Personal focus**, entering your name, and saving, the next

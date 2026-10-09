@@ -139,7 +139,7 @@ def test_pending_speaker_review_shows_as_a_debugging_task(tmp_path: Path) -> Non
 
 
 def test_kept_label_meetings_offer_a_speaker_correction(tmp_path: Path) -> None:
-    # Automatic Notes keep the diarized labels; the user can still map names.
+    # Kept diarized labels can still be mapped to names later.
     app = _build_populated_app(tmp_path)
     meeting = recent_meeting(tmp_path, 2, "Product Sync")
     app.controller.correctable_speaker_reviews = lambda: [

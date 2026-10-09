@@ -90,7 +90,7 @@ def open_known_speakers_form(
         _hint_field(
             (
                 "Match normalizes Calendar attendees. Optional role/topics provide local "
-                "context for Claude Haiku name suggestions, sent only when opening review."
+                "context for Claude Haiku suggestions after transcription or historical review."
             ),
             0,
             8,

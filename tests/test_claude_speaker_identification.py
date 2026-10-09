@@ -110,3 +110,33 @@ def test_request_always_sends_low_effort_via_sdk_extra_body():
     assert sdk.messages.create.call_args.kwargs["extra_body"] == {
         "output_config": {"effort": "low"}
     }
+
+
+def test_markdown_wrapped_json_uses_same_normalizer_as_notes():
+    sdk = client(
+        '```json\n{"suggestions":[{"label":"A","name":"Alex","evidence":"I am Alex"}]}\n```'
+    )
+    result = ClaudeSpeakerIdentificationClient(
+        "test-key", client_factory=lambda _key: sdk
+    ).identify(request())
+    assert result.suggestions[0].name == "Alex"
+
+
+def test_invalid_response_diagnoses_format_without_private_content(caplog):
+    sdk = client("PRIVATE TRANSCRIPT TEXT")
+    with pytest.raises(RuntimeError, match="response format was invalid"):
+        ClaudeSpeakerIdentificationClient("test-key", client_factory=lambda _key: sdk).identify(
+            request()
+        )
+    assert "stage=response" in caplog.text
+    assert "PRIVATE" not in caplog.text and "test-key" not in caplog.text
+
+
+def test_truncation_is_reported_separately_even_with_valid_partial_json(caplog):
+    sdk = client('{"suggestions":[]}')
+    sdk.messages.create.return_value.stop_reason = "max_tokens"
+    with pytest.raises(RuntimeError, match="response was incomplete"):
+        ClaudeSpeakerIdentificationClient("test-key", client_factory=lambda _key: sdk).identify(
+            request()
+        )
+    assert "stage=truncated" in caplog.text

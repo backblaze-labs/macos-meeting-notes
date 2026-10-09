@@ -341,14 +341,29 @@ workflow definition does not imply that owner credentials or approval exist.
 
 ## Speaker Suggestion Review
 
-`repo/claude_speaker_identification.py` uses the existing Anthropic key with a
-fixed Claude Haiku model. `service/speaker_excerpt.py` extracts bounded whole
-utterances without transcript frontmatter. `service/speaker_suggestions.py`
-gates requests on the local known-person roster, validates exact same-speaker
-evidence, and caches proposals only for the session. The roster reuses the
-private `KNOWN_SPEAKERS` preference with optional descriptions; matching
-aliases/emails remain local. `ui/speaker_review_flow.py` prepares review on a
-worker and delivers a typed `SpeakerReviewReady` event to the main-thread
-selector, which re-reads local state before presenting. Only the existing
-confirmation transaction rewrites labels and permits Notes. Notes pause also
-applies to suggestions and cached proposals.
+`repo/claude_speaker_identification.py` uses the existing Anthropic key with
+fixed `claude-haiku-5-5` and low effort. It reuses the Notes JSON-object
+normalizer to accept fenced JSON, then validates the exact proposal schema.
+Typed request, response-format, and truncated-output failures expose sanitized
+manual-fallback messages; logs contain counts and error categories, never
+meeting text or provider payloads. `service/speaker_excerpt.py` extracts bounded
+whole utterances without frontmatter. `service/speaker_suggestions.py` gates
+requests on the local roster, validates exact same-speaker evidence, and caches
+successful proposals only for the session. The roster reuses private
+`KNOWN_SPEAKERS` preferences with descriptions; matching aliases/emails stay
+local.
+
+The tray intercepts `TranscriptReady` and starts `SpeakerReviewFlow.prepare`
+on a worker. Typed `SpeakerReviewReady` returns to the main thread, which
+re-reads local identity, caches the prepared review (including empty/error
+fallbacks), and offers the actionable Transcript ready notification. A click
+uses that cache or joins an existing worker. Historical Debugging review
+prepares on demand. Changed transcript identity triggers worker reload before
+display. Canceling and reopening the same review makes no new provider request.
+Notes pause applies to both requests and cached proposals.
+
+Only explicit Confirm Names or Keep Speaker Labels permits Notes. Runtime
+Notes send the reviewed body without a Calendar prefix. A fixed identity
+contract in `config/defaults.py` prevents the configured Notes model from
+reinferring anonymous identities; explicitly named task recipients remain
+allowed. The former automatic Notes mode and its UI preference are retired.

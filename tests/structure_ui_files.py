@@ -41,6 +41,5 @@ REQUIRED_UI_SOURCE_FILES = (
     "ui/processing_actions.py",
     "ui/notes_flow.py",
     "ui/stop_reminder.py",
-    "ui/notes_mode.py",
     "ui/notification_actions.py",
 )

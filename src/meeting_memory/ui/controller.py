@@ -85,7 +85,6 @@ class TrayController:
             self.event_queue.put,
             self.thread_factory,
             self.notes_allowed,
-            lambda path: self.confirm_speaker_aliases(path, {}, keep_labels=True),
         )
         self._transitions = RecordingTransitions(
             self.recorder,
@@ -230,9 +229,6 @@ class TrayController:
     @property
     def notes_available(self) -> bool:
         return self._notes.available
-
-    def auto_generate_notes(self, path: Path) -> None:
-        self._notes.auto_generate(path)
 
     def set_notes_enabled(self, enabled: bool) -> None:
         self._notes.set_enabled(enabled)

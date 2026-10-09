@@ -9,7 +9,6 @@ from meeting_memory.service.meeting_store import MeetingStore
 from meeting_memory.service.runtime_notes import (
     generate_owned_notes,
     generate_v2_notes,
-    notes_input_text,
 )
 from meeting_memory.service.storage import write_meeting_dir
 from meeting_memory.service.transcript_review import confirm_speaker_aliases
@@ -120,9 +119,7 @@ def test_v2_notes_publishes_after_stable_confirmed_snapshot(tmp_path: Path) -> N
     assert "Reviewed" in notes.read_text(encoding="utf-8")
 
 
-def test_v2_notes_prefix_calendar_attendees_for_a_label_only_transcript(tmp_path: Path) -> None:
-    # Automatic mode keeps the diarized labels, so the summarizer sees the
-    # calendar attendees ahead of the label-only transcript as context.
+def test_v2_notes_preserve_kept_labels_without_calendar_attribution(tmp_path: Path) -> None:
     meetings, files, state = _confirmed_meeting(tmp_path, keep_labels=True)
     state.merge_fields(
         files.directory,
@@ -134,7 +131,9 @@ def test_v2_notes_prefix_calendar_attendees_for_a_label_only_transcript(tmp_path
     generate_v2_notes(meetings, files.directory, summarizer)
 
     assert summarizer.text is not None
-    assert summarizer.text.startswith("Calendar attendees: Alex Doe, Sam Roe\n\n")
+    assert "Calendar attendees:" not in summarizer.text
+    assert "Alex Doe" not in summarizer.text and "Sam Roe" not in summarizer.text
+    assert "**A**" in summarizer.text
     assert "Hello" in summarizer.text
 
 
@@ -152,19 +151,6 @@ def test_v2_notes_send_a_relabeled_transcript_without_attendee_context(tmp_path:
     assert summarizer.text is not None
     assert not summarizer.text.startswith("Calendar attendees:")
     assert "**Alex**" in summarizer.text
-
-
-def test_notes_input_text_without_attendees_is_the_bare_body() -> None:
-    assert (
-        notes_input_text({"speaker_aliases": {"A": "Alex"}, "speaker_candidates": ["Alex"]}, "body")
-        == "body"
-    )
-    assert notes_input_text({}, "body") == "body"
-    assert notes_input_text({"speaker_candidates": []}, "body") == "body"
-    assert notes_input_text({"speaker_candidates": "Alex"}, "body") == "body"
-    assert notes_input_text({"speaker_candidates": [" Alex ", ""]}, "body") == (
-        "Calendar attendees: Alex\n\nbody"
-    )
 
 
 def test_v2_notes_publishes_with_custom_report_layout(tmp_path: Path) -> None:

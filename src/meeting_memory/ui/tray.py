@@ -8,9 +8,8 @@ record/stop, screenshot, and quit. Every state change funnels through
 `refresh_sidebar()`, which rebuilds both from one immutable
 `SidebarViewModel` snapshot.
 
-After transcription the default flow is manual speaker review. The opt-in
-automatic mode (`automatic_notes`) keeps the diarized labels and starts Notes
-with Calendar attendees as context instead.
+After transcription speaker proposals are prepared before offering review.
+Notes use the identities confirmed in that single review flow.
 """
 
 from __future__ import annotations
@@ -43,7 +42,6 @@ from meeting_memory.ui.macos import (
     configure_modern_notifications,
     keep_timer_running_during_menu_tracking,
 )
-from meeting_memory.ui.notes_mode import MemoryDefaults, NotesMode, standard_defaults
 from meeting_memory.ui.notification_actions import dispatch_notification
 from meeting_memory.ui.notifications import (
     meeting_detected_notification,
@@ -84,7 +82,6 @@ class RumpsTrayApp:
         configuration_surface: ConfigurationSurfaceCoordinator | None = None,
         sidebar_panel_factory: Any = None,
         screenshot_store: ScreenshotStore | None = None,
-        notes_defaults: Any = None,
     ) -> None:
         self.rumps = rumps_module or load_rumps()
         self.controller = controller
@@ -119,11 +116,6 @@ class RumpsTrayApp:
         self.view_model: SidebarViewModel | None = None
         self.menu_items: StatusMenuItems | None = None
         self.open_url = webbrowser.open  # swapped out by tests
-        # Opt-in automatic Notes after transcription; off means manual review.
-        if notes_defaults is None:
-            notes_defaults = MemoryDefaults() if rumps_module is not None else standard_defaults()
-        self.notes_mode = NotesMode(notes_defaults)
-        self.automatic_notes = self.notes_mode.enabled
         self.recording_health = RecordingHealthMonitor(controller.recorder, controller.event_queue)
         self.audio_mode_menu = AudioModeMenu(
             self.rumps, self.controller, on_change=self.refresh_sidebar
@@ -175,10 +167,7 @@ class RumpsTrayApp:
             on_toggle_recording=self.toggle_recording,
             on_toggle_sidebar=self.sidebar.toggle_panel,
             on_quit=self.rumps.quit_application,
-            sidebar_rows=(
-                *self.notes_mode.rows(self.rumps, on_change=self.refresh_sidebar),
-                *self.sidebar.preference_rows(on_change=self.refresh_sidebar),
-            ),
+            sidebar_rows=(*self.sidebar.preference_rows(on_change=self.refresh_sidebar),),
         )
 
     def toggle_recording(self, _sender=None) -> None:
@@ -251,11 +240,12 @@ class RumpsTrayApp:
             )
             self.refresh_sidebar()
             return
-        automatic = bool(self.automatic_notes()) and self.controller.notes_available
-        runtime_event = runtime_notification(event, automatic_notes=automatic)
+        if isinstance(event, TranscriptReady):
+            self.speaker_review.prepare(event.meeting)
+            self.refresh_sidebar()
+            return
+        runtime_event = runtime_notification(event)
         if runtime_event is not None:
-            if isinstance(event, TranscriptReady) and automatic:
-                self.controller.auto_generate_notes(event.meeting.directory)
             self.notify_event(runtime_event)
             self.refresh_sidebar()
             return

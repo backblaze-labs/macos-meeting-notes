@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 
 @dataclass(frozen=True)
@@ -50,3 +51,26 @@ class SpeakerUtterance:
 class SpeakerIdentificationRequest:
     utterances: tuple[SpeakerUtterance, ...]
     people: tuple[KnownSpeaker, ...]
+
+
+class SpeakerIdentificationFailure(StrEnum):
+    REQUEST = "request"
+    RESPONSE = "response"
+    TRUNCATED = "truncated"
+
+
+class SpeakerIdentificationError(RuntimeError):
+    """Sanitized failure safe to display without provider response contents."""
+
+    def __init__(self, failure: SpeakerIdentificationFailure) -> None:
+        self.failure = failure
+        message = {
+            SpeakerIdentificationFailure.REQUEST: "Claude request failed. Assign names manually.",
+            SpeakerIdentificationFailure.RESPONSE: (
+                "Claude response format was invalid. Assign names manually."
+            ),
+            SpeakerIdentificationFailure.TRUNCATED: (
+                "Claude response was incomplete. Assign names manually."
+            ),
+        }[failure]
+        super().__init__(message)

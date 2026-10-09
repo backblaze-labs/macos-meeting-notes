@@ -15,6 +15,7 @@ from meeting_memory.config.settings import Settings
 from meeting_memory.repo import summarizer
 from meeting_memory.repo.summarizer import (
     DEFAULT_REQUEST_TIMEOUT_SECONDS,
+    IDENTITY_CONTRACT,
     MAX_SUMMARY_OUTPUT_TOKENS,
     MAX_TRANSCRIPT_CHARS,
     SUMMARY_OUTPUT_CONTRACT,
@@ -40,7 +41,7 @@ def test_claude_summarizer_requests_json_and_truncates_transcript(monkeypatch) -
     assert fake_client.kwargs["model"] == "claude-test"
     assert fake_client.kwargs["max_tokens"] == MAX_SUMMARY_OUTPUT_TOKENS
     assert "temperature" not in fake_client.kwargs
-    assert fake_client.kwargs["system"] == SUMMARY_OUTPUT_CONTRACT
+    assert fake_client.kwargs["system"] == f"{SUMMARY_OUTPUT_CONTRACT}\n{IDENTITY_CONTRACT}"
     prompt = fake_client.kwargs["messages"][0]["content"]
     assert "strict JSON" not in prompt
     assert prompt.startswith("Additional instructions:")
@@ -167,7 +168,7 @@ def test_custom_prompt_is_separate_from_contract_and_cannot_duplicate_transcript
 
     client.summarize(transcript)
 
-    assert fake_client.kwargs["system"] == SUMMARY_OUTPUT_CONTRACT
+    assert fake_client.kwargs["system"] == f"{SUMMARY_OUTPUT_CONTRACT}\n{IDENTITY_CONTRACT}"
     prompt = fake_client.kwargs["messages"][0]["content"]
     assert SUMMARY_OUTPUT_CONTRACT not in prompt
     assert "Additional instructions:\nReturn markdown instead." in prompt
