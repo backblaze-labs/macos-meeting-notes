@@ -121,12 +121,114 @@ def test_main_thread_drops_proposals_if_review_changed_since_worker(monkeypatch,
     )
     controller = SimpleNamespace(
         event_queue=Mock(),
+        thread_factory=Mock(),
         confirm_speaker_aliases=Mock(),
         keep_speaker_labels=Mock(),
         generate_notes=Mock(),
     )
     flow = SpeakerReviewFlow(controller, FakeRumps(), Mock())
     flow.handle_event(SpeakerReviewReady(original))
-    actions = presented.call_args.args[1]
-    assert actions.load_review(tmp_path) is current
-    assert actions.load_review(tmp_path).speaker_suggestions == {}
+    presented.assert_not_called()
+    controller.thread_factory.assert_called_once()
+
+
+def test_preparation_finishes_before_notification_and_click_reuses_result(monkeypatch, tmp_path):
+    from meeting_memory.types.meeting import MeetingRef
+
+    state = replace(_state(tmp_path), speaker_suggestions={"Speaker A": "Alex"})
+    controller = SimpleNamespace(
+        event_queue=Mock(),
+        thread_factory=Mock(),
+        load_speaker_review=Mock(return_value=state),
+        confirm_speaker_aliases=Mock(),
+        keep_speaker_labels=Mock(),
+        generate_notes=Mock(),
+    )
+    presented = Mock()
+    monkeypatch.setattr(
+        "meeting_memory.ui.speaker_review_flow.open_speaker_review_window", presented
+    )
+    monkeypatch.setattr(
+        "meeting_memory.ui.speaker_review_flow.load_speaker_review", lambda _p: state
+    )
+    flow = SpeakerReviewFlow(controller, FakeRumps(), Mock())
+    flow.prepare(MeetingRef("sample", "Standup", tmp_path))
+    controller.event_queue.put.assert_not_called()
+    presented.assert_not_called()
+    controller.thread_factory.call_args.kwargs["target"](tmp_path, "Standup")
+    ready = controller.event_queue.put.call_args.args[0]
+    assert isinstance(ready, SpeakerReviewReady)
+    flow.handle_event(ready)
+    notification = controller.event_queue.put.call_args.args[0]
+    assert notification.action == "review_speakers"
+    assert notification.action_label == "Review Speakers"
+    presented.assert_not_called()
+    flow.open(tmp_path)
+    flow.open(tmp_path)
+    controller.load_speaker_review.assert_called_once_with(tmp_path)
+    assert presented.call_count == 2
+    assert presented.call_args.args[1].load_review(tmp_path).speaker_suggestions == {
+        "Speaker A": "Alex"
+    }
+
+
+def test_click_during_preparation_waits_for_same_worker(monkeypatch, tmp_path):
+    from meeting_memory.types.meeting import MeetingRef
+
+    state = _state(tmp_path)
+    controller = SimpleNamespace(
+        event_queue=Mock(),
+        thread_factory=Mock(),
+        load_speaker_review=Mock(return_value=state),
+        confirm_speaker_aliases=Mock(),
+        keep_speaker_labels=Mock(),
+        generate_notes=Mock(),
+    )
+    presented = Mock()
+    monkeypatch.setattr(
+        "meeting_memory.ui.speaker_review_flow.open_speaker_review_window", presented
+    )
+    monkeypatch.setattr(
+        "meeting_memory.ui.speaker_review_flow.load_speaker_review", lambda _p: state
+    )
+    flow = SpeakerReviewFlow(controller, FakeRumps(), Mock())
+    flow.prepare(MeetingRef("sample", "Standup", tmp_path))
+    flow.open(tmp_path)
+    controller.thread_factory.assert_called_once()
+    controller.thread_factory.call_args.kwargs["target"](tmp_path, "Standup")
+    flow.handle_event(controller.event_queue.put.call_args.args[0])
+    presented.assert_called_once()
+    assert controller.event_queue.put.call_count == 1
+
+
+def test_cached_proposals_are_hidden_when_notes_pauses_before_click(monkeypatch, tmp_path):
+    from meeting_memory.types.meeting import MeetingRef
+
+    state = replace(_state(tmp_path), speaker_suggestions={"Speaker A": "Alex"})
+    allowed = [True]
+    controller = SimpleNamespace(
+        event_queue=Mock(),
+        thread_factory=Mock(),
+        load_speaker_review=Mock(return_value=state),
+        notes_allowed=lambda: allowed[0],
+        confirm_speaker_aliases=Mock(),
+        keep_speaker_labels=Mock(),
+        generate_notes=Mock(),
+    )
+    presented = Mock()
+    monkeypatch.setattr(
+        "meeting_memory.ui.speaker_review_flow.open_speaker_review_window", presented
+    )
+    monkeypatch.setattr(
+        "meeting_memory.ui.speaker_review_flow.load_speaker_review", lambda _p: state
+    )
+    flow = SpeakerReviewFlow(controller, FakeRumps(), Mock())
+    flow.prepare(MeetingRef("sample", "Standup", tmp_path))
+    controller.thread_factory.call_args.kwargs["target"](tmp_path, "Standup")
+    flow.handle_event(controller.event_queue.put.call_args.args[0])
+    allowed[0] = False
+    flow.open(tmp_path)
+    displayed = presented.call_args.args[1].load_review(tmp_path)
+    assert displayed.speaker_suggestions == {} and displayed.speaker_evidence == {}
+    assert "paused" in displayed.suggestion_message
+    controller.load_speaker_review.assert_called_once()

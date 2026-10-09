@@ -91,6 +91,7 @@ class SpeakerReviewReady:
 
     state: SpeakerReviewState
     requested_path: Path | None = None
+    calendar_title: str | None = None
 
 
 @dataclass(frozen=True)

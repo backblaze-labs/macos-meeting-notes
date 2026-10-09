@@ -66,7 +66,7 @@ def _confirm_locked(
             return document.path / "transcript.md"
         if stored or keep_labels or not cleaned:
             raise MeetingStateConflict("confirmed speaker aliases are terminal")
-        # Labels were kept (the automatic Notes path, or an explicit Keep
+        # Labels were kept (a historical automatic Notes run, or an explicit Keep
         # Speaker Labels): the body still carries diarized labels, so one
         # later manual mapping is allowed. Named aliases stay terminal.
     elif current_status != "needs_review":

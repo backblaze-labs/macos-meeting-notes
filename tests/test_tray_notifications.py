@@ -6,6 +6,7 @@ import queue
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import Mock
 
 from tray_fakes import FakeRumps, submenu_titles
 
@@ -92,58 +93,31 @@ def test_stop_notification_uses_stop_action(tmp_path: Path) -> None:
     assert fake_rumps.notification_options[0]["data"] == {"action": "stop_recording"}
 
 
-def test_transcript_ready_offers_manual_speaker_review_by_default(tmp_path: Path) -> None:
+def test_transcript_ready_prepares_speakers_before_notifying(tmp_path: Path) -> None:
     fake_rumps = FakeRumps()
     controller = FakeController(tmp_path)
     app = RumpsTrayApp(controller, rumps_module=fake_rumps)
+    app.speaker_review.prepare = Mock()
     meeting = MeetingRef("2026-06-11_09-00_product-sync", "Product Sync", tmp_path)
 
     app.handle_event(TranscriptReady(meeting))
 
-    assert controller.auto_notes == []
-    assert fake_rumps.notifications[0][:2] == ("Transcript ready", "")
-    assert fake_rumps.notifications[0][2] == "Product Sync · review speakers"
-    assert fake_rumps.notification_options[0]["action_button"] == "Review Speakers"
-    assert fake_rumps.notification_options[0]["data"] == {
-        "action": "review_speakers",
-        "meeting_directory": str(tmp_path),
-    }
+    app.speaker_review.prepare.assert_called_once_with(meeting)
+    assert fake_rumps.notifications == []
+    assert controller.notes_calls == []
 
 
-def test_transcript_ready_starts_notes_when_automatic_mode_is_on(tmp_path: Path) -> None:
-    fake_rumps = FakeRumps()
-    controller = FakeController(tmp_path)
-    app = RumpsTrayApp(controller, rumps_module=fake_rumps)
-    app.automatic_notes = lambda: True
-    meeting = MeetingRef("2026-06-11_09-00_product-sync", "Product Sync", tmp_path)
-
-    app.handle_event(TranscriptReady(meeting))
-
-    assert controller.auto_notes == [tmp_path]
-    assert fake_rumps.notifications[0][2] == "Product Sync · generating notes"
-    assert fake_rumps.notification_options[0]["action_button"] == "Open"
-    assert fake_rumps.notification_options[0]["data"] == {
-        "action": "open_meeting",
-        "meeting_directory": str(tmp_path),
-    }
-
-
-def test_transcript_ready_falls_back_to_review_when_notes_are_unavailable(tmp_path: Path) -> None:
+def test_transcript_ready_prepares_manual_review_when_notes_unavailable(tmp_path: Path) -> None:
     fake_rumps = FakeRumps()
     controller = FakeController(tmp_path, notes_available=False)
     app = RumpsTrayApp(controller, rumps_module=fake_rumps)
-    app.automatic_notes = lambda: True
+    app.speaker_review.prepare = Mock()
     meeting = MeetingRef("2026-06-11_09-00_product-sync", "Product Sync", tmp_path)
 
     app.handle_event(TranscriptReady(meeting))
 
-    assert controller.auto_notes == []
-    assert fake_rumps.notifications[0][2] == "Product Sync · review speakers"
-    assert fake_rumps.notification_options[0]["action_button"] == "Review Speakers"
-    assert fake_rumps.notification_options[0]["data"] == {
-        "action": "review_speakers",
-        "meeting_directory": str(tmp_path),
-    }
+    app.speaker_review.prepare.assert_called_once_with(meeting)
+    assert fake_rumps.notifications == []
 
 
 def test_open_meeting_notification_reveals_the_directory(tmp_path: Path) -> None:
@@ -212,7 +186,7 @@ class FakeController:
     started_title: str | None = None
     started_candidates: tuple[str, ...] = ()
     remembered: list[MeetingDetected] = field(default_factory=list)
-    auto_notes: list[Path] = field(default_factory=list)
+    notes_calls: list[Path] = field(default_factory=list)
     notes_available: bool = True
     opener: object = None
 
@@ -243,11 +217,8 @@ class FakeController:
     def retry_failed_processing(self) -> None:
         pass
 
-    def auto_generate_notes(self, path: Path) -> None:
-        self.auto_notes.append(path)
-
     def generate_notes(self, path: Path) -> None:
-        pass
+        self.notes_calls.append(path)
 
     def load_speaker_review(self, path: Path) -> object:
         raise NotImplementedError

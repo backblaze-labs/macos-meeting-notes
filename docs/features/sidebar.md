@@ -17,7 +17,7 @@ configured) keeps its plain dropdown menu and is not affected.
 
 | Gesture | Result |
 |---|---|
-| Click the menu bar icon (either button) | The app menu: Start/Stop Recording, Show/Hide Sidebar, Recent Meetings, Open Meetings Folder, Configuration (audio mode, capability forms, notes customization, calendar auth, legacy import, automatic Notes, hide-while-recording), Debugging (pending tasks, speaker corrections, readiness, interrupted recordings, retries, diagnostics), Quit. The panel starts hidden on every launch. |
+| Click the menu bar icon (either button) | The app menu: Start/Stop Recording, Show/Hide Sidebar, Recent Meetings, Open Meetings Folder, Configuration (audio mode, capability forms, notes customization, calendar auth, legacy import, hide-while-recording), Debugging (pending tasks, speaker corrections, readiness, interrupted recordings, retries, diagnostics), Quit. The panel starts hidden on every launch. |
 | Status bar while recording | `● mm:ss` beside the icon (`⚠︎ mm:ss` on an audio warning), so a hidden panel never hides the fact that a recording is running. |
 | Click the record button | Start or stop recording. Idle: teal `record.circle`. Recording: red `stop.circle.fill` plus a small `mm:ss` timer; orange when the audio-health monitor is warning. |
 | Click the camera button, or press **⌥⇧S** anywhere | Take a screenshot for the active recording (`docs/features/screenshots.md`). |
@@ -112,7 +112,6 @@ honors the reduce-motion preference.
 - `src/meeting_memory/ui/tray.py` — `refresh_sidebar()`, event routing
 - `src/meeting_memory/ui/status_menu.py` — the app menu
 - `src/meeting_memory/ui/sidebar_tray_wiring.py` — panel + content wiring, orientation switch
-- `src/meeting_memory/ui/notes_mode.py` — the automatic Notes opt-in row and its confirmation
 - `src/meeting_memory/ui/sidebar_compact.py` — the four icon buttons in both orientations
 - `src/meeting_memory/ui/sidebar_panel.py` — the `NSPanel` shell: show/hide, drag-to-snap, persistence
 - `src/meeting_memory/ui/sidebar_drag.py` — drag tracking view and the `⠿` grabber
@@ -131,7 +130,6 @@ honors the reduce-motion preference.
 - `tests/test_sidebar_panel.py`, `tests/test_sidebar_drag.py` — panel shell, drag, grabber
 - `tests/test_sidebar_compact.py`, `tests/test_sidebar_widgets.py` — the icon buttons
 - `tests/test_status_menu.py` — the app menu
-- `tests/test_notes_mode.py` — the automatic Notes opt-in
 - `tests/test_sidebar_view_model.py` (label snapshot: every retired menu row is still rendered), `tests/test_sidebar_view_model_rows.py`
 - `tests/test_sidebar_tray_wiring.py`, `tests/test_sidebar_autoshow.py`, `tests/test_sidebar_status_and_indicator.py`
 - `tests/test_tray.py`, `tests/test_tray_notifications.py`, `tests/test_setup_readiness.py`

@@ -30,10 +30,12 @@ processed.
 - Calendar attendees populate `speaker_candidates` as hints. Attendees are
   shown by Calendar full name, except aliases explicitly configured in
   `KNOWN_SPEAKERS` when the attendee name or email matches. The tray asks for
-  a speaker review after each transcription unless the opt-in automatic
-  Notes mode is on (`transcription.md`).
-- Opening **Review Speakers** or **Correct Speakers** fetches proposed names in
-  a background worker when every Calendar candidate matches the local roster.
+  explicit speaker review after every transcription (`transcription.md`).
+- After transcription, a worker prepares review before the actionable
+  **Transcript ready** notification. It fetches proposed names when every
+  Calendar candidate matches the local roster. Clicking **Review Speakers**
+  reuses the prepared result or joins the pending worker. Historical Debugging
+  review actions prepare on demand.
   The existing native Known Speakers editor adds optional role/topics context
   of at most 300 characters per person. No separate KB service is required.
 - Claude Haiku uses the existing Notes key and receives only relevant canonical
@@ -46,9 +48,14 @@ processed.
 - Unknown attendees, insufficient evidence, ambiguous duplicates, paused Notes,
   and provider failures retain manual review. Partial proposals may leave
   speakers unresolved; every invited person need not have spoken.
-- Successful proposals are cached only for the app session, bound to the
-  transcript and relevant roster context. Changed local state drops stale
-  proposals before display. Reopening review retries unsuccessful requests.
+- Prepared reviews, including empty/error manual fallbacks, are cached only
+  for the app session. Canceling and reopening unchanged review makes no new
+  API request. Successful proposals are bound to transcript and relevant roster
+  context; changed review identity reloads on a worker before display. Restart
+  clears these caches. Notes pause also suppresses cached proposals.
+- Confirm Names or Keep Speaker Labels starts Notes from those reviewed
+  identities. Notes receive no Calendar prefix and must not infer anonymous
+  speaker names independently; explicitly named task recipients remain allowed.
 - Confirmed relabeling remains local deterministic code. The proposal request
   does not change local aliases or the provider's diarized transcript. The CLI
   relabel command does not call an LLM.

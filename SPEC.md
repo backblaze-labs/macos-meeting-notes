@@ -282,9 +282,12 @@ its configured section IDs in the configured order.
 
 **REQ-EXT-12** Each Anthropic Notes-generation request MUST contain the fixed output-schema
 instructions, the configured editable instruction block, and only
-speaker-confirmed transcript text. It MUST NOT include the local Markdown
-layout or more than the first 60,000 transcript characters. Speaker-identification
-requests instead follow the fixed Haiku input/output contract in REQ-F4-04.
+speaker-confirmed transcript text. A fixed, non-editable identity contract MUST
+require the reviewed labels and forbid reidentifying anonymous speakers from
+mentions, topics, or Calendar context. Explicitly stated task recipients MAY
+still be named without identifying the speaker. The request MUST NOT include
+a Calendar attendee prefix, the local Markdown layout, or more than the first
+60,000 transcript characters. Speaker-identification requests instead follow the fixed Haiku input/output contract in REQ-F4-04.
 
 ### 3.4 Backblaze B2 (S3-Compatible API)
 
@@ -436,9 +439,20 @@ completion.
 
 **REQ-F4-03** Transcript segments MUST be formatted as `**<Speaker Label>** (<HH:MM:SS>): <text>` in `transcript.md`.
 
-**REQ-F4-04** Speaker labels returned by AssemblyAI (e.g. "Speaker A", "Speaker B") MUST be preserved until the user either confirms local `speaker_aliases` or explicitly confirms that the detected labels should be kept. Keeping labels MUST leave `speaker_aliases` empty, set `speaker_status` to `confirmed`, and MUST NOT prevent Notes generation. The application MAY fetch unconfirmed Claude Haiku name suggestions in a
-background worker when the user opens Review Speakers or Correct Speakers,
+**REQ-F4-04** Speaker labels returned by AssemblyAI (e.g. "Speaker A",
+"Speaker B") MUST be preserved until the user either confirms local
+`speaker_aliases` or explicitly confirms that the detected labels should be
+kept. Keeping labels MUST leave `speaker_aliases` empty, set `speaker_status`
+to `confirmed`, and MUST NOT prevent Notes generation. The application MUST
+prepare review in a background worker after successful
+transcription, before offering the actionable Transcript ready notification.
+It MAY fetch unconfirmed Claude Haiku name suggestions during preparation,
 but MUST NOT apply them or start Notes without explicit user confirmation.
+Historical Review Speakers or Correct Speakers actions MUST prepare on demand.
+Clicking or reopening a prepared review MUST reuse its result, including an
+empty/error manual fallback, without another provider request. A click during
+preparation MUST join that pending worker. Changed review identity MUST reload
+on a worker before presentation; the main thread MUST NOT call a provider.
 The request MUST reuse the Notes Anthropic key and honor its current-session
 pause. It MUST include only diarized local transcript text (at most 60,000
 characters, at a whole-utterance boundary), relevant candidate names, and local
@@ -450,7 +464,7 @@ MUST accept only supplied labels and exact candidate names with an exact
 evidence quote spoken by that label, reject ambiguous duplicate assignments,
 and preserve existing manual selections. Missing or invalid proposals, paused
 Notes, and provider failures MUST leave manual review available. ASR confidence
-MUST NOT be presented as speaker identity confidence. Successful proposals MAY
+MUST NOT be presented as speaker identity confidence. Prepared reviews and successful proposals MAY
 be cached only in memory, bound to transcript text, labels, candidates, review
 status/aliases, provider ID for local invalidation, and relevant roster context.
 The fixed identification model MUST be `claude-haiku-5-5`, independently of
@@ -473,18 +487,13 @@ setup/retry without blocking it. `meeting-memory summarize <meeting-folder>`
 MUST remain available as a manual backfill/retry command for confirmed
 transcripts.
 
-**REQ-F5-07** **Configuration › Automatic Notes from Calendar attendees** is
-an explicit opt-in, disabled by default. Enabling it MUST first show the
-tradeoff: manual mapping is skipped, Calendar attendees become context for
-Notes, no names are assigned in the transcript, and Notes may still attribute
-a person incorrectly. When on and Notes is available, transcription success
-MUST confirm the diarized labels as-is (`speaker_status: confirmed`,
-`speaker_aliases` empty) and start Notes, with the meeting's
-`speaker_candidates` prepended to the transcript the summarizer receives.
-When Notes is unconfigured or paused, the automatic mode MUST do nothing and
-MUST NOT confirm the transcript or report a failure. A transcript confirmed
-with kept labels MUST accept one later full alias map (REQ-F4-04), listed
-under **Debugging › Correct Speakers**, after which Notes regenerate.
+**REQ-F5-07** Speaker review MUST be the single identity-confirmation flow.
+The former Automatic Notes from Calendar attendees toggle MUST be absent, and
+its saved `NSUserDefaults` flag MUST be ignored. No automatic mode may confirm
+labels or bypass review. A transcript confirmed with kept labels MUST accept
+one later full alias map (REQ-F4-04), listed under **Debugging › Correct
+Speakers**, after which Notes regenerate. The configured Notes model MUST
+remain independent of the fixed speaker-identification model.
 
 **REQ-F5-02** The Claude prompt MUST instruct the model to produce output in a
 strict format parseable into the exact sections selected by the effective
@@ -636,7 +645,6 @@ Configuration                      (hover submenu)
   Notes Customization…
   Authorize Google Calendar…
   Import Legacy Configuration…
-  Automatic Notes from Calendar attendees   (checkmark when on; off by default)
   Hide sidebar while recording
 Debugging                          (hover submenu)
   Pending Meeting Tasks (<count>)
@@ -703,15 +711,18 @@ show the file updated after saving.
 ### F9: Completion Notification
 
 **REQ-F9-01** Only after `transcription_status` becomes `succeeded`, the
-application MUST enqueue a typed transcript-ready event and the tray main
-thread MUST send this separate macOS notification:
+application MUST enqueue a typed `TranscriptReady` event. The tray MUST start
+background speaker-review preparation and wait for typed `SpeakerReviewReady`
+before sending this separate macOS notification:
+
 - Title: `"Transcript ready"`
 - Body: `"<meeting-title> · review speakers"`
-- Action button: `"Review Speakers"` — opens the speaker-review flow
+- Action button: `"Review Speakers"`, opens the cached prepared review
 
-When the REQ-F5-07 automatic mode is on and Notes is available, the body is
-`"<meeting-title> · generating notes"` with an `"Open"` action that reveals
-the meeting directory; Notes announce `"Notes generated"` when done.
+Preparation MUST finish with proposals or a manual fallback before the action
+is offered. Empty or failed proposals MUST NOT trigger another provider request
+when the notification is clicked. Notes announce `"Notes generated"` only
+after explicit speaker confirmation and successful generation.
 
 **REQ-F9-02** Both the required recording-saved notification and any later
 transcript-ready notification MUST be independent of Backup state or completion.
@@ -994,6 +1005,9 @@ Tray main thread → notify("Recording saved")      ← first value is complete
         ├── Transcription ready? enqueue pending job
         │     └── AssemblyAI upload → poll → update transcript/status
         │           └── event_queue.put(TranscriptReady) on success
+        │                 └── background SpeakerReviewFlow.prepare
+        │                       └── SpeakerReviewReady → cache review on main thread
+        │                             └── notify("Transcript ready", "Review Speakers")
         │           └── event_queue.put(TranscriptionFailed) on failure
         └── Backup ready? enqueue pending job
               └── capture revision R/snapshot → upload → compare current R
@@ -1226,9 +1240,9 @@ explicitly. No reachable native UI action writes `.env`.
 
 **C4** Meetings that are not tracked in Google Calendar (ad-hoc calls, manual sessions) can still be recorded manually via the tray menu. The UI prompts for a title when no nearby calendar context exists; `"Untitled"` is the fallback.
 
-**C5** The application may propose speaker names from Claude Haiku when opening
-review for configured known Calendar attendees. It applies only user-confirmed
-`speaker_aliases` from `transcript.md` with deterministic local code.
+**C5** The application may propose speaker names from Claude Haiku while
+preparing review for configured known Calendar attendees. It applies only
+user-confirmed `speaker_aliases` from `transcript.md` with deterministic local code.
 
 **C6** Internet connectivity is required only while an enabled remote capability performs network work. Recording itself works offline. Failed B2 uploads can be retried with **Retry Pending B2 Backups**; failed transcription states can be retried with **Retry Failed Transcriptions**.
 

@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Callable
 
+from meeting_memory.repo.summarizer import extract_json_object
 from meeting_memory.types.egress import EgressPaused
 from meeting_memory.types.speakers import (
+    SpeakerIdentificationError,
+    SpeakerIdentificationFailure,
     SpeakerIdentificationRequest,
     SpeakerIdentificationResult,
     SpeakerSuggestion,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 SPEAKER_MODEL = "claude-haiku-5-5"
 SYSTEM = """Suggest speaker names using the supplied diarized transcript and known people.
@@ -59,6 +65,7 @@ class ClaudeSpeakerIdentificationClient:
         )
         if not self._admit_request():
             raise EgressPaused("Notes provider operation is disabled")
+        failure = SpeakerIdentificationFailure.REQUEST
         try:
             client = self._client_factory(self._api_key)
             if not self._admit_request():
@@ -70,7 +77,9 @@ class ClaudeSpeakerIdentificationClient:
                 messages=[{"role": "user", "content": payload}],
                 extra_body={"output_config": {"effort": "low"}},
             )
+            failure = SpeakerIdentificationFailure.RESPONSE
             if getattr(response, "stop_reason", None) == "max_tokens":
+                failure = SpeakerIdentificationFailure.TRUNCATED
                 raise ValueError("Speaker proposal response was truncated")
             text = "".join(
                 block.text for block in response.content if getattr(block, "type", "") == "text"
@@ -78,12 +87,18 @@ class ClaudeSpeakerIdentificationClient:
             return _parse_result(text)
         except EgressPaused:
             raise
-        except Exception:
-            raise RuntimeError("Speaker suggestions unavailable. Assign names manually.") from None
+        except Exception as exc:
+            LOGGER.warning(
+                "Speaker suggestions failed stage=%s error_type=%s http_status=%s",
+                failure.value,
+                type(exc).__name__,
+                getattr(exc, "status_code", None),
+            )
+            raise SpeakerIdentificationError(failure) from None
 
 
 def _parse_result(text: str) -> SpeakerIdentificationResult:
-    payload = json.loads(text)
+    payload = json.loads(extract_json_object(text))
     if not isinstance(payload, dict) or set(payload) != {"suggestions"}:
         raise ValueError("Speaker proposals must contain exactly suggestions")
     items = payload["suggestions"]

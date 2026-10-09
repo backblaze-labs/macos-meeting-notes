@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from collections import Counter
 from collections.abc import Callable
@@ -12,11 +13,14 @@ from typing import Protocol
 from meeting_memory.service.transcript_review import load_speaker_review
 from meeting_memory.types.speakers import (
     KnownSpeaker,
+    SpeakerIdentificationError,
     SpeakerIdentificationRequest,
     SpeakerIdentificationResult,
     SpeakerSuggestion,
 )
 from meeting_memory.types.transcript import SpeakerReviewState
+
+LOGGER = logging.getLogger(__name__)
 
 
 class SpeakerIdentificationClient(Protocol):
@@ -61,12 +65,21 @@ class SpeakerSuggestionLoader:
         try:
             result = self._client.identify(request)
             suggestions = validate_suggestions(result, request)
+            LOGGER.info(
+                "Speaker suggestions completed labels=%s proposed=%s accepted=%s",
+                len(state.speaker_labels),
+                len(result.suggestions),
+                len(suggestions),
+            )
             current = load_speaker_review(path)
             if review_identity(current) != review_identity(state):
                 return replace(
                     current, suggestion_message="Transcript changed. Review current labels."
                 )
-        except Exception:
+        except SpeakerIdentificationError as exc:
+            return replace(state, suggestion_message=str(exc))
+        except Exception as exc:
+            LOGGER.warning("Speaker review unavailable error_type=%s", type(exc).__name__)
             return replace(
                 state, suggestion_message="Suggestions unavailable. Assign names manually."
             )

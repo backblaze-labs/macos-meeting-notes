@@ -75,8 +75,8 @@ DISCLOSURES = {
         "Anthropic receives the fixed output-schema instructions, the instruction block, "
         "and only a speaker-confirmed transcript excerpt capped at 60,000 characters. "
         "The editable Markdown layout stays local. Notes generation starts after explicit "
-        "speaker confirmation. Opening Review Speakers or Correct Speakers for known "
-        "attendees also sends a diarized local transcript excerpt (at most 60,000 characters), "
+        "speaker confirmation. Preparing new transcripts, or opening historical review for "
+        "known attendees, sends a diarized local excerpt (at most 60,000 characters), "
         "candidate names and local known-person context to Claude Haiku for suggestions. "
         "These require confirmation before names or Notes change."
     ),

@@ -16,8 +16,8 @@ without its credential; a complete legacy environment group opts it in.
 - Optional `KNOWN_SPEAKERS`, used to normalize configured people in Calendar
   speaker suggestions
 - Optional `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, and `SUMMARY_PROMPT_FILE` for
-  notes after speaker review (or right after transcription in the opt-in
-  automatic mode) and the `meeting-memory summarize` retry command
+  notes after explicit speaker review and the `meeting-memory summarize` retry
+  command; the same Anthropic key enables Haiku speaker proposals
 
 ## Outputs
 
@@ -30,16 +30,18 @@ without its credential; a complete legacy environment group opts it in.
   - `speaker_status`
   - diarized transcript lines
 - `notes.md`, carrying the same AI-transcription warning, after confirmed
-  speaker review starts notes generation, right after transcription when the
-  automatic mode is on, or after `meeting-memory summarize` is run manually
+  speaker review starts notes generation or after `meeting-memory summarize`
+  is run manually for a confirmed transcript
 
 ## Threading
 
 Transcription runs inside a dedicated background worker. It must not run on the
 tray UI thread. Speaker review relabeling is local deterministic code. Notes
 generation runs in a background thread from the tray, or through the local
-`meeting-memory summarize` command. In the automatic mode the controller
-confirms the diarized labels as-is on a worker thread before starting Notes.
+`meeting-memory summarize` command. After `TranscriptReady`, a background
+worker prepares proposals or a manual fallback. Only then does the main thread
+cache the review and send the actionable notification. Clicking uses that
+prepared state; historical review actions prepare on demand.
 
 ## Behavior Notes
 
@@ -62,9 +64,8 @@ confirms the diarized labels as-is on a worker thread before starting Notes.
   by Calendar full name, except aliases explicitly configured in
   `KNOWN_SPEAKERS` through the tray's **Configuration › Calendar...**
   editor. The local roster also stores an optional 300-character role/topics
-  description. When Review Speakers or Correct Speakers opens and every
-  candidate matches the roster, a background Claude Haiku request sends a
-  diarized local transcript excerpt (at most 60,000 characters), canonical
+  description. When preparing review and every candidate matches the roster, a
+  background Claude Haiku request sends a diarized local transcript excerpt (at most 60,000 characters), canonical
   candidate names, and relevant descriptions. It reuses the Notes key and
   honors the Notes pause; matching emails/aliases and transcript IDs stay local.
   AssemblyAI remains responsible only for audio transcription and diarization.
@@ -73,25 +74,20 @@ confirms the diarized labels as-is on a worker thread before starting Notes.
   take precedence, and cancellation changes no files. Unknown attendees,
   insufficient evidence, ambiguous mappings, and provider failures leave manual
   review available. Partial proposals do not require every attendee to speak.
-  Successful proposals are cached only for the current session and discarded
-  when transcript or roster context changes. No numerical identity-confidence
-  score is displayed. Google Meet and
-  Zoom expose no API a menu-bar app can use to learn who is speaking.
-- By default the user confirms speaker aliases in the tray UI, or chooses
+  Successful proposals and prepared manual fallbacks are cached only for the
+  current session. Clicking or reopening unchanged review makes no additional
+  request; changed transcript identity is reloaded on a worker before display.
+  Changed transcript or roster context invalidates successful proposals. No
+  numerical identity-confidence score is displayed. Google Meet and Zoom expose no API a menu-bar app can use to learn who is speaking.
+- The user confirms speaker aliases in the tray UI, or chooses
   **Keep Speaker Labels** when the names are unknown. The latter preserves
   labels such as `Speaker A`, leaves `speaker_aliases` empty, and still
   records the review as confirmed. Relabeling is deterministic code, not an
   LLM step. Either choice starts notes generation automatically. If notes are
   missing, skipped, or failed, the tray shows a **Debugging › Pending Meeting
   Tasks** action.
-- **Configuration › Automatic Notes from Calendar attendees** is off by
-  default. Enabling it shows the tradeoff first. When on and Notes is
-  available, a successful transcription keeps the diarized labels
-  (`speaker_status: confirmed`, `speaker_aliases` empty) and starts Notes;
-  the summarizer receives a `Calendar attendees:` line ahead of the
-  transcript and names owners only where the conversation makes the mapping
-  clear. When Notes is unconfigured or paused nothing happens and the
-  transcript stays open for manual review.
+- Speaker review is the only identity-confirmation flow. The former automatic
+  Notes toggle is removed, and its saved preference is ignored.
 - A transcript confirmed with kept labels accepts one later full alias map.
   **Debugging › Correct Speakers** lists recent such meetings; confirming
   names there relabels the transcript and regenerates Notes. Named aliases are
@@ -99,12 +95,14 @@ confirms the diarized labels as-is on a worker thread before starting Notes.
 - If Notes is unconfigured or fails, the transcript stays complete and
   `meeting-memory summarize` regenerates `notes.md` later.
 - Anthropic receives the fixed output-schema instructions, the configured
-  editable instruction block, the attendee names when the review kept the
-  diarized labels, and only a speaker-confirmed transcript excerpt clipped to
-  at most 60,000 characters. Notes reserve up to 4,096 output tokens so longer
+  editable instruction block, a fixed non-editable identity contract, and only
+  a speaker-confirmed transcript excerpt clipped to at most 60,000 characters. Notes reserve up to 4,096 output tokens so longer
   meetings can complete the structured response; a response that still stops
   at the output limit is rejected rather than parsed or published. Anthropic
-  never receives an unreviewed metadata stub.
+  never receives an unreviewed metadata stub for Notes. Notes receive no Calendar
+  prefix and preserve reviewed labels; they cannot infer anonymous speaker
+  names from mentions/topics. Explicitly named task recipients remain allowed.
+  The Notes model remains independently configurable.
 - The tray's **Configuration › Notes Customization...** item opens a native
   workspace for the effective `SUMMARY_PROMPT_FILE`. Templates offers the
   built-in Classic report and a Personal Focus report that requires the user's

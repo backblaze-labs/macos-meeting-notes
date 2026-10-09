@@ -1,7 +1,7 @@
 """Detect resumable post-processing work from local meeting artifacts.
 
 Also lists meetings whose speaker review kept the diarized labels (the
-automatic Notes path), so the user can still assign names afterwards.
+historical automatic Notes path), so the user can still assign names afterwards.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def list_pending_processing_tasks(meetings_dir: Path, limit: int = 5) -> list[Pr
 def list_correctable_speaker_reviews(meetings_dir: Path, limit: int = 3) -> list[ProcessingTask]:
     """Recent confirmed meetings that still carry diarized labels and no aliases.
 
-    These are the outcome of automatic Notes or Keep Speaker Labels. Their
+    These are the outcome of Keep Speaker Labels or historical automatic Notes. Their
     transcript accepts one later manual mapping, so they get a review task.
     Change the limit if the Debugging menu should reach further back.
     """
