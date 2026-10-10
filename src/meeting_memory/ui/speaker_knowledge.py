@@ -25,7 +25,7 @@ class SpeakerKnowledgeUI:
 
     def startup(self):
         if self._service is not None:
-            self._worker(lambda: self._offer(), offer_only=True)
+            self._worker(self._offer, offer_only=True)
 
     def after_review(self, path):
         if self._service is not None:

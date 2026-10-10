@@ -187,15 +187,15 @@ class RecorderService:
             capture = self._capture
             session = self._session
             if session is None or capture is None or self._stopping:
-                return
+                return None
             checker = getattr(capture, "check_health", None)
             if checker is None:
-                return
+                return None
 
         with self._capture_io_lock:
             with self._lock:
                 if self._capture is not capture or self._session is not session or self._stopping:
-                    return
+                    return None
             try:
                 warning = checker()
             except Exception:

@@ -20,7 +20,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class TopicsClient(Protocol):
-    def describe(self, people: tuple[PersonHistory, ...]) -> tuple[PersonTopic, ...]: ...
+    def describe(self, people: tuple[PersonHistory, ...]) -> tuple[PersonTopic, ...]:
+        pass
 
 
 class SpeakerKnowledgeService:
