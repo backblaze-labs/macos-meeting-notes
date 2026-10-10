@@ -109,7 +109,11 @@ repo, or service modules as needed.
    virtualenv Python so the official clickable app is updated and restarted.
 9. If requested behavior is not implemented or is only partially implemented,
    append the reason and future first-check guidance to `docs/deferred-work.md`.
-10. Commit and push a passing slice, open and merge its PR, then remove the
+10. Before merging, wait for all running bot reviews and checks to finish. Read
+    their comments and findings on the latest revision, evaluate each finding,
+    and fix applicable issues. After pushing fixes, wait for the new runs and
+    evaluate their results again.
+    Commit and push a passing slice, open and merge its PR, then remove the
    feature worktree and local feature branch.
 11. Update the primary checkout from `origin/main` without discarding or
    overwriting any pre-existing local changes.
