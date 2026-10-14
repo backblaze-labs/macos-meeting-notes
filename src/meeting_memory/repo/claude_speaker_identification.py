@@ -31,6 +31,16 @@ Do not force every attendee to have spoken or assign a name to every label. Each
 and label may occur at most once. Generic greetings, acknowledgements, and elimination
 alone are insufficient identity evidence: abstain.
 If evidence is insufficient return suggestions: [].
+Choose evidence AFTER identifying the speaker from the full supplied conversation.
+The evidence shown to the user must expose the actual distinguishing signal used:
+quote the specific work, project, responsibility, or self-identification that links
+this label to the chosen person's description. A generic line is not a substitute
+for that signal, even if another utterance made the identity clear. Prefer a concise
+verbatim passage containing the distinguishing detail, not the start of a long turn.
+For a named transition, quote the responding speaker's substantive continuation
+that supports the match, not a generic acknowledgement. If you cannot provide a
+useful same-speaker quote, omit that proposal. Never attach "yes", "thank you",
+a greeting, or an unrelated sentence as evidence for an otherwise inferred name.
 No confidence scores, Markdown fences, explanation fields, or extra keys."""
 
 

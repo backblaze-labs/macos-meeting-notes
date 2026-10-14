@@ -444,6 +444,14 @@ Partial proposals leave unresolved speakers for manual selection. Prepared
 reviews, including empty or failed proposals, are cached only for the app
 session. Canceling and reopening the same review reuses that result. Changed
 transcript text or participants invalidate it; a restart also clears the cache.
+Speaker proposal diagnostics are retained locally in
+`~/Library/Logs/meeting-memory/app.log`: the meeting folder name, proposed
+label/name, evidence quote (up to 2,000 characters, with truncation marked), and
+whether validation accepted the proposal. JSON escaping keeps each diagnostic
+on one log line. Raw provider responses and the full transcript are excluded.
+The identification prompt requires a concise quote showing the distinguishing
+identity signal rather than a generic acknowledgement.
+
 Review Speakers always displays each speaker's longest line as a clue, alongside
 any suggested-name evidence. Both clues remain visible in the scrollable review.
 

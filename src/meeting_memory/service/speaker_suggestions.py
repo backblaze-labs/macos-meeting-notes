@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from collections import Counter
@@ -70,6 +71,23 @@ class SpeakerSuggestionLoader:
                 len(state.speaker_labels),
                 len(result.suggestions),
                 len(suggestions),
+            )
+            LOGGER.info(
+                "Speaker proposal diagnostics meeting=%s proposals=%s",
+                json.dumps(state.meeting_directory.name, ensure_ascii=True),
+                json.dumps(
+                    [
+                        {
+                            "label": item.label[:200],
+                            "name": item.name[:200],
+                            "evidence": item.evidence[:2000],
+                            "evidence_truncated": len(item.evidence) > 2000,
+                            "accepted": item in suggestions,
+                        }
+                        for item in result.suggestions[:100]
+                    ],
+                    ensure_ascii=True,
+                ),
             )
             current = load_speaker_review(path)
             if review_identity(current) != review_identity(state):
