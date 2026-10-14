@@ -475,6 +475,9 @@ manual review without an automatic provider retry.
 
 **REQ-F4-05** After AssemblyAI creates a transcript job, the application MUST record its ID in the meeting's YAML frontmatter (`assemblyai_id` field) for future retrieval. Before then the field MUST remain `null`, never a failure sentinel.
 
+Review Speakers always displays each speaker's longest line as a clue, alongside
+any suggested-name evidence. Both clues remain visible in the scrollable review.
+
 **REQ-F4-06** Google Calendar attendees MAY populate `speaker_candidates`. Candidates SHOULD use the attendee's Calendar full name, except aliases explicitly configured in `KNOWN_SPEAKERS`. These candidates are hints for review and MAY be sent for unconfirmed Speaker
 Identification suggestions under REQ-F4-04.
 

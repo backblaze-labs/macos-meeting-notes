@@ -57,6 +57,9 @@ that competes with the user's meeting.
   suggestions for configured known Calendar attendees before offering Review
   Speakers. Unknown or ambiguous assignments remain manual. Opening prepared
   review reuses its result, and Notes preserve the reviewed identities.
+Review Speakers always displays each speaker's longest line as a clue, alongside
+any suggested-name evidence. Both clues remain visible in the scrollable review.
+
 - Make the local people base discoverable through Configuration and a one-time
   offer from confirmed history or newly confirmed names. Draft names locally,
   keep unknown matches editable, and ask explicitly before suggesting topics

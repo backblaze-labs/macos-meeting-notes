@@ -84,6 +84,9 @@ processed.
   does not change local aliases or the provider's diarized transcript. The CLI
   relabel command does not call an LLM.
 
+Review Speakers always displays each speaker's longest line as a clue, alongside
+any suggested-name evidence. Both clues remain visible in the scrollable review.
+
 ## Related Files
 
 - `src/meeting_memory/service/search.py`
