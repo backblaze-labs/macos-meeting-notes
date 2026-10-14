@@ -345,8 +345,9 @@ workflow definition does not imply that owner credentials or approval exist.
 fixed `claude-haiku-5-5` and low effort. It reuses the Notes JSON-object
 normalizer to accept fenced JSON, then validates the exact proposal schema.
 Typed request, response-format, and truncated-output failures expose sanitized
-manual-fallback messages; logs contain counts and error categories, never
-meeting text or provider payloads. `service/speaker_excerpt.py` extracts bounded
+manual-fallback messages; logs contain counts and error categories plus local speaker-proposal diagnostics
+(meeting folder name, proposed labels/names, bounded evidence quotes, and validation
+acceptance). Diagnostics JSON-escape text and exclude raw provider payloads. `service/speaker_excerpt.py` extracts bounded
 whole utterances without frontmatter. `service/speaker_suggestions.py` gates
 requests on the local roster, validates exact same-speaker evidence, and caches
 successful proposals only for the session. The roster reuses private

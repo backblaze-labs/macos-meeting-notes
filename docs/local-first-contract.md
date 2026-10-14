@@ -251,8 +251,17 @@ The local known-speaker roster stores canonical names, matching aliases/emails,
 and optional descriptions in the existing private preference document. Haiku
 receives only relevant canonical names and descriptions with the bounded
 diarized excerpt. No speaker-identification requests are sent to AssemblyAI.
-Suggestions require exact evidence from the indicated speaker and remain only
-in memory. They change no artifacts until the user confirms names. Missing,
+Speaker proposal diagnostics are retained locally in
+`~/Library/Logs/meeting-memory/app.log`: the meeting folder name, proposed
+label/name, evidence quote (up to 2,000 characters, with truncation marked), and
+whether validation accepted the proposal. JSON escaping keeps each diagnostic
+on one log line. Raw provider responses and the full transcript are excluded.
+The identification prompt requires a concise quote showing the distinguishing
+identity signal rather than a generic acknowledgement.
+
+Suggestions require exact evidence from the indicated speaker. Review caches
+remain in memory; diagnostic copies persist in the local log. Suggestions change
+no meeting artifacts until the user confirms names. Missing,
 unknown, ambiguous, or failed proposals preserve manual review; ASR confidence
 does not measure speaker identity. Notes start only after Confirm Names or
 Keep Speaker Labels and preserve those reviewed identities. They receive no

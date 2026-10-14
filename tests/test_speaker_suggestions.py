@@ -178,3 +178,44 @@ def test_transcript_changes_invalidate_cache(monkeypatch, state, change):
     current[0] = replace(state, **change)
     loader(state.meeting_directory)
     assert client.identify.call_count == 2
+
+
+def test_local_diagnostics_preserve_proposals_and_escape_lines(monkeypatch, state, caplog):
+    import json
+    import logging
+
+    state = replace(state, speaker_utterances=(SpeakerUtterance("A", "I am Alex.\nLaunch plan."),))
+    load_fixture(monkeypatch, state)
+    client = Mock()
+    client.identify.return_value = result(
+        ("A", "Alex", "I am Alex.\nLaunch plan."),
+        ("B", "Casey", "Unsupported quote"),
+    )
+    with caplog.at_level(logging.INFO):
+        SpeakerSuggestionLoader(client, people(*state.speaker_candidates))(state.meeting_directory)
+    record = next(r for r in caplog.records if "proposal diagnostics" in r.message)
+    payload = json.loads(record.message.split("proposals=", 1)[1])
+    assert payload[0]["evidence"] == "I am Alex.\nLaunch plan."
+    assert payload[0]["accepted"] is True
+    assert payload[1]["accepted"] is False
+    assert "\n" not in record.message
+
+
+def test_proposal_diagnostics_bound_and_mark_long_evidence(monkeypatch, state, caplog):
+    import json
+    import logging
+
+    quote = "x" * 2100
+    state = replace(state, speaker_utterances=(SpeakerUtterance("A", quote),))
+    load_fixture(monkeypatch, state)
+    client = Mock()
+    client.identify.return_value = result(("A", "Alex", quote))
+    with caplog.at_level(logging.INFO):
+        loaded = SpeakerSuggestionLoader(client, people(*state.speaker_candidates))(
+            state.meeting_directory
+        )
+    record = next(r for r in caplog.records if "proposal diagnostics" in r.message)
+    payload = json.loads(record.message.split("proposals=", 1)[1])
+    assert len(payload[0]["evidence"]) == 2000
+    assert payload[0]["evidence_truncated"] is True
+    assert loaded.speaker_evidence["A"] == quote

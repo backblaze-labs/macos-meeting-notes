@@ -514,3 +514,14 @@ First compare provider proposals against user-confirmed aliases on the same
 transcripts and roster. Inspect description overlap, named transitions, and
 abstentions before changing the model or loosening evidence validation. Avoid
 logging meeting text or sending historical records in an automatic investigation.
+
+## Speaker evidence diagnostics follow-up (2026-10-14)
+
+User feedback clarified that Felipe and Gonzalo were correctly identified but
+shown generic evidence quotes. Exact quote validation alone does not establish
+that a quote explains the identity. The prompt now explicitly requires choosing
+the distinguishing quote after reasoning from the conversation. Local logs retain
+bounded proposed names/quotes and validation acceptance for future inspection.
+This does not prove improved model behavior or add semantic quote validation.
+First inspect the next real proposal diagnostics against the user's review,
+including any truncation marker, before changing the identification model.
