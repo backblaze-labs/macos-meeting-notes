@@ -498,3 +498,19 @@ reason, and `SPEAKER_MAX_TOKENS` in `repo/claude_speaker_identification.py` befo
 changing parsing or evidence validation. A valid-looking partial JSON object
 must never bypass the output-limit check. Further private diagnostics require
 explicit authorization; never record meeting content or provider IDs here.
+
+## Speaker identity coverage investigation (2026-10-14)
+
+Recent local completion logs show proposals and accepted assignments of 3/5,
+1/2, and 2/5. Every returned proposal passed validation. The recent transcript
+inputs were below the 60,000-character bound, so prefix truncation does not
+explain those cases. The roster contains overlapping QA/tooling descriptions,
+and the identification prompt deliberately abstains when multiple people are
+plausible. These are potential contributors, not a demonstrated regression.
+
+Review Speakers now preserves the longest-line clue beside proposal evidence.
+Identity accuracy improvements remain unimplemented pending a labeled evaluation.
+First compare provider proposals against user-confirmed aliases on the same
+transcripts and roster. Inspect description overlap, named transitions, and
+abstentions before changing the model or loosening evidence validation. Avoid
+logging meeting text or sending historical records in an automatic investigation.

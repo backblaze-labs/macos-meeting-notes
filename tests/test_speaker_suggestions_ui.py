@@ -232,3 +232,16 @@ def test_cached_proposals_are_hidden_when_notes_pauses_before_click(monkeypatch,
     assert displayed.speaker_suggestions == {} and displayed.speaker_evidence == {}
     assert "paused" in displayed.suggestion_message
     controller.load_speaker_review.assert_called_once()
+
+
+def test_longest_line_remains_visible_with_suggestion_evidence(tmp_path):
+    from meeting_memory.ui.speaker_review import _speaker_hint
+
+    state = replace(
+        _state(tmp_path),
+        speaker_longest_lines={"Speaker A": "The longest utterance."},
+        speaker_evidence={"Speaker A": "I am Alex."},
+    )
+    hint = _speaker_hint(state, "Speaker A")
+    assert "Longest line: The longest utterance." in hint
+    assert "Suggested name evidence: I am Alex." in hint

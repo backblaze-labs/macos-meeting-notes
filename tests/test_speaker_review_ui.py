@@ -126,7 +126,7 @@ def test_appkit_review_scrolls_many_speakers(monkeypatch, tmp_path: Path) -> Non
     _prompt_aliases_appkit(state, lambda _path: None, lambda _path: None)
 
     scroll_view = fake_appkit.alerts[0].accessory
-    content_height = 62 + len(labels) * 82
+    content_height = 62 + len(labels) * 126
     assert (scroll_view.frame, scroll_view.document_view.frame) == (
         (0, 0, 640, SPEAKER_REVIEW_MAX_HEIGHT),
         (0, 0, 640, content_height),

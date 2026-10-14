@@ -105,7 +105,7 @@ def _prompt_aliases_appkit(
 
     while True:
         width = 640
-        row_height = 82
+        row_height = 126
         content_height = max(140, 62 + len(state.speaker_labels) * row_height)
         height = min(content_height, SPEAKER_REVIEW_MAX_HEIGHT)
         view = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, width, content_height))
@@ -131,7 +131,7 @@ def _prompt_aliases_appkit(
             view.addSubview_(label_field)
             view.addSubview_(popup)
             view.addSubview_(manual_field)
-            view.addSubview_(_hint_field(_speaker_hint(state, label), 132, y - 52, 488, 46))
+            view.addSubview_(_hint_field(_speaker_hint(state, label), 132, y - 96, 488, 90))
             rows.append((label, popup, manual_field))
 
         scroll_view = NSScrollView.alloc().initWithFrame_(NSMakeRect(0, 0, width, height))
@@ -253,13 +253,12 @@ def _aliases_from_rows(rows: list[tuple[str, Any, Any]]) -> dict[str, str]:
 
 
 def _speaker_hint(state: SpeakerReviewState, label: str) -> str:
+    text = state.speaker_longest_lines.get(label, "")
+    hint = f"Longest line: {_truncate(text, 170)}" if text else "Longest line unavailable"
     evidence = state.speaker_evidence.get(label)
     if evidence and not state.speaker_aliases.get(label):
-        return f"Suggested name evidence: {_truncate(evidence, 155)}"
-    text = state.speaker_longest_lines.get(label, "")
-    if not text:
-        return "Longest line unavailable"
-    return f"Longest line: {_truncate(text, 170)}"
+        hint += f"\nSuggested name evidence: {_truncate(evidence, 155)}"
+    return hint
 
 
 def _truncate(text: str, limit: int) -> str:
