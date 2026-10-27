@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -10,9 +9,19 @@ from typing import Any
 
 from meeting_memory.types.transcript import SpeakerReviewState
 from meeting_memory.ui.modal_focus import run_modal
+from meeting_memory.ui.speaker_review_fields import (
+    _alias_text,
+    _aliases_from_rows,
+    _display_label,
+    _hint_field,
+    _label_field,
+    _options_for,
+    _parse_alias_text,
+    _selected_option,
+    _speaker_hint,
+)
 from meeting_memory.ui.transcript_view import open_markdown_in_vscode, show_transcript_window
 
-MANUAL_OPTION = "Manual..."
 KEEP_LABELS_RESPONSE = 1001
 OPEN_MARKDOWN_RESPONSE = 1003
 FULL_TRANSCRIPT_RESPONSE = 1004
@@ -52,22 +61,35 @@ def open_speaker_review_window(
         _alert(rumps, "Review Speakers", "No speaker labels found in transcript.md.")
         return False
 
-    aliases = (
-        prompt_aliases(state)
-        if prompt_aliases is not None
-        else _prompt_aliases(state, open_conversation, show_transcript)
-    )
-    if aliases is None:
-        return False
+    def remember_draft(aliases: dict[str, str]) -> None:
+        nonlocal state
+        state = replace(state, speaker_aliases=dict(aliases), speaker_suggestions={})
 
-    try:
-        if aliases is KEEP_SPEAKER_LABELS:
-            actions.keep_labels(meeting_path)
-        else:
-            actions.confirm_aliases(meeting_path, aliases)
-    except Exception as exc:
-        _alert(rumps, "Review Speakers", _format_exception(exc))
-        return False
+    while True:
+        aliases = (
+            prompt_aliases(state)
+            if prompt_aliases is not None
+            else _prompt_aliases(state, open_conversation, show_transcript, remember_draft)
+        )
+        if aliases is None:
+            return False
+        if aliases is not KEEP_SPEAKER_LABELS:
+            remember_draft(aliases)
+            missing = [
+                label for label in state.speaker_labels if not aliases.get(label, "").strip()
+            ]
+            if missing:
+                _alert(rumps, "Review Speakers", "Assign a name to: " + ", ".join(missing))
+                continue
+        try:
+            if aliases is KEEP_SPEAKER_LABELS:
+                actions.keep_labels(meeting_path)
+            else:
+                actions.confirm_aliases(meeting_path, aliases)
+        except Exception as exc:
+            _alert(rumps, "Review Speakers", _format_exception(exc))
+            continue
+        break
 
     try:
         actions.generate_notes(meeting_path)
@@ -81,17 +103,19 @@ def _prompt_aliases(
     state: SpeakerReviewState,
     open_conversation: OpenConversation,
     show_transcript: ShowTranscript,
+    remember_draft: Callable[[dict[str, str]], None],
 ):
     try:
-        return _prompt_aliases_appkit(state, open_conversation, show_transcript)
+        return _prompt_aliases_appkit(state, open_conversation, show_transcript, remember_draft)
     except Exception:
-        return _prompt_aliases_text(state, _load_rumps())
+        return _prompt_aliases_text(state, _load_rumps(), remember_draft)
 
 
 def _prompt_aliases_appkit(
     state: SpeakerReviewState,
     open_conversation: OpenConversation,
     show_transcript: ShowTranscript,
+    remember_draft: Callable[[dict[str, str]], None] = lambda _aliases: None,
 ) -> PromptResult:
     from AppKit import (
         NSAlert,
@@ -153,14 +177,16 @@ def _prompt_aliases_appkit(
         alert.addButtonWithTitle_("Full Transcript")
         alert.setAccessoryView_(scroll_view)
         response = run_modal(alert)
+        aliases = _aliases_from_rows(rows)
+        remember_draft(aliases)
         if int(response) in {1, 1000}:
-            return _aliases_from_rows(rows)
+            return aliases
         if int(response) == OPEN_MARKDOWN_RESPONSE:
-            state = replace(state, speaker_aliases=_aliases_from_rows(rows))
+            state = replace(state, speaker_aliases=aliases, speaker_suggestions={})
             open_conversation(state.transcript_path)
             continue
         if int(response) == FULL_TRANSCRIPT_RESPONSE:
-            state = replace(state, speaker_aliases=_aliases_from_rows(rows))
+            state = replace(state, speaker_aliases=aliases, speaker_suggestions={})
             show_transcript(state.transcript_path)
             continue
         if int(response) == KEEP_LABELS_RESPONSE:
@@ -168,7 +194,11 @@ def _prompt_aliases_appkit(
         return None
 
 
-def _prompt_aliases_text(state: SpeakerReviewState, rumps: Any) -> PromptResult:
+def _prompt_aliases_text(
+    state: SpeakerReviewState,
+    rumps: Any,
+    remember_draft: Callable[[dict[str, str]], None] = lambda _aliases: None,
+) -> PromptResult:
     window = rumps.Window(
         message=_review_message(state)
         + "\nUse label=name mappings, or leave every name blank to keep the labels.",
@@ -182,6 +212,7 @@ def _prompt_aliases_text(state: SpeakerReviewState, rumps: Any) -> PromptResult:
     if not getattr(response, "clicked", False):
         return None
     aliases = _parse_alias_text(str(response.text))
+    remember_draft(aliases)
     return aliases if any(aliases.values()) else KEEP_SPEAKER_LABELS
 
 
@@ -205,88 +236,12 @@ def _alert(
 def _review_message(state: SpeakerReviewState) -> str:
     candidates = ", ".join(state.speaker_candidates) or "No candidates found"
     speakers = ", ".join(_display_label(label) for label in state.speaker_labels)
-    message = f"Detected speakers: {speakers}\nCandidates: {candidates}"
-    return f"{message}\n{state.suggestion_message}" if state.suggestion_message else message
-
-
-def _options_for(state: SpeakerReviewState, label: str) -> list[str]:
-    options = list(state.speaker_candidates)
-    alias = state.speaker_aliases.get(label, "")
-    if alias and alias not in options:
-        options.append(alias)
-    options.append(MANUAL_OPTION)
-    return options
-
-
-def _selected_option(state: SpeakerReviewState, label: str, options: list[str]) -> str:
-    alias = state.speaker_aliases.get(label) or state.speaker_suggestions.get(label, "")
-    return alias if alias in options else MANUAL_OPTION
-
-
-def _label_field(text: str, x: int, y: int, width: int, height: int) -> Any:
-    from AppKit import NSMakeRect, NSTextField
-
-    field = NSTextField.alloc().initWithFrame_(NSMakeRect(x, y, width, height))
-    field.setStringValue_(text)
-    field.setBezeled_(False)
-    field.setDrawsBackground_(False)
-    field.setEditable_(False)
-    field.setSelectable_(False)
-    return field
-
-
-def _hint_field(text: str, x: int, y: int, width: int, height: int) -> Any:
-    from AppKit import NSFont
-
-    field = _label_field(text, x, y, width, height)
-    field.setFont_(NSFont.systemFontOfSize_(12))
-    return field
-
-
-def _aliases_from_rows(rows: list[tuple[str, Any, Any]]) -> dict[str, str]:
-    aliases: dict[str, str] = {}
-    for label, popup, manual_field in rows:
-        selected = str(popup.titleOfSelectedItem())
-        manual = str(manual_field.stringValue()).strip()
-        aliases[label] = manual if selected == MANUAL_OPTION else selected.strip()
-    return aliases
-
-
-def _speaker_hint(state: SpeakerReviewState, label: str) -> str:
-    text = state.speaker_longest_lines.get(label, "")
-    hint = f"Longest line: {_truncate(text, 170)}" if text else "Longest line unavailable"
-    evidence = state.speaker_evidence.get(label)
-    if evidence and not state.speaker_aliases.get(label):
-        hint += f"\nSuggested name evidence: {_truncate(evidence, 155)}"
-    return hint
-
-
-def _truncate(text: str, limit: int) -> str:
-    if len(text) <= limit:
-        return text
-    return f"{text[: limit - 3].rstrip()}..."
-
-
-def _alias_text(state: SpeakerReviewState) -> str:
-    return "\n".join(
-        f"{label}={state.speaker_aliases.get(label) or state.speaker_suggestions.get(label, '')}"
-        for label in state.speaker_labels
+    message = (
+        f"Detected speakers: {speakers}\nCandidates: {candidates}\n"
+        "Assign every speaker a name. To keep one label, enter its text as the manual name "
+        "(for example, Unknown). Keep Speaker Labels keeps all labels."
     )
-
-
-def _display_label(label: str) -> str:
-    return f"Speaker {label}" if re.fullmatch(r"[A-Z]+", label) else label
-
-
-def _parse_alias_text(text: str) -> dict[str, str]:
-    aliases: dict[str, str] = {}
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        label, alias = line.split("=", 1)
-        aliases[label.strip()] = alias.strip()
-    return aliases
+    return f"{message}\n{state.suggestion_message}" if state.suggestion_message else message
 
 
 def _format_exception(exc: Exception) -> str:

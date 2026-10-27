@@ -97,6 +97,13 @@ identity signal rather than a generic acknowledgement.
 Review Speakers always displays each speaker's longest line as a clue, alongside
 any suggested-name evidence. Both clues remain visible in the scrollable review.
 
+Incomplete speaker assignments return to Review Speakers with the selected names
+and blank fields preserved, and identify the labels that still need a name.
+A save failure also returns to review for correction, retry, or cancellation.
+To keep one anonymous label while naming the others, enter its exact text
+(for example, `Unknown`) as the manual name. **Keep Speaker Labels** keeps
+all labels. Notes start only after a successful confirmation.
+
 ## Related Files
 
 - `src/meeting_memory/service/search.py`
