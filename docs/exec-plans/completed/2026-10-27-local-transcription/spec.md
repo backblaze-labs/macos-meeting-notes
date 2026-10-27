@@ -1,5 +1,6 @@
 ---
-status: approved
+status: done
+completed: 2026-10-27
 approved: 2026-10-27
 plan: plan.md
 ---
