@@ -80,6 +80,11 @@ class MigrationPlan:
         existing_keys = {item.key for item in values}
         for capability in selected:
             for definition in definitions_for(capability):
+                if definition.key in {
+                    SettingKey.TRANSCRIPTION_PROVIDER,
+                    SettingKey.ASSEMBLYAI_CONSENT,
+                }:
+                    continue
                 if definition.secret or definition.key not in self._values:
                     continue
                 key = PreferenceKey(definition.key.value)
@@ -106,6 +111,11 @@ def build_migration_plan(
 ) -> MigrationPlan:
     """Build canonical candidates without using process values as import material."""
 
+    values = {
+        key: value
+        for key, value in values.items()
+        if key not in {SettingKey.TRANSCRIPTION_PROVIDER, SettingKey.ASSEMBLYAI_CONSENT}
+    }
     candidates = tuple(
         _candidate(capability, values, preferences, process_keys) for capability in Capability
     )

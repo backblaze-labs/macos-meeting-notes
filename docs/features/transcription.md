@@ -2,183 +2,240 @@
 
 ## Purpose
 
-Send completed meeting audio to AssemblyAI and write the source-of-truth
-diarized transcript to `transcript.md`.
+Produce the source-of-truth diarized `transcript.md` from committed meeting
+audio. Transcription defaults to Local and is enabled unless explicitly
+disabled. It remains independent of Recording Core under
+[`../local-first-contract.md`](../local-first-contract.md): missing models,
+incompatible hardware, and processing failures preserve local audio.
 
-Transcription is an optional capability under
-[`../local-first-contract.md`](../local-first-contract.md). Recording Core runs
-without its credential; a complete legacy environment group opts it in.
+## Prepare and Use Local Transcription
 
-## Inputs
+Local requires native arm64 macOS on Apple Silicon, Metal, and the installed
+MLX runtime. Intel, Windows, and translated x86_64 processes do not support this
+backend. Installation remains possible without MLX on unsupported systems, and
+recording remains available under the existing B2 onboarding requirements.
 
-- `recording.m4a`
-- `ASSEMBLYAI_API_KEY`
-- Optional `KNOWN_SPEAKERS`, used to normalize configured people in Calendar
-  speaker suggestions
-- Optional `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, and `SUMMARY_PROMPT_FILE` for
-  notes after explicit speaker review and the `meeting-memory summarize` retry
-  command; the same Anthropic key enables Haiku speaker proposals
+1. Choose **Configuration › Prepare Local Models...** and start preparation.
+   The native panel shows phases or measured progress, supports cancellation
+   and retry, and leaves the tray responsive.
+2. Preparation first validates the standard Hugging Face cache and downloads
+   only missing content. Weight downloads send no meeting audio or text.
+3. Record a new meeting after preparation. To process a recording already
+   pending or failed, choose **Debugging › Retry Pending or Failed
+   Transcriptions** separately and confirm the effective provider.
 
-## Outputs
+Preparation changes readiness only. Startup, doctor, restart, and preparation
+completion do not process historical recordings. Successful transcriptions are
+terminal. Saving a provider pauses new transcription jobs and requires a
+restart; there is no live backend switch or automatic cloud fallback.
 
-- `TranscriptResult`
-- `transcript.md` with:
-  - a brief warning that AI-generated transcriptions may contain errors
-  - `assemblyai_id`
-  - `speaker_candidates`
-  - editable `speaker_aliases`
-  - `speaker_status`
-  - diarized transcript lines
-- `notes.md`, carrying the same AI-transcription warning, after confirmed
-  speaker review starts notes generation or after `meeting-memory summarize`
-  is run manually for a confirmed transcript
+### Models and Language
 
-## Threading
+| Role | Model | Pinned revision |
+| --- | --- | --- |
+| Recognition | `mlx-community/whisper-large-v3-turbo-asr-fp16` | `624c19c9af5603fa73b83bce14d4aeea96156d18` |
+| Diarization | `mlx-community/Nemotron-3-Diarization` | `59ed2dbfc1346dcea9d423c71306a3a2499c568f` |
 
-Transcription runs inside a dedicated background worker. It must not run on the
-tray UI thread. Speaker review relabeling is local deterministic code. Notes
-generation runs in a background thread from the tray, or through the local
-`meeting-memory summarize` command. After `TranscriptReady`, a background
-worker prepares proposals or a manual fallback. Only then does the main thread
-cache the review and send the actionable notification. Clicking uses that
-prepared state; historical review actions prepare on demand.
+Whisper uses word timestamps, `condition_on_previous_text=False`, automatic
+language detection, and `task="transcribe"`. It preserves the spoken language
+rather than translating. English and Spanish have been exercised with real
+audio. This is not a universal multilingual-accuracy claim. Nemotron supports
+up to eight anonymous labels and does not fully resolve overlapping speech.
 
-## Behavior Notes
+The cache manifest fixes expected files, sizes, and hashes for each revision.
+Preparation verifies integrity, including legitimate snapshot/blob cache links.
+Incomplete or corrupt weights are not ready. Inference performs full
+verification before loading; doctor uses bounded local checks without loading
+weights or downloading. Cancellation preserves shared cache files. Remote code
+and pickle are not used.
 
-- AssemblyAI is the transcription source of truth and returns diarized speaker
-  labels such as `Speaker A`.
-- Runtime submission copies audio through the pinned owned meeting descriptor
-  into a private file reopened read-only and unlinked before the adapter sees
-  it. Later path swaps cannot change or redirect the bytes. Provider job create
-  is attempted once because retrying an ambiguous submit timeout could create
-  an orphan; persisted job-ID resume remains retryable.
-- Before the worker thread starts, runtime binds the meeting directory
-  device/inode sealed by local publication, or by an explicit retry scan. Audio
-  capture and every Transcription claim, job-ID
-  CAS, success, failure, and retry write require that same identity, so an
-  owned same-slug directory replacement reaches neither AssemblyAI nor the
-  replacement transcript.
-- The Stop Recording pipeline writes `transcript.md` only. It does not call
-  Anthropic and does not write summaries or decisions.
-- Google Calendar attendees populate `speaker_candidates`. Attendees are shown
-  by Calendar full name, except aliases explicitly configured in
-  `KNOWN_SPEAKERS` through the tray's **Configuration › Calendar...**
-  editor. The standalone **Configuration › Known Speakers...** entry can build
-  an editable local base from existing confirmed names and optionally suggest
-  usual topics through an explicit Haiku action. A one-time offer also follows
-  newly confirmed names after Notes starts. The local roster stores an optional
-  300-character role/topics
-  description. When preparing review and every candidate matches the roster, a
-  background Claude Haiku request sends a diarized local transcript excerpt (at most 60,000 characters), canonical
-  candidate names, and relevant descriptions. It reuses the Notes key and
-  honors the Notes pause; matching emails/aliases and transcript IDs stay local.
-  AssemblyAI remains responsible only for audio transcription and diarization.
-  The selector marks proposed names and shows an exact supporting quote spoken
-  by that label. Only Confirm Names saves aliases. Existing manual selections
-  take precedence, and cancellation changes no files. Unknown attendees,
-  insufficient evidence, ambiguous mappings, and provider failures leave manual
-  review available. Partial proposals do not require every attendee to speak.
-  Successful proposals and prepared manual fallbacks are cached only for the
-  current session. Clicking or reopening unchanged review makes no additional
-  request; changed transcript identity is reloaded on a worker before display.
-  Changed transcript or roster context invalidates successful proposals. No
-  numerical identity-confidence score is displayed. Google Meet and Zoom expose no API a menu-bar app can use to learn who is speaking.
-- The user confirms speaker aliases in the tray UI, or chooses
-  **Keep Speaker Labels** when the names are unknown. The latter preserves
-  labels such as `Speaker A`, leaves `speaker_aliases` empty, and still
-  records the review as confirmed. Relabeling is deterministic code, not an
-  LLM step. Either choice starts notes generation automatically. If notes are
-  missing, skipped, or failed, the tray shows a **Debugging › Pending Meeting
-  Tasks** action.
-- Speaker review is the only identity-confirmation flow. The former automatic
-  Notes toggle is removed, and its saved preference is ignored.
-- A transcript confirmed with kept labels accepts one later full alias map.
-  **Debugging › Correct Speakers** lists recent such meetings; confirming
-  names there relabels the transcript and regenerates Notes. Named aliases are
-  terminal.
-- If Notes is unconfigured or fails, the transcript stays complete and
-  `meeting-memory summarize` regenerates `notes.md` later.
-- Anthropic receives the fixed output-schema instructions, the configured
-  editable instruction block, a fixed non-editable identity contract, and only
-  a speaker-confirmed transcript excerpt clipped to at most 60,000 characters. Notes reserve up to 4,096 output tokens so longer
-  meetings can complete the structured response; a response that still stops
-  at the output limit is rejected rather than parsed or published. Anthropic
-  never receives an unreviewed metadata stub for Notes. Notes receive no Calendar
-  prefix and preserve reviewed labels; they cannot infer anonymous speaker
-  names from mentions/topics. Explicitly named task recipients remain allowed.
-  The Notes model remains independently configurable.
-- The tray's **Configuration › Notes Customization...** item opens a native
-  workspace for the effective `SUMMARY_PROMPT_FILE`. Templates offers the
-  built-in Classic report and a Personal Focus report that requires the user's
-  name. Advanced defines one to eight ordered sections, with separate title,
-  guidance, audience, and Markdown format controls plus metadata choices,
-  general AI guidance, and a live preview. The app-owned storage markers and
-  versioned profile payload never appear in the workspace. Saved changes alter
-  both the requested structured section IDs and the next local `notes.md`
-  without restarting the app. Without an explicit path override, the editable
-  copy is personal state at
-  `~/Library/Application Support/meeting-memory/prompts/summary.md`; the
-  repository prompt remains an unchanged built-in fallback.
-- `meeting-memory summarize <meeting-folder>` requires
-  `speaker_status: confirmed` and remains available as a backfill/retry command
-  for `notes.md`.
-- If AssemblyAI fails, the worker atomically writes a provider-detail-free
-  transcription failure state while retaining local audio.
-- Failed transcription states can be retried later with `Retry Failed
-  Transcriptions`, using transcript frontmatter as durable state.
-- Before a failed retry submits a replacement provider job, one locked replace
-  moves the job to pending and clears the previous provider ID. The new ID is
-  then persisted before polling, so an old ID cannot orphan a new submission.
-- `Retry Failed Transcriptions` scans only Transcription state; it never starts
-  Backup work.
-- Legacy retry compatibility snapshots the owned legacy metadata and audio into
-  private read-only streams before the adapter runs. The provider job and
-  request identity therefore come from the same captured bytes, and a changed
-  legacy file fails closed instead of letting the compatibility writer touch a
-  schema-v2 or foreign artifact.
-- An unconfigured or failed transcription
-  leaves the committed audio usable and reports only Transcription's state.
-- The runtime finishes schema-v2 transcription with
-  one locked whole-document replace: provider-ID CAS, transcript body, owned
-  fields, and Backup revision reconciliation succeed or conflict together.
-  Speaker confirmation uses the same model. Notes snapshots a confirmed owned
-  transcript, revalidates it after the provider call, and atomically publishes
-  `notes.md` without following an existing symlink or FIFO. Existing legacy
-  meetings use a separate private metadata snapshot and unchanged-identity
-  check, so the tray action and `meeting-memory summarize` remain compatible
-  without sending legacy artifacts through the schema-v2 writer.
+## Configuration and External Provider Consent
+
+The relevant settings are:
+
+| Setting | Accepted sources | Meaning |
+| --- | --- | --- |
+| `TRANSCRIPTION_PROVIDER` | App preference or actual process environment only | `local` by default; `assemblyai` only by explicit choice |
+| `ASSEMBLYAI_CONSENT` | App preference or actual process environment only | `external-audio-v1` after notice acceptance |
+| `ASSEMBLYAI_API_KEY` | Existing supported credential sources, including legacy `.env` | Credential for explicitly selected AssemblyAI |
+
+The provider and consent settings are intentionally ignored in legacy `.env`
+and legacy imports. An inherited API key does not select AssemblyAI or grant
+consent. Existing keys and Keychain references remain preserved; Local does not
+read or depend on them. Explicit disablement remains effective.
+
+Prefer **Configuration › Transcription...**. Selecting AssemblyAI requires
+acceptance of the versioned external-audio notice before saving and before any
+submit, polling, or retry request. Canceling leaves the provider and permission
+unchanged. Development and automation must supply equivalent explicit
+selection and consent through the actual process environment or app settings;
+copying these values into `.env` is insufficient.
+
+### External Provider Consent
+
+The AssemblyAI notice identifies the automatic post-stop audio upload and
+explains that handling depends on plan, contract, and account controls. Its free
+plan participates in model improvement and has no opt-out. Paid accounts can
+explicitly opt out; paying does not automatically exclude content. Opt-out
+affects future requests only. Meeting Memory does not read or assert the
+account's actual opt-out setting.
+
+Official sources verified on 2026-10-27:
+
+- [Model-improvement opt-out](https://www.assemblyai.com/docs/faq/how-to-opt-out-of-data-sharing-for-our-model-improvement-program)
+- [Data controls](https://www.assemblyai.com/docs/data-controls)
+
+## Inputs and Outputs
+
+Input is an owned, committed `recording.m4a`. Local needs prepared models; cloud
+needs explicit selection, consent, and an AssemblyAI key. Optional Calendar
+attendees and `KNOWN_SPEAKERS` provide speaker-review candidates. Optional
+Anthropic settings enable speaker suggestions and Notes.
+
+Output is a typed `TranscriptResult` and `transcript.md` containing an AI-error
+notice, provider/attempt identity, optional cloud-only `assemblyai_id`,
+timestamps, anonymous speaker labels, text, `speaker_candidates`, editable
+`speaker_aliases`, and `speaker_status`. Local uses no invented remote IDs.
+`notes.md` is derived separately after explicit speaker confirmation or the
+`meeting-memory summarize` retry command.
+
+## Execution and Durable Identity
+
+Preparation, decoding, and inference run outside the tray UI thread. A serial
+local worker and cross-instance lock prevent duplicate simultaneous downloads
+or model loads. Each inference uses a subprocess that loads Whisper, releases
+it, then loads Nemotron. The process exits after completion, failure, or
+cancellation to release Metal allocations. Lock ownership includes teardown;
+canceling while waiting does not start a child.
+
+The repository adapter decodes validated M4A snapshots through the native
+AVFoundation helper into private mono 16 kHz PCM. It does not require system
+FFmpeg or reopen the mutable original meeting path. Temporary derivatives are
+removed after completion or failure. Child environments are allowlisted,
+exclude inherited credentials, close unrelated descriptors, and disable
+inference network access and telemetry before SDK imports. Meeting content is
+not placed in arguments or worker logs. This is a constrained process boundary,
+not a claim of complete operating-system isolation.
+
+Before execution, one atomic claim records the provider, attempt ID, and
+running state. Claims, remote-ID updates, success, failure, and retry compare
+the captured attempt, provider, directory identity, and source-audio identity.
+A replaced directory/audio file or stale completion cannot update the meeting.
+An old AssemblyAI ID never causes polling or upload under Local. Historical
+cloud provenance supports artifact interpretation, not egress authorization.
+AssemblyAI submission is attempted once because an ambiguous submission
+retry could create an orphan; a durably persisted remote job may be resumed
+only under the selected and consented cloud configuration.
+
+Completion uses one locked whole-document replace for identity CAS, transcript
+body, owned fields, and Backup revision reconciliation. Speaker confirmation
+uses the same transactional boundary. Legacy retries use private read-only
+metadata/audio snapshots and unchanged-identity checks instead of routing
+historical files through the schema-v2 writer.
+
+## Alignment and Failures
+
+Words align to the diarization turn with greatest positive overlap, with
+stable tie-breaking and half-open intervals for zero-duration words. Gaps use
+Unknown rather than a guessed nearest speaker. Preserve text and segments when
+word timing is absent, and reject invalid or non-finite timestamps. Anonymous
+labels identify turns, not people.
+
+Missing or corrupt models leave work pending with a preparation action.
+Unsupported hardware, unavailable runtime, and inference errors report an
+action while preserving audio. Complete Nemotron failure fails the whole job:
+no partial transcript, review notification, or automatic Notes is published.
+Unknown applies to gaps in otherwise completed diarization. No failure selects
+AssemblyAI.
+
+**Retry Pending or Failed Transcriptions** scans durable Transcription state
+only, never Backup. It requires an explicit action and effective-provider
+confirmation. A fresh attempt replaces the prior identity atomically, and
+successful transcripts stay terminal. Neither provider changes nor model
+preparation automatically retry history.
+
+## Speaker Review and Notes
+
+After successful transcription, a background worker prepares review before the
+main thread sends **Transcript ready** with **Review Speakers**. Configured
+Calendar attendees populate candidates; explicit `KNOWN_SPEAKERS` matches
+normalize their names. If every candidate matches the roster and Notes is
+enabled, preparation can send a bounded diarized excerpt, relevant canonical
+names, and descriptions to Claude Haiku before confirmation. Matching
+emails/aliases, frontmatter, and provider IDs remain local. Suggestions honor
+Notes pause, require exact evidence from the indicated label, and never assign
+identities without user confirmation. Unknown or ambiguous cases remain
+manual. Prepared suggestions and manual fallbacks are session-only; opening
+unchanged review reuses them. Historical review prepares on demand.
+
+**Confirm Names** applies aliases through local deterministic code. **Keep
+Speaker Labels** preserves anonymous labels, leaves aliases empty, and still
+confirms review. Either can start enabled Notes. A kept-label transcript can
+receive one later complete alias correction through **Debugging › Correct
+Speakers**, which regenerates Notes. Named aliases are terminal. The former
+automatic Notes toggle is ignored.
+
+Notes send fixed schema/identity instructions, editable guidance, and only the
+speaker-confirmed excerpt, capped at 60,000 characters. The local Markdown
+layout and Calendar attendee prefix are excluded. Reviewed identities are
+preserved; anonymous identities cannot be inferred from mentions or topics.
+Explicitly named task recipients remain allowed. Output-limit responses are
+rejected without partial publication. Failures preserve the transcript, and
+`meeting-memory summarize <meeting-folder>` remains a manual retry for confirmed
+transcripts. **Debugging › Pending Meeting Tasks** exposes missing Notes.
+
+The native **Notes Customization...** workspace edits the private versioned
+profile; the repository prompt is a read-only built-in fallback. The standalone
+**Known Speakers...** editor can draft names locally from confirmed history.
+Only its explicit **Suggest Topics** action sends historical quotes to
+Anthropic. See [search and speaker mapping](search-and-speaker-mapping.md) for
+roster and evidence rules.
+
+Local transcription does not make the whole application offline or wholly
+local: required B2 Backup sends audio/transcripts, and enabled Anthropic
+suggestions and Notes send bounded content at the triggers above.
+
+## Verification
+
+`make check` uses fakes and requires neither GPU, model weights, nor network.
+The explicit hardware check uses real audio, preserves the source meeting,
+and writes results to the selected private output:
+
+```bash
+make PYTHON=.venv/bin/python check-local-transcription \
+  LOCAL_CHECK_ARGS='"/path/to/recording.m4a" --expected-language es --helper .build/MeetingMemoryCapture --output /path/to/private-results/result.json'
+```
+
+Use `--expected-language en` for an English sample. Keep results and source
+meeting content outside Git. Anonymized feasibility observations and delivery
+checks are recorded with the approved execution plan.
 
 ## Related Files
 
+- `src/meeting_memory/repo/local_transcription.py`
+- `src/meeting_memory/repo/local_models.py`
+- `src/meeting_memory/repo/local_model_cache.py`
+- `src/meeting_memory/repo/local_process.py`
+- `src/meeting_memory/repo/native_audio_decoding.py`
 - `src/meeting_memory/repo/transcription.py`
-- `src/meeting_memory/repo/summarizer.py`
-- `src/meeting_memory/repo/retry.py`
-- `src/meeting_memory/service/pipeline.py`
-- `src/meeting_memory/service/transcription_audio.py`
-- `src/meeting_memory/service/markdown.py`
-- `src/meeting_memory/service/transcript_review.py`
-- `src/meeting_memory/service/transcript_state.py`
+- `src/meeting_memory/service/local_transcription.py`
+- `src/meeting_memory/service/transcription_attempts.py`
 - `src/meeting_memory/service/runtime_transcription.py`
-- `src/meeting_memory/service/runtime_notes.py`
-- `src/meeting_memory/service/speaker_state.py`
-- `src/meeting_memory/service/file_snapshot.py`
-- `src/meeting_memory/service/summary_prompt.py`
-- `src/meeting_memory/service/processing_retry.py`
-- `src/meeting_memory/service/legacy_snapshot.py`
-- `src/meeting_memory/service/speaker_mapping.py`
-- `src/meeting_memory/ui/notes_prompt.py`
-- `prompts/summary.md`
+- `src/meeting_memory/service/local_model_preparation.py`
+- `src/meeting_memory/ui/transcription_form.py`
+- `src/meeting_memory/ui/local_models.py`
+- `scripts/check_local_transcription.py`
 
 ## Tests
 
-- `tests/test_transcription.py`
-- `tests/test_transcript_review.py`
-- `tests/test_transcript_state.py`
-- `tests/test_speaker_state.py`
-- `tests/test_file_snapshot.py`
-- `tests/test_summarizer.py`
-- `tests/test_summary_prompt.py`
-- `tests/test_pipeline.py`
-- `tests/test_processing_retry.py`
+- `tests/test_local_transcription_configuration.py`
+- `tests/test_transcription_external_consent.py`
+- `tests/test_local_model_cache.py`
+- `tests/test_local_model_preparation.py`
+- `tests/test_local_transcription_output.py`
+- `tests/test_local_transcription_readiness.py`
+- `tests/test_local_models_ui.py`
+- `tests/test_transcription_form.py`
 - `tests/test_runtime_job_identity.py`
+- `tests/test_transcript_review.py`
 - `tests/test_speaker_mapping.py`

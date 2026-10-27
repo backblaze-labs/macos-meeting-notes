@@ -28,10 +28,13 @@ background threads. UI notifications are emitted through the event queue.
 - Recovery discovers private indexed sessions read-only. Selecting one uses the
   same verified local commit, typed event, cleanup receipt, and post-commit
   policy as a newly stopped recording.
-- `Retry Failed Transcriptions` uses existing frontmatter as durable state
+- `Retry Pending or Failed Transcriptions` uses existing frontmatter as durable state
   instead of a separate job database.
 - `Retry Pending B2 Backups` is only for backup retry; transcription retry
-  handles failed transcription.
+  handles pending or failed transcription after effective-provider confirmation.
+  Model preparation changes readiness only and never invokes this retry.
+  Successful transcriptions remain terminal; legacy cloud IDs do not authorize
+  uploads or polling under Local.
 - Retries are user-triggered from the tray's **Debugging** submenu; automatic
   connectivity-triggered retry remains future work.
 - The active recovery substrate uses a unique private app-owned

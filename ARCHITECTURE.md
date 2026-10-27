@@ -36,7 +36,7 @@ the pure artifact, job-owner, post-commit policy, and worker-to-UI boundaries.
 ```text
 Recording Core
 ├── Backup (required configuration; provider failure remains isolated)
-├── Transcription (optional)
+├── Transcription (Local by default; explicitly disableable)
 ├── Calendar (optional)
 └── Notes (optional; consumes a reviewed transcript)
 ```
@@ -50,7 +50,9 @@ staging on the `MEETINGS_DIR` filesystem, then publishes the complete meeting
 directory with one atomic rename.
 
 `config/runtime.py` loads Recording Core independently and treats complete
-legacy `.env` provider groups as configured inputs. `ui/runtime_app.py` is the
+legacy `.env` provider groups as credential inputs. Transcription provider
+and external consent accept app/process sources only; an inherited AssemblyAI
+key never activates cloud. `ui/runtime_app.py` is the
 composition root: it routes missing/disabled Backup to the setup tray, builds
 only configured adapters, starts Calendar only when configured, and captures
 Transcription/Backup policy at local commit time.
@@ -78,7 +80,7 @@ keeps the exact source pinned while MeetingStore publishes it. Direct M4A
 recovery checks copied size and digest; WAV recovery gives an injected
 converter a verified private snapshot path and removes that snapshot before
 publication. Both paths require a caller-supplied, native-compatible M4A
-validator that establishes a complete container with AAC audio—the service has
+validator that establishes a complete container with AAC audio. The service has
 no signature-only fallback. The validator receives a read-only inherited file
 descriptor for the exact pinned candidate; because AVFoundation cannot open
 that descriptor path directly, the native helper copies it to a private 0600
@@ -145,6 +147,60 @@ retries can therefore locate and validate the exact visible directory/audio
 without republishing, including after an uncertain parent fsync or cleanup
 failure. The tray reports uncertainty/pending state and starts no provider;
 verified cleanup and journal clearing precede `RecordingCommitted` and jobs.
+
+## Local Transcription Boundary
+
+`types/transcription.py` defines provider, versioned external consent, attempt,
+and immutable audio identity. `config/transcription_resolution.py` resolves
+Local by default, enabled unless explicitly disabled. The settings
+`TRANSCRIPTION_PROVIDER` and `ASSEMBLYAI_CONSENT` are app/process-only; legacy
+`.env` and imports cannot supply them. Local reads no cloud key. AssemblyAI
+requires explicit selection, `external-audio-v1` acceptance, and a credential
+before any outbound operation.
+
+`repo/local_models.py` owns bounded platform/runtime/cache checks and explicit
+preparation; `local_model_cache.py` validates pinned manifests, sizes, hashes,
+and legitimate Hugging Face cache links. Native arm64 macOS on Apple Silicon
+with Metal is required. Missing/corrupt weights leave work pending; unsupported
+execution or inference failure preserves audio and provides an action. No
+failure selects AssemblyAI. Startup and doctor neither download nor load
+weights. `service/local_model_preparation.py` owns preparation state and typed
+worker-to-main events; native controls show phases, cancellation, and recovery.
+Preparation never schedules historical transcription.
+
+`repo/local_process.py` serializes download/loading across app instances and
+runs short-lived workers with an allowlisted environment, no inherited cloud
+credentials, closed unrelated descriptors, and offline inference. The lock
+covers teardown. `repo/local_transcription.py` consumes the validated audio
+snapshot, uses `native_audio_decoding.py` to decode M4A through AVFoundation to
+private mono 16 kHz PCM, validates output, and cleans temporary files. It needs
+no system FFmpeg. Each inference loads Whisper then Nemotron sequentially and
+exits the child to release Metal allocations. Content stays out of arguments
+and worker logs. This does not claim complete OS sandboxing.
+
+Whisper uses pinned `mlx-community/whisper-large-v3-turbo-asr-fp16`, word
+timestamps, `condition_on_previous_text=False`, automatic language detection,
+and `task="transcribe"`; Nemotron uses pinned
+`mlx-community/Nemotron-3-Diarization`. The exact revisions are in
+[the transcription feature](docs/features/transcription.md#models-and-language)
+and the repository manifest. `service/local_transcription.py` aligns words by
+maximum positive overlap, retains Unknown for gaps, and preserves text without
+word timing. Complete diarization failure publishes no partial transcript or
+review/Notes event.
+
+`service/transcription_attempts.py` claims provider/attempt/running state
+atomically before execution. Completion and retry compare that identity and
+the captured audio/directory identities. Remote IDs remain optional,
+cloud-specific compatibility fields and cannot authorize Local polling or
+uploads. Existing whole-document CAS and Backup reconciliation remain intact.
+Provider saves pause new jobs until restart; successful transcriptions remain
+terminal. Explicit pending/failed retry is separate from model preparation.
+
+Local recognition does not remove other data flows: B2 receives
+recording/transcript snapshots, enabled Anthropic review preparation receives
+bounded transcript context before confirmation, and enabled Notes receives the
+confirmed excerpt. Model preparation contacts Hugging Face without meeting
+content. See the local-first contract for consent and triggers.
 
 ## Native Audio Boundary
 

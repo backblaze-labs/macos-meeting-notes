@@ -19,16 +19,16 @@ from meeting_memory.service.configuration_editing_cas import (
 )
 from meeting_memory.service.configuration_editing_outcomes import configuration_outcome
 from meeting_memory.service.configuration_editing_support import (
+    can_retain_editing_secret,
     editable_fields,
     editing_legacy_source,
+    editing_secret_state,
     legacy_reenables,
     replacement_preferences,
-    secret_id_for_capability,
     valid_change,
 )
 from meeting_memory.service.configuration_sources import (
     load_legacy_environment,
-    read_secret_materials,
 )
 from meeting_memory.service.preference_store import (
     PreferenceStore,
@@ -200,7 +200,9 @@ class CapabilityConfigurationService:
             return configuration_outcome(
                 ConfigurationSaveState.REJECTED, change.capability, **flags
             )
-        can_retain = binding.secret_availability is SecretAvailability.AVAILABLE
+        can_retain = can_retain_editing_secret(
+            change, binding.snapshot, binding.secret_availability, self._secrets.read
+        )
         if not valid_change(change, can_retain_secret=can_retain):
             return configuration_outcome(
                 ConfigurationSaveState.REJECTED,
@@ -287,13 +289,4 @@ class CapabilityConfigurationService:
         capability: Capability,
         snapshot: PreferenceSnapshot,
     ) -> tuple[SecretAvailability, tuple[SecretMaterial, ...]]:
-        secret_id = secret_id_for_capability(capability)
-        if secret_id is None:
-            return SecretAvailability.NONE, ()
-        ref = snapshot.preferences.secret_ref_for(secret_id)
-        if ref is None:
-            return SecretAvailability.UNAVAILABLE, ()
-        materials, failed = read_secret_materials((ref,), self._secrets.read)
-        if failed or len(materials) != 1 or materials[0].ref != ref:
-            return SecretAvailability.UNAVAILABLE, ()
-        return SecretAvailability.AVAILABLE, materials
+        return editing_secret_state(capability, snapshot, self._secrets.read)

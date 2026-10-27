@@ -24,11 +24,17 @@ keywords = [
 ]
 dependencies = [
   "anthropic>=0.40",
-  "assemblyai>=0.35",
+  "assemblyai>=0.64.11",
   "boto3>=1.35",
   "google-api-python-client>=2.150",
   "google-auth-oauthlib>=1.2",
   "keyring>=25.0",
+  "mlx-audio==0.6.2; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "mlx==0.32.4; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "mlx-metal==0.32.4; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "huggingface-hub==2.3.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "transformers==5.20.2; sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "numpy==2.4.6; sys_platform == 'darwin' and platform_machine == 'arm64'",
   "pydantic>=2.9",
   "pydantic-settings>=2.6",
   "python-dotenv>=1.0",
@@ -57,7 +63,7 @@ version = { attr = "meeting_memory.version.APP_VERSION" }
 [tool.setuptools.package-data]
 "meeting_memory.service.assets" = ["*.icns"]
 "meeting_memory.ui.assets" = ["*.png", "*.svg"]
-"meeting_memory.repo" = ["native/*.swift"]
+"meeting_memory.repo" = ["native/*.swift", "local_model_manifest.json"]
 
 [tool.ruff]
 line-length = 100

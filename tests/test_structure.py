@@ -7,6 +7,7 @@ from pathlib import Path
 
 import structure_distribution_files as distribution
 from structure_d2_files import REQUIRED_D2_SOURCE_FILES
+from structure_local_files import LOCAL_SDK_PREFIXES, REQUIRED_LOCAL_SOURCE_FILES
 from structure_native_files import REQUIRED_NATIVE_SOURCE_FILES
 from structure_ui_files import REQUIRED_UI_SOURCE_FILES
 
@@ -25,9 +26,11 @@ EXTERNAL_SDK_PREFIXES = (
     "google_auth_httplib2",
     "httplib2",
     "keyring",
+    *LOCAL_SDK_PREFIXES,
 )
 
 REQUIRED_SOURCE_FILES = (
+    *REQUIRED_LOCAL_SOURCE_FILES,
     *REQUIRED_D2_SOURCE_FILES,
     *distribution.REQUIRED_DISTRIBUTION_SOURCE_FILES,
     "__init__.py",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import stat
 from dataclasses import dataclass
 from datetime import datetime
@@ -110,6 +111,10 @@ def map_transcription_status(
 ) -> MeetingJobState:
     if ownership is ArtifactOwnership.V2:
         return _job_state(frontmatter.get("transcription_status"))
+    if frontmatter.get("transcription_provider") in {"local", "assemblyai"} and frontmatter.get(
+        "transcription_attempt_id"
+    ):
+        return _job_state(frontmatter.get("transcription_status"))
     assemblyai_id = frontmatter.get("assemblyai_id")
     identifier = assemblyai_id.strip() if isinstance(assemblyai_id, str) else ""
     if identifier == LEGACY_FAILURE_SENTINEL:
@@ -191,7 +196,14 @@ def _has_legacy_marker(frontmatter: dict[str, object]) -> bool:
     has_b2_marker = (
         isinstance(b2_status, str) and b2_status.strip().casefold() in LEGACY_B2_STATUSES
     )
-    return has_assembly_marker or has_b2_marker
+    attempt = frontmatter.get("transcription_attempt_id")
+    has_attempt = (
+        frontmatter.get("transcription_provider") in {"local", "assemblyai"}
+        and isinstance(attempt, str)
+        and re.fullmatch(r"[0-9a-f]{32}", attempt) is not None
+        and frontmatter.get("transcription_status") in {"pending", "running", "failed", "succeeded"}
+    )
+    return has_assembly_marker or has_b2_marker or has_attempt
 
 
 def _job_state(value: object) -> MeetingJobState:

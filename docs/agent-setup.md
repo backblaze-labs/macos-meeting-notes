@@ -6,8 +6,17 @@ Use this guide when a user asks you to install Meeting Memory from
 ## Safety Boundaries
 
 - Read `AGENTS.md` and `README.md` before running commands.
-- Backblaze B2 configuration is required; AssemblyAI, Google Calendar, and
-  Anthropic are optional and must not be configured unless the user asks.
+- Backblaze B2 configuration is required. Local transcription is the enabled
+  default unless explicitly disabled. It requires native Apple Silicon macOS,
+  Metal, and explicit model preparation; missing models do not block recording.
+- AssemblyAI, Google Calendar, and Anthropic are optional. Do not configure an
+  external integration without the user's request and its app disclosure.
+  AssemblyAI needs explicit provider selection and `external-audio-v1` consent;
+  an existing key or local failure never permits cloud fallback.
+- Explain that Hugging Face receives weight-download requests without meeting
+  content, B2 receives audio/transcripts, and enabled Anthropic speaker
+  suggestions can send transcript context before the user reviews names.
+  Do not describe the whole application as offline or entirely local.
 - Never ask the user to paste credentials into chat, source files, command-line
   arguments, or shell history.
 - Never inspect an existing `.env`, Keychain item, OAuth token, recording, or
@@ -45,10 +54,20 @@ Use this guide when a user asks you to install Meeting Memory from
    ```
 
    Recording Core and Backup must be usable. The check validates configuration
-   locally and does not contact B2.
+   locally and does not contact B2, download weights, or load models.
 7. Guide the user through a short recording. Confirm the local meeting folder
    exists and ask the user to verify the matching private B2 objects. If the
    upload failed, use **Debugging › Retry Pending B2 Backups**.
+8. On compatible Apple Silicon, guide the user to **Configuration › Prepare
+   Local Models...**. Preparation reuses validated cached weights and downloads
+   only missing content; its panel supports progress, cancellation, and retry.
+   Do not download at startup or infer approval for processing old recordings.
+   After preparation, use **Debugging › Retry Pending or Failed Transcriptions**
+   only when the user requests the displayed backlog action.
+9. If the user requests AssemblyAI, use **Configuration › Transcription...**
+   and its external-audio notice, then restart. Never infer selection or consent
+   from `.env` keys or imports. `TRANSCRIPTION_PROVIDER` and
+   `ASSEMBLYAI_CONSENT` accept only app preferences or actual process overrides.
 
 ## Completion Criteria
 

@@ -43,6 +43,8 @@ SETTING_DEFINITIONS = (
         Capability.RECORDING_CORE,
         DEFAULT_MAX_RECORDING_MINUTES,
     ),
+    SettingDefinition(SettingKey.TRANSCRIPTION_PROVIDER, Capability.TRANSCRIPTION, "local"),
+    SettingDefinition(SettingKey.ASSEMBLYAI_CONSENT, Capability.TRANSCRIPTION, "not-accepted"),
     SettingDefinition(
         SettingKey.ASSEMBLYAI_API_KEY,
         Capability.TRANSCRIPTION,

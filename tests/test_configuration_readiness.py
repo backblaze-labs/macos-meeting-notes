@@ -24,6 +24,8 @@ from meeting_memory.types.configuration_resolution import (
     ConfigurationUse,
 )
 
+pytestmark = pytest.mark.usefixtures("local_models_ready")
+
 
 @pytest.mark.parametrize("enabled", [False, True])
 def test_masked_unreadable_legacy_env_never_overrides_explicit_consent_state(
@@ -65,8 +67,8 @@ def test_masked_unreadable_legacy_env_never_overrides_explicit_consent_state(
 
     assert ConfigurationIssueCode.LEGACY_ENV_UNAVAILABLE not in issue_codes
     if enabled:
-        assert transcription.state is CapabilityState.FAILED
-        assert ConfigurationIssueCode.APP_CONFIGURATION_INVALID in issue_codes
+        assert transcription.state is CapabilityState.READY
+        assert ConfigurationIssueCode.APP_CONFIGURATION_INVALID not in issue_codes
         assert ".env" not in f"{transcription.summary} {transcription.action}"
     else:
         assert transcription.state is CapabilityState.UNCONFIGURED
@@ -135,6 +137,11 @@ def test_complete_process_groups_override_stored_disable_in_runtime_and_readines
         report = _report(loaded, token_reader=_valid_token)
         status = report.status_for(capability)
 
+        if capability is Capability.TRANSCRIPTION:
+            assert loaded.capability_enabled(capability) is False
+            assert loaded.transcription is None
+            assert status.state is CapabilityState.UNCONFIGURED
+            continue
         assert loaded.capability_enabled(capability) is True
         assert getattr(loaded, accessor) is not None
         assert status.state is CapabilityState.READY

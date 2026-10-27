@@ -1,0 +1,55 @@
+"""Stable field order for meeting Markdown artifacts."""
+
+TRANSCRIPT_FRONTMATTER_FIELDS = (
+    "id",
+    "date",
+    "duration_minutes",
+    "calendar_title",
+    "participants",
+    "assemblyai_id",
+    "transcription_provider",
+    "transcription_attempt_id",
+    "transcription_status",
+    "speaker_candidates",
+    "speaker_aliases",
+    "speaker_status",
+    "b2_audio",
+    "b2_transcript",
+    "b2_status",
+)
+
+TRANSCRIPT_STUB_FIELDS = (
+    "schema_version",
+    "created_by",
+    "id",
+    "date",
+    "duration_minutes",
+    "calendar_title",
+    "participants",
+    "assemblyai_id",
+    "transcription_provider",
+    "transcription_attempt_id",
+    "transcription_audio_sha256",
+    "transcription_audio_size",
+    "transcription_status",
+    "speaker_candidates",
+    "speaker_aliases",
+    "speaker_status",
+    "b2_audio",
+    "b2_transcript",
+    "backup_status",
+    "backup_uploaded_revision",
+    "capture_mode",
+    "capture_status",
+    "capture_diagnostics",
+)
+
+NOTES_FRONTMATTER_FIELDS = (
+    "id",
+    "date",
+    "duration_minutes",
+    "calendar_title",
+    "source_transcript",
+    "speaker_status",
+    "summary_status",
+)

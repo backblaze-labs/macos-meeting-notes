@@ -59,8 +59,10 @@ FIELD_LABELS = {
 }
 DISCLOSURES = {
     Capability.TRANSCRIPTION: (
-        "AssemblyAI receives each newly committed meeting audio file automatically "
-        "after recording stops, and returns a diarized transcript."
+        "Local speech recognition and diarization run on this Mac by default. "
+        "An imported AssemblyAI key does not activate external processing. "
+        "After explicit provider selection and acceptance in Transcription settings, "
+        "AssemblyAI receives newly committed meeting audio automatically after recording stops."
     ),
     Capability.BACKUP: (
         "Backblaze B2 receives recording.m4a and transcript.md automatically for "
@@ -85,6 +87,11 @@ DISCLOSURES = {
 
 def open_configuration_form(view: CapabilityConfiguration) -> ConfigurationChange | None:
     """Render one native form; secret controls are always blank and secure."""
+
+    if view.capability is Capability.TRANSCRIPTION:
+        from meeting_memory.ui.transcription_form import open_transcription_form
+
+        return open_transcription_form(view)
 
     from AppKit import (
         NSAlert,
@@ -233,7 +240,7 @@ def _secret_bundle(capability: Capability, values: Mapping[SettingKey, str]) -> 
 
 def _secret_placeholder(availability: SecretAvailability) -> str:
     if availability is SecretAvailability.AVAILABLE:
-        return "Stored in Keychain — leave blank to keep"
+        return "Stored in Keychain, leave blank to keep"
     return "Enter a new credential"
 
 

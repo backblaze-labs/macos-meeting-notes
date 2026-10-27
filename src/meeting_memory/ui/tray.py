@@ -1,16 +1,4 @@
-"""macOS tray integration.
-
-Clicking the menu bar icon (either button) opens the ordinary app menu
-(`ui/status_menu.py`) with Start/Stop Recording at the top. While recording
-the status bar shows a dot and the live timer. The compact floating sidebar
-(`docs/features/sidebar.md`) appears when a recording starts and offers
-record/stop, screenshot, and quit. Every state change funnels through
-`refresh_sidebar()`, which rebuilds both from one immutable
-`SidebarViewModel` snapshot.
-
-After transcription speaker proposals are prepared before offering review.
-Notes use the identities confirmed in that single review flow.
-"""
+"""Main-thread native tray, recording controls, and typed runtime events."""
 
 from __future__ import annotations
 
@@ -36,6 +24,8 @@ from meeting_memory.ui.audio_modes import AudioModeMenu
 from meeting_memory.ui.configuration_surface import ConfigurationSurfaceUI
 from meeting_memory.ui.controller import TrayController
 from meeting_memory.ui.icons import tray_icon_path
+from meeting_memory.ui.local_models import LocalModelsUI
+from meeting_memory.ui.local_shutdown import LocalShutdown
 from meeting_memory.ui.macos import (
     allow_foreground_notifications,
     configure_background_app_identity,
@@ -69,6 +59,7 @@ from meeting_memory.ui.status_menu import (
 )
 from meeting_memory.ui.submenus import configuration_surface_actions
 from meeting_memory.ui.title_prompt import ask_recording_title
+from meeting_memory.ui.transcription_actions import confirm_transcription_retry
 
 LOGGER = logging.getLogger(__name__)
 
@@ -84,9 +75,17 @@ class RumpsTrayApp:
         sidebar_panel_factory: Any = None,
         screenshot_store: ScreenshotStore | None = None,
         speaker_knowledge=None,
+        local_model_preparation=None,
+        shutdown_callback=lambda: None,
     ) -> None:
         self.rumps = rumps_module or load_rumps()
         self.controller = controller
+        self.shutdown = LocalShutdown(
+            self.rumps.quit_application,
+            lambda: self.local_models.coordinator.shutdown(),
+            shutdown_callback,
+            native=rumps_module is None,
+        )
         self.readiness_report = readiness_report
         self.readiness_check = readiness_check_for(controller)
         if rumps_module is None:
@@ -115,7 +114,7 @@ class RumpsTrayApp:
             on_toggle_recording=self.toggle_recording,
             on_screenshot=self.take_screenshot,
             on_hide_sidebar=lambda: self.sidebar.hide(),
-            on_quit=self.rumps.quit_application,
+            on_quit=self.shutdown.quit,
             panel_factory=sidebar_panel_factory,
         )
         self.view_model: SidebarViewModel | None = None
@@ -134,6 +133,13 @@ class RumpsTrayApp:
             self.rumps,
             rebuild_menu=self.refresh_sidebar,
         )
+        self.local_models = LocalModelsUI(
+            controller.event_queue.put,
+            self.rumps,
+            coordinator=local_model_preparation,
+            provider=getattr(controller.settings, "transcription_provider", "local"),
+            on_change=self.refresh_sidebar,
+        )
         self.refresh_sidebar()
 
     def run(self) -> None:
@@ -141,19 +147,19 @@ class RumpsTrayApp:
             self.screenshot_hotkey.install()
         self.timer.start()
         self.people_base.startup()
-        # The setup tray and the right-click menu still track menus.
         keep_timer_running_during_menu_tracking(self.timer, LOGGER)
-        self.app.run()
+        self.shutdown.run(self.app.run)
 
     def refresh_sidebar(self, _sender=None) -> None:
-        """Rebuild panel and menu after state changes; the 1 Hz tick updates in place."""
-
         self.view_model = build_view_model(
             self.controller,
             readiness_report=self.readiness_report,
             audio_mode_menu=self.audio_mode_menu,
             configuration_actions=configuration_surface_actions(
-                self.configuration_ui, known_speakers=self.people_base.open
+                self.configuration_ui,
+                known_speakers=self.people_base.open,
+                local_models=self.local_models.open,
+                transcription_progress=self.local_models.progress_label,
             ),
             debugging_actions=DebuggingActions(
                 review_speakers=self.open_speaker_review,
@@ -161,7 +167,7 @@ class RumpsTrayApp:
                 process_recovered_recording=self.controller.process_recovered_recording,
                 scan_legacy_recoveries=self.controller.scan_legacy_recoveries,
                 sync_to_b2=self.controller.sync_to_b2,
-                retry_failed_processing=self.controller.retry_failed_processing,
+                retry_failed_processing=self.retry_transcriptions,
                 run_diagnostics=self.run_diagnostics,
                 send_test_notification=self.send_test_notification,
             ),
@@ -174,7 +180,7 @@ class RumpsTrayApp:
             sidebar_visible=self.sidebar.is_visible,
             on_toggle_recording=self.toggle_recording,
             on_toggle_sidebar=self.sidebar.toggle_panel,
-            on_quit=self.rumps.quit_application,
+            on_quit=self.shutdown.quit,
             sidebar_rows=(*self.sidebar.preference_rows(on_change=self.refresh_sidebar),),
         )
 
@@ -184,6 +190,10 @@ class RumpsTrayApp:
         else:
             self.controller.start_recording()
         self.refresh_sidebar()
+
+    def retry_transcriptions(self):
+        if confirm_transcription_retry(self.controller.settings):
+            self.controller.retry_failed_processing()
 
     def take_screenshot(self, _sender=None) -> None:
         self.screenshots.take()
@@ -207,16 +217,13 @@ class RumpsTrayApp:
         self._sync_live_titles()
 
     def _tray_title(self) -> str | None:
-        recorder = self.controller.recorder
         return menu.tray_title(
-            is_recording=recorder.is_recording,
+            is_recording=self.controller.recorder.is_recording,
             duration_seconds=self.controller.recording_duration_seconds(),
-            audio_warning=bool(getattr(recorder, "recording_warning", None)),
+            audio_warning=bool(getattr(self.controller.recorder, "recording_warning", None)),
         )
 
     def _sync_live_titles(self) -> None:
-        """Retitle the status bar and the live menu items without a rebuild."""
-
         title = self._tray_title()
         if self.app.title != title:
             self.app.title = title
@@ -231,6 +238,10 @@ class RumpsTrayApp:
             items.recording.title = recording_label
 
     def handle_event(self, event: object) -> None:
+        if self.local_models.handle_event(event):
+            return
+        if self.local_models.handle_runtime_event(event):
+            return
         if self.people_base.handle_event(event):
             return
         if self.configuration_ui.handle_event(event):

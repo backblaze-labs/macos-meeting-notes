@@ -29,13 +29,14 @@ work.
 | Capability | Responsibility | Dependencies | Blocks first value? |
 | --- | --- | --- | --- |
 | **Recording Core** | Capture, recover, convert, store, browse, and search local audio | Supported macOS, writable local folder, native helper, mode-specific macOS permission | **Yes** |
-| **Transcription** | Produce a diarized `transcript.md` | Recording Core, network, AssemblyAI credential | No |
+| **Transcription** | Produce a diarized `transcript.md`, Local by default | Recording Core; Local needs native Apple Silicon macOS, Metal, runtime, and prepared weights; AssemblyAI needs network, explicit selection, consent, and key | No |
 | **Backup** | Copy owned meeting artifacts to B2 | Local artifact, network, B2 destination credentials | **Configuration only** |
 | **Calendar** | Detect meeting context and reminders | Network, Google credentials and OAuth grant | No |
 | **Notes** | Prepare unconfirmed speaker suggestions and produce derived `notes.md` after explicit speaker review | Completed transcript, network, Anthropic credential | No |
 
 Recording Core is always present. Backup credentials and destination settings
-are required to leave setup; Transcription, Calendar, and Notes are opt-in.
+are required to leave setup. Transcription defaults to Local and is enabled
+unless explicitly disabled; Calendar and Notes remain opt-in.
 Capabilities remain independently configurable and retryable. Enabling one
 MUST NOT implicitly enable another, and local audio does not require
 Transcription or live B2 reachability.
@@ -55,6 +56,50 @@ Every capability reports exactly one of these stable wire values:
 State is capability-local. A failed Backup does not turn Recording Core red. A
 missing Anthropic key is Notes `unconfigured`, not an application failure.
 `checking` MUST be bounded by a timeout and settle to another state.
+
+## Local Transcription Contract
+
+The default provider is Local. New installations and upgrades without an
+explicit new provider setting select it. Existing AssemblyAI keys, imports, or
+Keychain references do not select cloud transcription or grant consent. Local
+reads no AssemblyAI secrets and never falls back to cloud after a failure.
+Explicit Transcription disablement remains effective.
+
+Local runs pinned Whisper recognition and Nemotron diarization with word
+timestamps, automatic language detection, `task="transcribe"`, and
+`condition_on_previous_text=False`. It preserves the spoken language. Model IDs,
+revisions, and alignment rules are specified in
+[the transcription feature](features/transcription.md). English and Spanish
+execution have been validated; this does not promise universal accuracy.
+
+**Prepare Local Models...** is an explicit native action, separate from retry.
+It validates standard cached weights before downloading missing content from
+Hugging Face, verifies integrity, and supports progress, cancellation, and
+recovery without blocking the UI. Preparation changes readiness only; it never
+processes pending or failed recordings. Startup and doctor never download or
+load model weights. Missing models leave meeting work pending while recording
+remains available. Unsupported hardware/runtime and inference errors explain
+an action and preserve audio without changing provider.
+
+Inference is serial across local jobs and uses a separate process with no
+inherited external credentials. It consumes validated snapshots, decodes M4A
+natively to private mono 16 kHz PCM, and releases child resources and temporary
+files at completion, cancellation, or failure. No system FFmpeg is required.
+A complete diarization failure publishes no partial transcript and starts no
+review or Notes; Unknown preserves text in unassigned gaps after successful
+diarization.
+
+Claiming a job MUST atomically record provider and attempt identity before
+execution. Every state update MUST compare that identity plus the captured
+directory and audio. Stale completions MUST fail closed. `assemblyai_id` is
+cloud-only and remains null under Local. Historical remote IDs do not authorize
+polling or uploads. Successful transcription is terminal. **Retry Pending or
+Failed Transcriptions** is a separate explicit action that confirms the
+effective provider; neither restart nor preparation processes history.
+
+Provider edits pause new transcription jobs immediately and take effect after
+restart. The app does not switch live backends. A remote request already sent
+cannot be recalled.
 
 ## Readiness and Doctor Semantics
 
@@ -98,8 +143,8 @@ failure.
    missing diagnostics preserve the indexed WAV for explicit recovery rather
    than silently claiming a verified capture.
 3. **Committing locally:** finish a collision-safe staging directory containing
-   two closed, readable artifacts—`recording.m4a` plus a compatible
-   `transcript.md` metadata stub—then publish that whole directory into
+   two closed, readable artifacts (`recording.m4a` and a compatible
+   `transcript.md` metadata stub), then publish that whole directory into
    `MEETINGS_DIR` with one same-filesystem atomic rename before any cloud
    request. WAV conversion prefers AVFoundation and otherwise uses the bundled
    offline, source-pinned minimal LGPL encoder. Either route MUST produce the
@@ -119,14 +164,17 @@ failure.
 
 The metadata stub uses `schema_version: 2` and `created_by: meeting-memory`, plus
 the existing meeting identity/date/title/duration/speaker fields. Before a
-remote transcript exists, `assemblyai_id` is `null`; ownership MUST be detected
-from `created_by` and supported schema, never from an AssemblyAI sentinel. It
+cloud transcript job exists, `assemblyai_id` is `null`; Local keeps it null.
+Ownership MUST be detected from `created_by` and supported schema, never from
+an AssemblyAI sentinel. It
 also includes independent durable states:
 
 ```yaml
 schema_version: 2
 created_by: meeting-memory
 assemblyai_id: null
+transcription_provider: local | assemblyai | null
+transcription_attempt_id: null | <opaque-attempt-id>
 transcription_status: not_requested | pending | running | succeeded | failed
 backup_status: not_requested | pending | running | succeeded | failed
 backup_uploaded_revision: null
@@ -216,15 +264,28 @@ process the backlog.
 
 ## Privacy, Data Egress, and Secret Ownership
 
-Meeting Memory is private and local by default. The app MUST identify data
-egress before an integration is enabled:
+Recordings commit locally, and default speech recognition and diarization run
+locally on supported hardware. This is not a whole-application offline or
+confidentiality promise: required B2 Backup and enabled external capabilities
+send content as disclosed. The app MUST identify each boundary before enabling
+an external integration:
 
 | Integration | Data sent | Purpose |
 | --- | --- | --- |
-| AssemblyAI | Completed meeting audio | Diarized transcription |
+| Hugging Face | Requests for pinned model weights, never meeting content | Explicit local-model preparation |
+| AssemblyAI | Completed meeting audio after explicit provider selection and consent | External diarized transcription |
 | Backblaze B2 | `recording.m4a` and `transcript.md` for eligible schema-v2 meetings | Durable private backup |
 | Google Calendar | OAuth/API requests; event metadata is received locally | Context and reminders |
 | Anthropic | Notes receive fixed schema/identity instructions, editable guidance, and only the reviewed transcript excerpt capped at 60,000 characters; the Markdown layout stays local, and no Calendar prefix is included. For new transcripts, background review preparation sends a diarized local excerpt capped at 60,000 characters, canonical known attendee names, and relevant roster descriptions to Claude Haiku before confirmation. Historical review actions trigger that request explicitly; matching aliases/emails, frontmatter, and provider IDs stay local | Derived notes and unconfirmed speaker suggestions |
+
+AssemblyAI requires explicit provider selection plus versioned
+`external-audio-v1` acceptance before submit, polling, or retry. Canceling does
+not change selection or permission. The notice explains plan, contract, and
+account controls: the free plan participates in model improvement without
+opt-out; paid accounts can explicitly opt out, payment alone is not exclusion,
+and opt-out applies only to future requests. The app does not know the account's
+actual opt-out setting. Official sources were verified on 2026-10-27 and are
+linked in [the transcription feature](features/transcription.md#external-provider-consent).
 
 **Configuration › Known Speakers...** also supports a local draft from confirmed
 named history without enabling Calendar or Notes. Startup/addition offers only
@@ -313,6 +374,11 @@ Existing checkouts and their files continue to work during migration.
    app-owned preference/Keychain value > legacy `.env` > built-in default.
    Process environment exists for development and automation and MUST be
    identifiable in diagnostics as an override without revealing its value.
+   `TRANSCRIPTION_PROVIDER` and `ASSEMBLYAI_CONSENT` are exceptions to legacy
+   fallback: only app preferences and actual process overrides may supply
+   them. `.env` and imports ignore these keys so they cannot infer egress
+   consent. Existing AssemblyAI credentials remain preserved but inert until
+   explicit selection and consent.
 6. Never delete, rewrite, or commit the legacy `.env` automatically. Offer a
    safe cleanup explanation after verification.
 7. Preserve existing meeting directories, legacy `meeting.md`/frontmatter,
@@ -327,7 +393,7 @@ confirmed import; it performs no automatic import and never mutates `.env`.
 
 ## Phase Acceptance Criteria
 
-### Phase 1 — Contract and characterization (complete)
+### Phase 1: Contract and characterization (complete)
 
 - This document is canonical and linked from product, spec, architecture, and
   contributor-facing docs.
@@ -337,7 +403,7 @@ confirmed import; it performs no automatic import and never mutates `.env`.
 - macOS CI runs lint/tests/structure and builds the Swift helper.
 - No runtime behavior, secret, `.env`, or user data is migrated.
 
-### Phase 2 — Local core and isolated adapters (complete)
+### Phase 2: Local core and isolated adapters (complete)
 
 - The local recording substrate remains operable without provider reachability;
   the product-level B2 configuration gate is applied by the setup/runtime UI.
@@ -352,14 +418,14 @@ confirmed import; it performs no automatic import and never mutates `.env`.
   and disable-at-safe-boundary behavior follow the deterministic rules above;
   no separate manifest is introduced.
 
-### Phase 3 — Coherent setup and doctor (complete)
+### Phase 3: Coherent setup and doctor (complete)
 
 - In-app setup and doctor render the same capability report.
 - Default doctor success depends on Recording Core and Backup configuration.
 - Provider failures have capability-specific actions and never remove a local
   recording.
 
-### Phase 4 — Secure progressive configuration
+### Phase 4: Secure progressive configuration
 
 - Native setup can configure capabilities one at a time.
 - Secrets are stored in Keychain and are never redisplayed.
@@ -402,7 +468,7 @@ Phase 4 is intentionally split into independently reviewable slices:
 The Phase 4 implementation criteria above are complete; Phase 5 owns official
 computer-use validation of the installed app.
 
-### Phase 5 — Native onboarding validation
+### Phase 5: Native onboarding validation
 
 - A clean macOS user configures required B2 backup, records about 30 seconds of
   real audio, stops, plays the saved result, reveals its directory in Finder,
@@ -410,7 +476,7 @@ computer-use validation of the installed app.
 - Keyboard, VoiceOver labels, denial/retry paths, relaunch, and permission
   prompts pass computer-use validation.
 
-### Phase 6 — Standalone distribution
+### Phase 6: Standalone distribution
 
 - The runtime-layout foundation is complete: bundled execution has no implicit
   checkout/cwd or `.env` discovery, and explicit legacy imports persist selected
@@ -425,7 +491,8 @@ computer-use validation of the installed app.
 
 ## Explicitly Deferred
 
-- Local/offline transcription and local/offline notes models.
+- Local Notes and speaker-name suggestion models; Local transcription is active
+  on supported Apple Silicon systems.
 - Automatic recording based on meeting-app detection.
 - Cross-machine restore from B2.
 - Client-side encryption before provider upload.

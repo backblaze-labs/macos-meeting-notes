@@ -3,6 +3,8 @@
 REQUIRED_NATIVE_SOURCE_FILES = (
     "types/audio.py",
     "repo/native_audio_health.py",
+    "repo/native_audio_decoding.py",
+    "repo/native/NativeDecoding.swift",
     "repo/native/CaptureDiagnostics.swift",
     "repo/native/CLI.swift",
     "repo/native/NativeCapture.swift",

@@ -153,3 +153,30 @@ def complete_legacy_backup() -> str:
             "",
         )
     )
+
+
+def cloud_fields(fields):
+    from meeting_memory.types.configuration_editing import ConfigurationField, ConfigurationValue
+
+    values = {
+        SettingKey.TRANSCRIPTION_PROVIDER: "assemblyai",
+        SettingKey.ASSEMBLYAI_CONSENT: "external-audio-v1",
+    }
+    return tuple(
+        ConfigurationField(field.key, ConfigurationValue(values[field.key]))
+        if field.key in values
+        else field
+        for field in fields
+    )
+
+
+def cloud_preferences(ref):
+    from meeting_memory.types.configuration import PreferenceKey, PreferenceValue
+
+    return AppPreferences(
+        values=(
+            PreferenceValue(PreferenceKey.TRANSCRIPTION_PROVIDER, "assemblyai"),
+            PreferenceValue(PreferenceKey.ASSEMBLYAI_CONSENT, "external-audio-v1"),
+        ),
+        secret_refs=(ref,),
+    )

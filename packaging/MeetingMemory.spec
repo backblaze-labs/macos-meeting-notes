@@ -4,7 +4,9 @@ import os
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files, copy_metadata
+from PyInstaller.utils.hooks import (
+    collect_data_files, collect_dynamic_libs, collect_submodules, copy_metadata,
+)
 
 ROOT = Path(SPECPATH).parent
 SOURCE = ROOT / "src"
@@ -67,10 +69,26 @@ hiddenimports = [
     "urllib3.util.ssl_",
 ]
 
+local_binaries = []
+if ARCH == "arm64":
+    for package in ("mlx", "mlx_audio"):
+        datas += collect_data_files(package)
+    local_binaries += collect_dynamic_libs("mlx")
+    for package in (
+        "mlx", "mlx_audio.stt.models.whisper", "mlx_audio.vad.models.nemotron_diarization",
+        "mlx_audio.vad.models.sortformer",
+    ):
+        hiddenimports += collect_submodules(package)
+    hiddenimports += [
+        "mlx.core", "mlx.nn", "mlx_audio.stt", "mlx_audio.vad", "huggingface_hub",
+        "miniaudio", "numpy", "scipy", "transformers",
+    ]
+datas += [(str(ROOT / "src/meeting_memory/repo/local_model_manifest.json"), "meeting_memory/repo")]
+
 a = Analysis(
     [str(ROOT / "src/meeting_memory/__main__.py")],
     pathex=[str(SOURCE)],
-    binaries=[],
+    binaries=local_binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
@@ -89,6 +107,12 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+# Tokenizers' optional public CycloneDX SBOM matches the credential denylist.
+# It is unused at runtime; omit only this file and retain metadata and licenses.
+a.datas = [
+    entry for entry in a.datas
+    if entry[0] != "tokenizers-0.23.3.dist-info/sboms/tokenizers-python.cyclonedx.json"
+]
 pyz = PYZ(a.pure)
 
 exe = EXE(

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import math
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from meeting_memory.types.speakers import SpeakerUtterance
+from meeting_memory.types.transcription import TranscriptionProvider
 
 
 @dataclass(frozen=True)
@@ -17,7 +20,7 @@ class TranscriptSegment:
     def __post_init__(self) -> None:
         if not self.speaker_label.strip():
             raise ValueError("speaker_label must not be blank")
-        if self.start_seconds < 0:
+        if not math.isfinite(self.start_seconds) or self.start_seconds < 0:
             raise ValueError("start_seconds must be >= 0")
         if not self.text.strip():
             raise ValueError("text must not be blank")
@@ -29,13 +32,29 @@ class TranscriptSegment:
 
 @dataclass(frozen=True)
 class TranscriptResult:
-    assemblyai_id: str
-    segments: tuple[TranscriptSegment, ...]
+    assemblyai_id: str | None = None
+    segments: tuple[TranscriptSegment, ...] = ()
     error: str | None = None
+    provider: TranscriptionProvider | None = None
+    attempt_id: str | None = None
 
     def __post_init__(self) -> None:
-        if not self.assemblyai_id.strip():
-            raise ValueError("assemblyai_id must not be blank")
+        provider = self.provider or (
+            TranscriptionProvider.ASSEMBLYAI
+            if self.assemblyai_id is not None
+            else TranscriptionProvider.LOCAL
+        )
+        if not isinstance(provider, TranscriptionProvider):
+            raise ValueError("transcript provider must be typed")
+        object.__setattr__(self, "provider", provider)
+        if provider is TranscriptionProvider.LOCAL and self.assemblyai_id is not None:
+            raise ValueError("a local transcript cannot have an AssemblyAI ID")
+        if provider is TranscriptionProvider.ASSEMBLYAI and (
+            not isinstance(self.assemblyai_id, str) or not self.assemblyai_id.strip()
+        ):
+            raise ValueError("AssemblyAI transcripts require a non-blank provider ID")
+        if self.attempt_id is not None and re.fullmatch(r"[0-9a-f]{32}", self.attempt_id) is None:
+            raise ValueError("transcript attempt must be an opaque identifier")
         if not self.segments and not self.error:
             raise ValueError("segments are required unless error is set")
 
@@ -65,6 +84,8 @@ class SpeakerReviewState:
     suggestion_message: str = ""
     speaker_evidence: dict[str, str] = field(default_factory=dict)
     speaker_utterances: tuple[SpeakerUtterance, ...] = ()
+    transcription_provider: str | None = None
+    transcription_attempt_id: str | None = None
 
 
 def format_timestamp(seconds: float) -> str:

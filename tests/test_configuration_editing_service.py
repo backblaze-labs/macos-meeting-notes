@@ -7,6 +7,8 @@ from configuration_editing_fakes import (
     FakeSecrets,
     IdFactory,
     backup_bundle,
+    cloud_fields,
+    cloud_preferences,
     complete_legacy_backup,
     notes_bundle,
     service,
@@ -122,7 +124,7 @@ def test_blank_secret_preserves_only_verified_available_reference() -> None:
             view.edit_id,
             Capability.NOTES,
             True,
-            view.fields,
+            cloud_fields(view.fields),
             disclosure_confirmed=True,
         )
     )
@@ -135,7 +137,7 @@ def test_blank_secret_preserves_only_verified_available_reference() -> None:
 
 def test_blank_secret_with_missing_or_unreadable_ref_is_rejected() -> None:
     ref = SecretRef(SecretId.TRANSCRIPTION, "c" * 32)
-    preferences = AppPreferences(secret_refs=(ref,))
+    preferences = cloud_preferences(ref)
     store = FakePreferences(preferences)
     editor = service(store=store, secrets=FakeSecrets())
     view = editor.open(Capability.TRANSCRIPTION)
@@ -145,7 +147,7 @@ def test_blank_secret_with_missing_or_unreadable_ref_is_rejected() -> None:
             view.edit_id,
             Capability.TRANSCRIPTION,
             True,
-            view.fields,
+            cloud_fields(view.fields),
             disclosure_confirmed=True,
         )
     )
@@ -226,7 +228,7 @@ def test_new_secret_is_deleted_after_proven_precommit_conflict() -> None:
             view.edit_id,
             Capability.TRANSCRIPTION,
             True,
-            view.fields,
+            cloud_fields(view.fields),
             transcription_bundle("secret-sentinel"),
             disclosure_confirmed=True,
         )
@@ -248,7 +250,7 @@ def test_visible_late_failure_retains_new_secret_and_reports_durability() -> Non
             view.edit_id,
             Capability.TRANSCRIPTION,
             True,
-            view.fields,
+            cloud_fields(view.fields),
             transcription_bundle("secret-sentinel"),
             disclosure_confirmed=True,
         )
@@ -270,7 +272,7 @@ def test_unknown_cas_visibility_retains_new_secret() -> None:
             view.edit_id,
             Capability.TRANSCRIPTION,
             True,
-            view.fields,
+            cloud_fields(view.fields),
             transcription_bundle("secret-sentinel"),
             disclosure_confirmed=True,
         )

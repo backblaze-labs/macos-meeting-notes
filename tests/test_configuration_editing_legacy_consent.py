@@ -55,9 +55,9 @@ def test_legacy_compatibility_requires_disclosure_and_reenables_on_restart(
 
         rejected = editor.save(ConfigurationChange(view.edit_id, capability, None, view.fields))
 
-        assert view.legacy_reenables is True
+        assert view.legacy_reenables is (capability is not Capability.TRANSCRIPTION)
         assert rejected.state is ConfigurationSaveState.REJECTED
-        assert rejected.legacy_reenables is True
+        assert rejected.legacy_reenables is (capability is not Capability.TRANSCRIPTION)
         assert store.cas_calls == 0
 
         confirmed_view = editor.open(capability)
@@ -79,7 +79,7 @@ def test_legacy_compatibility_requires_disclosure_and_reenables_on_restart(
         )
 
         assert saved.state is ConfigurationSaveState.SAVED
-        assert saved.legacy_reenables is True
+        assert saved.legacy_reenables is (capability is not Capability.TRANSCRIPTION)
         assert loaded.capability_enabled(capability) is True
         assert env.read_bytes() == original
 
@@ -171,10 +171,15 @@ def test_repeated_disable_pauses_complete_process_override(capability) -> None:
 
     outcome = editor.save(ConfigurationChange(view.edit_id, capability, False, view.fields))
 
-    assert outcome.state is ConfigurationSaveState.SESSION_PAUSED
-    assert outcome.pause_current_session is True
+    if capability is Capability.TRANSCRIPTION:
+        assert outcome.state is ConfigurationSaveState.UNCHANGED
+        assert outcome.pause_current_session is False
+        assert outcome.process_reenables is False
+    else:
+        assert outcome.state is ConfigurationSaveState.SESSION_PAUSED
+        assert outcome.pause_current_session is True
+        assert outcome.process_reenables is True
     assert outcome.restart_required is False
-    assert outcome.process_reenables is True
     assert store.cas_calls == 0
     assert secrets.writes == secrets.deletes == []
 

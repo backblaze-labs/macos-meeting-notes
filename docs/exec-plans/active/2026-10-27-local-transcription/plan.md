@@ -257,20 +257,61 @@ Complete the validation table and move this plan and specification to
 
 | Requirement | Required evidence | Observed |
 | --- | --- | --- |
-| 1 | Exact configuration, real offline inference, word timestamps, English and Spanish sample checks | English comparative evidence available; implementation and Spanish validation pending |
-| 2 | New/upgrade/disabled/override cases and no implicit cloud calls | Pending |
-| 3 | Consent cancel/confirm and guards before submit, poll, and retry | Pending |
-| 4 | Dated official sources and notice without automatic paid-plan exclusion claims | Sources verified 2026-10-27; implementation pending |
-| 5 | Separate B2, Anthropic, Hugging Face, and local disclosures | Pending |
-| 6 | Complete-cache reuse, simulated missing downloads, native cancel/retry | Pending |
-| 7 | Platform, Metal, and runtime tests with native recovery action | Pending |
-| 8 | Serial worker, responsive UI, child termination and temporary cleanup | Pending |
-| 9 | Formatting, review, aliases, Notes, Backup, and real samples | Pending |
-| 10 | Provider/attempt CAS and legacy handling without egress | Pending |
-| 11 | Preserved audio, unchanged `.env`, unrelated preferences retained | Pending |
-| 12 | Full gate, dependency markers, and packaging verification | Pending |
-| 13 | Reviewed docs/guides/doctor/licenses and real M4A decoding | Pending |
-| 14 | PR/merge, latest reviews, and official app from main | Pending |
+| 1 | Exact configuration, real offline inference, word timestamps, English and Spanish sample checks | Passed real integrated native-decoder checks on three English recordings and one Spanish recording, with expected auto detection, word timestamps, and unchanged input hashes. |
+| 2 | New/upgrade/disabled/override cases and no implicit cloud calls | Passed new/upgrade/default, explicit disable, malformed and mixed-source override, no-fallback composition, and unused-cloud-Keychain tests. |
+| 3 | Consent cancel/confirm and guards before submit, poll, and retry | Passed native form cancel/confirm tests and actual-SDK MockTransport admission tests across upload, create, polling, retries, and deadlines; no real cloud audio requests. |
+| 4 | Dated official sources and notice without automatic paid-plan exclusion claims | Official sources verified 2026-10-27; dated linked native notice and copy tests confirm free-plan limits and explicit prospective paid-account opt-out. |
+| 5 | Separate B2, Anthropic, Hugging Face, and local disclosures | Native forms and synchronized docs separately disclose local inference, model download, B2 Backup, Anthropic Notes, and speaker suggestions. |
+| 6 | Complete-cache reuse, simulated missing downloads, native cancel/retry | Passed complete-cache reuse with network blocked, simulated missing/corrupt downloads, cancellation, and readiness-only preparation tests. |
+| 7 | Platform, Metal, and runtime tests with native recovery action | Passed platform/runtime fakes and bounded real no-weights Metal probe; dependency resolution excludes MLX on Intel. |
+| 8 | Serial worker, responsive UI, child termination and temporary cleanup | Passed native rendering and cancellation/shutdown tests, inherited-lock and parent-death child-process tests, private cleanup, and serial-worker tests. |
+| 9 | Formatting, review, aliases, Notes, Backup, and real samples | Passed alignment, Markdown, review, alias, Notes, Backup, legacy, and local runtime regressions plus four complete real audio checks. |
+| 10 | Provider/attempt CAS and legacy handling without egress | Passed provider/attempt/source CAS, stale-completion rejection, restart source checks, cloud ID retention, and explicit changed-source recovery tests. |
+| 11 | Preserved audio, unchanged `.env`, unrelated preferences retained | Passed source-unchanged checks for all audio inputs, byte-hash checks for existing .env/preferences, and unrelated-reference preservation tests. |
+| 12 | Full gate, dependency markers, and packaging verification | Passed make check with 1,364 tests plus five structural tests; clean locked arm64 install, arm64/Intel resolution, arm64 bundle build and strict relocated verification. Remote CI remains part of S6. |
+| 13 | Reviewed docs/guides/doctor/licenses and real M4A decoding | Canonical docs and active guides synchronized; notices/licenses reviewed; doctor/provider readiness tested; final native decode verified after lifecycle fixes. |
+| 14 | PR/merge, latest reviews, and official app from main | Pending remote PR checks, merge, primary fast-forward, official installation/restart, and final delivery evidence. |
+
+## Progress
+
+| Step | Status | Recorded evidence |
+| --- | --- | --- |
+| S0 | Complete | Approved public records and isolated feature worktree prepared; private evidence retained outside Git |
+| S0A | Passed | Native M4A decode, pinned offline inference, language detection, cache reuse, and arm64 artifact viability established |
+| S1 | Complete | Provider configuration, consent, and compatibility tests passed |
+| S2 | Complete | Native decoding, pinned cache, serial worker, cleanup, and packaging checks passed |
+| S3 | Complete | Provider/source attempts, retries, alignment, Notes, and Backup regressions passed |
+| S4 | Complete | Native forms/progress, disclosures, canonical docs, and active guides synchronized |
+| S5 | Complete | Local full gate, four real audio checks, independent reviews, and strict arm64 bundle verification passed |
+| S6 | Pending | Remote checks, merge, primary checkout update, official app reload, and final evidence remain required |
+
+### S0A Feasibility Evidence
+
+- An independent integration run decoded real M4A input through the native
+  helper to mono 16 kHz PCM and verified private temporary cleanup.
+- Real inference used the pinned model snapshots without implicit downloads.
+  English and Spanish clips preserved the same text with automatic and forced
+  language selection. Measured automatic-detection overhead was below one
+  second in those clips, supporting automatic detection without added product
+  controls or translation.
+- A complete 69.8-minute Spanish recording was detected as Spanish. Comparative
+  word discrepancy was approximately 16.3 percent against an existing
+  AI-generated transcript, not human ground truth. About 99.945 percent of
+  words received an assignment. Four anonymous labels were produced against
+  three reviewed speakers; the fourth label covered five words. Coverage is
+  not a speaker-correctness score. These are bounded observations, not a
+  universal multilingual-accuracy claim.
+- A full arm64 standalone app build passed. Frozen imports and a Metal
+  operation passed in that artifact. This establishes MLX collection/runtime
+  viability, not notarized release acceptance.
+- Explicit preparation reused validated cached weights with network access
+  disabled. Historical-processing behavior remains part of the integrated
+  validation gate.
+
+The R1 language-validation condition has feasibility evidence. The final
+integrated implementation must still preserve these settings and pass S5.
+Source recordings, detailed results, machine-specific diagnostics, and approval
+wording remain private.
 
 ## Independent review findings
 
@@ -316,3 +357,47 @@ changes.
 - 2026-10-27: recorded only anonymized aggregate English benchmark evidence in
   the public specification. Spanish validation and implementation checks remain
   pending.
+
+- 2026-10-27: S0 completed with approval records and isolated worktree. S0A
+  passed real native decoding, offline pinned-model inference, English/Spanish
+  language checks, warm-cache offline preparation, and arm64 frozen-runtime
+  viability. Automatic detection selected for the integrated implementation.
+- 2026-10-27: recorded anonymized Spanish language and diarization observations
+  for R1. Integrated validation, latest-revision reviews, and delivery remain
+  pending; no later step is marked complete by this evidence.
+
+- 2026-10-27: integrated adapter checks processed all three English recordings
+  and the Spanish recording with expected automatic language detection and
+  unchanged input hashes. English micro word discrepancy was 6.06 percent;
+  Spanish word discrepancy was 15.51 percent, both against imperfect existing
+  AI transcripts. Private outputs remain outside the repository.
+- 2026-10-27: orchestrator gate passed: 1,364 tests plus five structural tests,
+  with Ruff passing. A subsequent focused run of 46 SDK, retry, configuration,
+  local-state, and legacy tests passed on the final affected source.
+- 2026-10-27: independent implementation reviews identified and resolved worker
+  lifetime cleanup, word timestamp bounds, per-request external admission and
+  deadlines, mixed-source credential resolution, and changed-source retry
+  recovery. Additional ID-retention tests cover deadline responses and legacy
+  submit/persist/resume. A reviewer independently confirmed the three state
+  and provider findings resolved with 25 focused tests.
+- 2026-10-27: graceful shutdown routes menu, Cocoa termination, normal return,
+  and SIGTERM through idempotent cancellation. Harmless child-process tests
+  verify parent-death cleanup and inherited operation-lock retention. Native
+  audio decoding was rebuilt and independently verified after lifecycle fixes.
+- 2026-10-27: the distribution lock preserves existing shared versions and
+  adds platform-scoped backend pins. Clean arm64 installation, dependency
+  consistency, selected imports, and Metal probe passed. Both arm64 and Intel
+  dependency resolution passed; Intel excludes MLX. Final artifact verification
+  and remote CI remain pending.
+- 2026-10-27: omit the optional Tokenizers CycloneDX build report from bundled
+  metadata because its filename matches the strict token-file denylist.
+  Runtime metadata and licenses remain included; the credential verifier is
+  unchanged. This corrects packaging contents rather than relaxing the gate.
+- 2026-10-27: official installation remains a post-merge delivery step. The
+  running official application and primary checkout have not been changed.
+
+- 2026-10-27: final locked arm64 artifact built and passed the strict verifier,
+  including relocated self-check and signature checks. The final frozen worker
+  dispatch and bounded no-weights Metal check also passed. Distribution
+  contract/structure tests passed separately (23 tests). A test collection check
+  confirmed the final full-gate count remains 1,364.

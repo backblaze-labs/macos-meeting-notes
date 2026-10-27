@@ -8,6 +8,13 @@ from meeting_memory.config.schema import (
     SETTING_DEFINITIONS,
     required_keys,
 )
+from meeting_memory.config.transcription_resolution import (
+    SELECTION_KEYS,
+    active_transcription_setting,
+    invalid_transcription_process,
+    resolve_transcription,
+    selection_value,
+)
 from meeting_memory.config.validation import configured_value, valid_required_setting
 from meeting_memory.types.capabilities import Capability
 from meeting_memory.types.configuration import (
@@ -75,7 +82,8 @@ def resolve_configuration(
             SettingProvenance(
                 item.provenance.key,
                 item.provenance.source,
-                active=active[_capability_for(item.provenance.key)].enabled,
+                active=active[_capability_for(item.provenance.key)].enabled
+                and active_transcription_setting(item.provenance.key, settings),
             ),
             item.value,
         )
@@ -86,6 +94,9 @@ def resolve_configuration(
 
 def _resolve_setting(definition, process, preferences, secrets, legacy) -> ResolvedSetting:
     key = definition.key
+    if key in SELECTION_KEYS:
+        value, source = selection_value(definition, process, preferences)
+        return ResolvedSetting(SettingProvenance(key, source), value)
     if key in process:
         value, source = process[key], SettingSource.PROCESS_ENV
     elif definition.secret and key in secrets:
@@ -113,9 +124,8 @@ def _resolve_setting(definition, process, preferences, secrets, legacy) -> Resol
 def _is_shipped_legacy_prompt_default(definition, value: object) -> bool:
     """Let old scaffold values follow the current app-owned default location."""
 
-    return (
-        definition.key is SettingKey.SUMMARY_PROMPT_FILE
-        and str(value).strip() == str(definition.default)
+    return definition.key is SettingKey.SUMMARY_PROMPT_FILE and str(value).strip() == str(
+        definition.default
     )
 
 
@@ -131,6 +141,10 @@ def _resolve_capability(
     if capability is Capability.RECORDING_CORE:
         return CapabilityResolution(capability, None, True, SettingSource.DEFAULT)
 
+    if capability is Capability.TRANSCRIPTION:
+        return resolve_transcription(
+            process, preferences, settings, preferences_available=preferences_available
+        )
     preference = preferences.enabled_for(capability)
     required = required_keys(capability)
     process_override = bool(required) and all(
@@ -219,6 +233,8 @@ def has_invalid_process_required(
 ) -> bool:
     """Whether a selected required process value is present but invalid."""
 
+    if capability is Capability.TRANSCRIPTION:
+        return invalid_transcription_process(resolution)
     required = set(required_keys(capability))
     return any(
         item.provenance.key in required

@@ -1,14 +1,14 @@
 # Software Requirements Specification
-# `macos-meeting-notes` — Meeting Memory macOS Meeting Notes App
+# `macos-meeting-notes`: Meeting Memory macOS Meeting Notes App
 
 **Status:** Draft  
 **Author:** Meeting Memory contributors
 **Date:** 2026-08-17
-**Version:** 0.9
+**Version:** 0.10
 **Methodology:** RFC-inspired SRS (requirement language per RFC 2119: MUST / SHOULD / MAY / MUST NOT)
 
-**Revision note (v0.2):** Added a second, first-class design goal — **the
-repository must be easy for AI coding agents to read and modify** — using an
+**Revision note (v0.2):** Added a second, first-class design goal: **the
+repository must be easy for AI coding agents to read and modify**. It uses an
 `AGENTS.md` control surface, import-enforced module layering, mechanical
 structural tests, a doctor preflight, and fail-fast config. §7 was restructured
 into enforced layers (§7.1, §7.5, §7.6) and all v0.1 Open Questions were
@@ -49,6 +49,14 @@ with versioned Notes profiles. Templates provides Classic and Personal Focus
 recipes; Advanced controls the exact generated sections, audience, format, and
 guidance. Required template fields are validated before saving.
 
+**Revision note (v0.10):** Made Local transcription the enabled default on
+supported Apple Silicon systems, with explicit model preparation, pinned
+Whisper/Nemotron inference, automatic language detection, and durable attempt
+identity. AssemblyAI now requires explicit provider selection and versioned
+external-audio consent. Legacy keys do not infer consent, and preparation does
+not process historical recordings. B2 onboarding and existing Anthropic data
+boundaries remain in effect.
+
 ---
 
 ## Table of Contents
@@ -86,7 +94,8 @@ Naming is intentionally split during the low-risk external rename: the visible a
 It is a native, local-first B2 sample: rather than a browser upload flow, it
 captures real system + microphone audio on the desktop and saves it locally.
 B2 is the required durable archive; users may opt into calendar context,
-remote transcription, and derived notes.
+external transcription, and derived notes. Speech recognition and diarization
+use Local by default on supported Apple Silicon systems.
 
 A **second, explicit design goal** sits alongside the user-facing app: the
 repository itself must be **easy for AI coding agents to read and modify**.
@@ -109,7 +118,8 @@ mechanical structural tests, a doctor preflight, and fail-fast configuration
 
 ### 1.4 References
 
-- AssemblyAI Universal-2 transcription API docs
+- MLX Whisper and Nemotron model cards and pinned manifests
+- AssemblyAI transcription API and data-control documentation
 - Anthropic Claude API (claude-sonnet-5)
 - Google Calendar API v3
 - Apple ScreenCaptureKit and Core Audio frameworks
@@ -125,7 +135,9 @@ mechanical structural tests, a doctor preflight, and fail-fast configuration
 **Meeting Memory** is a standalone macOS application with no server-side
 component, maintained in the `macos-meeting-notes` repository. It runs as a
 menu bar process, interfaces with external services (Google Calendar,
-AssemblyAI, Anthropic, B2) via HTTPS, and reads/writes to the local filesystem.
+AssemblyAI when explicitly selected, Anthropic, B2) via HTTPS, and reads/writes
+to the local filesystem. Recognition and diarization default to a local MLX
+subprocess on native Apple Silicon macOS with Metal.
 There is no web UI, no application database, and no always-on server.
 
 ```
@@ -143,31 +155,33 @@ There is no web UI, no application database, and no always-on server.
 │  │ or muted system   │                          │
 │  └───────────────────┘                          │
 └────────────────────────┬────────────────────────┘
-                         │ HTTPS
-         ┌───────────────┼───────────────────┐
-         ▼               ▼                   ▼
-  Google Calendar   AssemblyAI         Backblaze B2
-  API v3            (transcription     (object storage
-  (event polling)    + diarization)     backup)
                          │
-                    Anthropic Claude
-                    (summarization)
+           ┌─────────────┴─────────────────────┐
+           ▼                                   ▼
+  Local MLX subprocess                  External capabilities
+  Whisper + Nemotron                    B2 Backup (required setup)
+  (Apple Silicon + Metal)               Calendar / Anthropic (optional)
+                                        AssemblyAI (explicit consent)
+
+  Explicit preparation downloads pinned model weights from Hugging Face.
+  Local inference sends no meeting content to a transcription provider.
 ```
 
 ### 2.2 Product Functions (Summary)
 
-- F0: Local-first capability readiness — require B2 configuration for onboarding while preserving local artifacts through provider failures
-- F1: Optional calendar watching — detect upcoming meetings with video conferencing links
-- F2: Pre-meeting notification — remind the user to start recording
-- F3: Audio recording — natively capture system audio with optional microphone and playback by mode
-- F4: Optional transcription — diarized speech-to-text via AssemblyAI
-- F5: Optional summarization — extract summary, decisions, and action items via Claude
-- F6: Local storage — save structured markdown + audio to `~/Meetings/`
-- F7: Required B2 backup — upload meeting artifacts to Backblaze B2 after local write
-- F8: Tray menu — control recording, browse recent meetings, trigger sync
-- F9: Completion notification — alert user when transcript is ready
-- F10: Local macOS app wrapper — install, reload, launch, quit, and optionally start at login
-- F11: Local search and retry tools — search stored meetings and retry failed processing
+- F0: Local-first capability readiness: require B2 configuration for onboarding while preserving local artifacts through provider failures
+- F1: Optional calendar watching: detect upcoming meetings with video conferencing links
+- F2: Pre-meeting notification: remind the user to start recording
+- F3: Audio recording: natively capture system audio with optional microphone and playback by mode
+- F4: Optional transcription: diarized speech-to-text via Local by default;
+  AssemblyAI only after explicit selection and consent
+- F5: Optional summarization: extract summary, decisions, and action items via Claude
+- F6: Local storage: save structured markdown + audio to `~/Meetings/`
+- F7: Required B2 backup: upload meeting artifacts to Backblaze B2 after local write
+- F8: Tray menu: control recording, browse recent meetings, trigger sync
+- F9: Completion notification: alert user when transcript is ready
+- F10: Local macOS app wrapper: install, reload, launch, quit, and optionally start at login
+- F11: Local search and retry tools: search stored meetings and retry failed processing
 
 ### 2.3 User Characteristics
 
@@ -187,8 +201,10 @@ the CLI.
 - Recording Core preserves captures without internet access after onboarding
 - B2 credentials are required for onboarding; uploads require internet access,
   while a temporary provider or network failure does not remove local artifacts
-- Transcription, summarization, and Calendar require internet access only when
-  the user enables them
+- Local transcription requires native arm64 Apple Silicon macOS, Metal,
+  runtime dependencies, and explicitly prepared weights; inference then works
+  offline. External transcription, Anthropic, Calendar, and B2 need internet
+  access for their own enabled network operations
 - Google Calendar OAuth credentials are required only for the optional Calendar capability
 - The current checkout-installed `.app` is a local wrapper around this repo and
   Python environment; the Phase 6 distributed target is signed, notarized, and
@@ -261,11 +277,17 @@ processing or upload MUST require an explicit user backfill/retry action.
 
 ### 3.2 AssemblyAI Transcription API
 
-**REQ-EXT-05** When Transcription is configured and invoked, the application MUST upload audio to AssemblyAI using the `assemblyai` Python SDK (not raw HTTP).
+**REQ-EXT-05** Only when AssemblyAI is explicitly selected, enabled, and covered
+by accepted `external-audio-v1` consent, the application MUST upload audio using
+the `assemblyai` Python SDK (not raw HTTP). A key, legacy import, or Local
+failure MUST NOT select or authorize AssemblyAI.
 
-**REQ-EXT-06** Every transcription request MUST include `speaker_labels=True` to enable diarization.
+**REQ-EXT-06** Every AssemblyAI transcription request MUST include
+`speaker_labels=True` to enable diarization.
 
-**REQ-EXT-07** The application MUST poll AssemblyAI for job completion, with a polling interval of 5 seconds and a maximum wait time of 30 minutes.
+**REQ-EXT-07** An explicitly selected and consented AssemblyAI job MUST support
+persisted-ID polling with a 5-second interval and maximum wait of 30 minutes.
+Local MUST NOT poll an inherited remote ID.
 
 **REQ-EXT-08** If the transcription job fails (status `error`), the application MUST update the existing `transcript.md` stub with a safe failure state and recovery action, MUST NOT expose a raw provider exception, and MUST preserve the committed local audio.
 
@@ -360,7 +382,7 @@ fields contain at least one of:
 **REQ-F2-01** When a meeting is detected (per REQ-F1-04) that starts within `NOTIFY_MINUTES_BEFORE` minutes, the application MUST send a macOS User Notification with:
 - Title: `"Meeting starting soon"`
 - Body: `"<calendar_title> starts in <N> minutes"`
-- Action button: `"Record"` — clicking starts recording immediately and
+- Action button: `"Record"`: clicking starts recording immediately and
   dismisses the meeting-start notification
 
 **REQ-F2-02** The application MUST send the notification no more than once per detected meeting, regardless of how many polling cycles occur before the meeting starts.
@@ -426,20 +448,26 @@ or credentials.
 
 **REQ-F3-14** Stopping one meeting and starting the next MUST NOT wait for the
 previous meeting's conversion, local publication, transcription, backup, or
-notes work. Optional work remains single-flight per meeting rather than global.
+notes work. Optional work remains single-flight per meeting; Local inference
+also serializes model loading across meetings and instances without blocking
+the next recording.
 
 ### F4: Transcription
 
-**REQ-F4-01** When Transcription is `ready`, the transcription pipeline MUST start automatically after durable local audio is committed. When it is unavailable, the application MUST retain the local recording and expose transcription setup/retry without blocking recording completion.
+**REQ-F4-01** Transcription MUST default to Local and enabled unless explicitly
+disabled. When ready, it MUST start for eligible new recordings after durable
+local commit. Missing/corrupt local models MUST leave requested work pending
+with a preparation action. Incompatibility and failures MUST retain the audio
+and offer recovery without blocking recording completion or selecting cloud.
 
 **REQ-F4-02** The application MUST write the schema-v2 `transcript.md` metadata
-stub before uploading audio to AssemblyAI. AssemblyAI is the source of truth
-for remote transcript content, not for local artifact ownership or recording
-completion.
+stub before any transcription work. Local artifact ownership and recording
+completion MUST NOT depend on remote IDs. The completed owned `transcript.md`
+is the transcript source of truth for review, search, Notes, and Backup.
 
 **REQ-F4-03** Transcript segments MUST be formatted as `**<Speaker Label>** (<HH:MM:SS>): <text>` in `transcript.md`.
 
-**REQ-F4-04** Speaker labels returned by AssemblyAI (e.g. "Speaker A",
+**REQ-F4-04** Speaker labels produced by the selected backend (e.g. "Speaker A",
 "Speaker B") MUST be preserved until the user either confirms local
 `speaker_aliases` or explicitly confirms that the detected labels should be
 kept. Keeping labels MUST leave `speaker_aliases` empty, set `speaker_status`
@@ -473,7 +501,12 @@ to 8,192 output tokens with low effort. A `max_tokens` stop reason MUST reject
 the response before parsing, even if its partial JSON is valid, and preserve
 manual review without an automatic provider retry.
 
-**REQ-F4-05** After AssemblyAI creates a transcript job, the application MUST record its ID in the meeting's YAML frontmatter (`assemblyai_id` field) for future retrieval. Before then the field MUST remain `null`, never a failure sentinel.
+**REQ-F4-05** Before execution, the application MUST atomically claim the
+provider, opaque attempt ID, and running state, bound to the source audio and
+meeting directory. Completion, failure, and retry MUST compare those identities
+and reject stale results. `assemblyai_id` MUST remain optional and cloud-only,
+null under Local and never a fabricated ID or failure sentinel. A cloud ID MUST
+be persisted before eligible polling resumes.
 
 Speaker proposal diagnostics are retained locally in
 `~/Library/Logs/meeting-memory/app.log`: the meeting folder name, proposed
@@ -526,6 +559,61 @@ settings. A concurrent edit MUST fail without overwriting it. Saved empty roster
 MUST take precedence over stale startup values in subsequent editing. Saving MUST
 report the restart required for effective runtime settings, without pausing Notes
 already started. Process-environment overrides retain their existing precedence.
+
+**REQ-F4-11** Local MUST use
+`mlx-community/whisper-large-v3-turbo-asr-fp16` revision
+`624c19c9af5603fa73b83bce14d4aeea96156d18` for recognition and
+`mlx-community/Nemotron-3-Diarization` revision
+`59ed2dbfc1346dcea9d423c71306a3a2499c568f` for diarization. Whisper MUST request
+word timestamps, `condition_on_previous_text=False`, automatic language
+detection, and `task="transcribe"`. It MUST preserve the spoken language rather
+than translate. English is required; English and Spanish execution/text
+preservation MUST be included in hardware validation. These checks do not
+establish universal multilingual accuracy.
+
+**REQ-F4-12** Native **Prepare Local Models...** controls MUST explicitly start
+preparation, reuse validated standard cached weights, download missing content,
+and verify the pinned manifest before readiness. Show measured progress or an
+indeterminate phase, Cancel, and actionable retry on a worker. Startup and
+doctor MUST NOT download or load weights. Preparation changes readiness only;
+processing pending or failed meetings requires the separate explicit retry
+action. Cancellation MUST preserve shared weights.
+
+**REQ-F4-13** Local execution MUST require native arm64 macOS on Apple Silicon,
+Metal, and an available runtime. Incompatible systems MUST remain installable
+without MLX and report an action without enabling cloud. Preparation, decode,
+and inference MUST stay off the UI thread. Model loading/downloads MUST be
+single-flight across instances. Short-lived inference children MUST receive a
+minimal allowlisted environment without inherited credentials, close unrelated
+descriptors, and release locks, private temporaries, and child resources after
+completion, cancellation, or failure. Inference MUST run offline without
+telemetry. Meeting content MUST NOT enter child arguments or worker logs.
+
+**REQ-F4-14** Decode only validated source snapshots through AVFoundation to
+private mono 16 kHz PCM without system FFmpeg or reopening the original mutable
+meeting path. Align words by greatest positive overlap with diarization turns,
+with stable tie-breaking and half-open zero-duration handling. Preserve all
+text, use Unknown for gaps, retain segments without word timing, and reject
+invalid/non-finite timestamps. Complete diarization failure MUST fail the job
+without partial transcript publication, review, or automatic Notes. Anonymous
+labels MUST NOT imply identities; overlapping speech remains a limitation.
+
+**REQ-F4-15** AssemblyAI MUST require explicit provider choice and versioned
+consent before submit, polling, or retry. The native notice MUST describe audio
+leaving the Mac and the plan/contract/account-control boundary. It MUST explain
+free-plan model improvement without opt-out, explicit paid-account opt-out
+without automatic exclusion, and future-request-only effect. The app MUST NOT
+assert the account's actual opt-out setting. Cancel MUST change no selection or
+permission. Official sources verified 2026-10-27 are
+[model-improvement opt-out](https://www.assemblyai.com/docs/faq/how-to-opt-out-of-data-sharing-for-our-model-improvement-program)
+and [data controls](https://www.assemblyai.com/docs/data-controls).
+
+**REQ-F4-16** `TRANSCRIPTION_PROVIDER` and `ASSEMBLYAI_CONSENT` MUST accept only
+app preferences and actual process overrides. Legacy `.env` and imports MUST
+ignore them. Existing AssemblyAI keys/references MUST be preserved but remain
+inert without selection and consent. Saving a provider MUST pause new jobs and
+require restart. Restart and preparation MUST NOT process historical work;
+successful transcriptions MUST remain terminal.
 
 ### F5: Summarization
 
@@ -588,8 +676,8 @@ read-only built-in template, not personal state.
 - `<title-slug>` is the calendar event title lowercased, with spaces replaced by hyphens, non-alphanumeric characters stripped, and truncated to 40 characters
 
 **REQ-F6-03** Two closed, readable files MUST be durably committed to each meeting directory before optional network work:
-- `recording.m4a` — the audio file (M4A/AAC format)
-- `transcript.md` — a schema-v2 metadata stub that becomes the source-of-truth transcript when transcription succeeds
+- `recording.m4a`: the audio file (M4A/AAC format)
+- `transcript.md`: a schema-v2 metadata stub that becomes the source-of-truth transcript when transcription succeeds
 
 **REQ-F6-03a** The application MUST assemble both files in an app-owned staging
 directory on the `MEETINGS_DIR` filesystem and atomically rename the completed
@@ -689,6 +777,7 @@ Configuration                      (hover submenu)
   Audio Mode
   Recording Core…
   Transcription…
+  Prepare Local Models…
   Backup…
   Calendar…
   Known Speakers…
@@ -704,7 +793,7 @@ Debugging                          (hover submenu)
   Interrupted Recordings (<count>)  (when present)
   Find Legacy Recordings…
   Retry Pending B2 Backups
-  Retry Failed Transcriptions
+  Retry Pending or Failed Transcriptions
   Check Setup & Dependencies
   Test macOS Notifications
 Quit
@@ -729,7 +818,10 @@ to compatibility mode.
 
 **REQ-F8-07** If recoverable temporary recordings are found, **Debugging** MUST show an **Interrupted Recordings** section with one action per recoverable item.
 
-**REQ-F8-08** **Retry Failed Transcriptions** MUST scan local meeting directories and retry meetings whose transcript frontmatter indicates failed transcription.
+**REQ-F8-08** **Retry Pending or Failed Transcriptions** MUST use an explicit
+provider-confirmed action to scan owned meetings with pending or failed durable
+Transcription state. It MUST NOT retry successful transcriptions or trigger
+Backup. Preparation and restart MUST NOT invoke this action automatically.
 
 **REQ-F8-09** **Check Setup & Dependencies** MUST rerun doctor-lite checks and surface the result through a notification and tray setup items.
 
@@ -755,7 +847,7 @@ show the file updated after saving.
 
 **REQ-F8-15** The panel MUST be draggable and MUST snap to the left-center, right-center, top-center, or bottom-center of the screen when one of the panel's edges is released within 64 pt of the matching screen edge, free-floating otherwise. A snapped panel MUST stay snapped unless released more than 160 pt clear of its edge. Left/right anchors render the vertical button stack; top/bottom anchors (and free-floating) render the horizontal button row.
 
-**REQ-F8-16** Panel position and anchor MUST persist across launches via `NSUserDefaults`; visibility MUST NOT — the panel starts hidden on every launch.
+**REQ-F8-16** Panel position and anchor MUST persist across launches via `NSUserDefaults`; visibility MUST NOT: the panel starts hidden on every launch.
 
 **REQ-F8-17** The panel MUST float above other windows on every Space and full-screen app without activating Meeting Memory, and MUST be excluded from screen capture and screen sharing.
 
@@ -783,7 +875,7 @@ enqueue typed `TranscriptionFailed`; the tray main thread MUST render this
 mandatory notification without any worker UI call:
 - Title: `"Transcription failed"`
 - Body: `"<meeting-title> · audio saved locally"`
-- Action button: `"Open"` — opens the meeting directory in Finder
+- Action button: `"Open"`: opens the meeting directory in Finder
 
 **REQ-F9-04** Immediately after the audio and metadata stub are atomically
 committed, the local-commit worker MUST enqueue `RecordingCommitted` and the
@@ -791,7 +883,7 @@ tray main thread MUST send this notification without waiting for any optional
 capability:
 - Title: `"Recording saved"`
 - Body: `"<meeting-title> · audio saved locally"`
-- Action button: `"Reveal"` — reveals the meeting directory in Finder
+- Action button: `"Reveal"`: reveals the meeting directory in Finder
 
 ### F10: Local macOS App Wrapper and Login Item
 
@@ -812,7 +904,7 @@ capability:
 **REQ-F11-02** Search results MUST include the meeting date, title, markdown path, and a short excerpt.
 
 **REQ-F11-03** The retry-processing flow MUST use durable
-`transcription_status` to identify failed work. During migration it MUST also
+`transcription_status` to identify pending or failed work. During migration it MUST also
 recognize legacy failure sentinels without writing new sentinels.
 
 **REQ-F11-04** Recovered recordings MUST be converted from staging/legacy temp
@@ -861,7 +953,11 @@ app-owned staging MUST be discoverable from the tray on restart. If the user
 selects recovery, the application MUST perform the normal atomic local commit
 and enqueue only jobs currently configured for that explicit recovery.
 
-**REQ-NF-05** The application MUST preserve local audio and write a usable, sanitized `transcript.md` failure state when AssemblyAI calls fail. AssemblyAI and Anthropic adapter calls MUST use explicit retry/backoff for transient failures and rate limits.
+**REQ-NF-05** The application MUST preserve local audio and a usable sanitized
+job state when any transcription backend fails. Missing/corrupt local models
+remain pending with recovery. AssemblyAI and Anthropic calls MUST use explicit
+retry/backoff where safe for transient failures and rate limits; an ambiguous
+remote submission MUST NOT be duplicated.
 
 ### 5.3 Security and Privacy
 
@@ -875,11 +971,19 @@ sources remain supported with the names and precedence in REQ-EXT-15 and the
 local-first contract. Credentials MUST NOT be logged, displayed, or included in
 error messages.
 
-**REQ-NF-09** Meeting audio and transcripts are private by default. B2 objects MUST NOT be made public. No presigned URLs are generated or shared in v1.
+**REQ-NF-09** Local recognition and diarization MUST send no meeting content
+externally. Explicit model preparation may download weights from Hugging Face.
+Required B2 Backup sends audio/transcripts, and enabled Anthropic suggestions
+and Notes send bounded transcript context, including pre-review suggestions.
+The app MUST NOT claim whole-application offline execution or confidentiality.
+B2 objects MUST NOT be public. No presigned URLs are generated or shared in v1.
 
 ### 5.4 Compatibility
 
-**REQ-NF-10** The application MUST run on macOS 15 (Sequoia) or later on both Intel and Apple Silicon.
+**REQ-NF-10** Recording Core MUST run on macOS 15 (Sequoia) or later on Intel
+and Apple Silicon. Local transcription requires native Apple Silicon arm64 with
+Metal; unsupported local execution MUST NOT disable Recording Core or activate
+cloud transcription.
 
 **REQ-NF-11** The application MUST NOT depend on any paid macOS feature or third-party subscription beyond the services listed in Section 3.
 
@@ -897,7 +1001,8 @@ app icon MAY be stored in the repository.
 
 **REQ-NF-14** Each stage MUST emit a start/completion log with meeting slug and
 elapsed time in lifecycle order: record, local-commit, then any configured
-upload-to-assemblyai/poll, summarize, or b2-upload work.
+local decode/inference, consented AssemblyAI upload/poll, summarize, or
+b2-upload work. Local worker logs MUST exclude meeting audio/text and secrets.
 
 ### 5.6 Agent-Handleability
 
@@ -926,7 +1031,9 @@ date: <ISO-8601 datetime>        # recording start time, local timezone
 duration_minutes: <integer>      # rounded to nearest minute
 calendar_title: <string>         # from Google Calendar event, or "Untitled"
 participants: [<string>, ...]    # speaker labels, or mapped speaker names when configured
-assemblyai_id: <string | null>   # null until AssemblyAI assigns a remote job ID
+assemblyai_id: <string | null>   # cloud only; null for Local
+transcription_provider: local | assemblyai | null
+transcription_attempt_id: <opaque-string | null> # claimed atomically before execution
 transcription_status: not_requested | pending | running | succeeded | failed
 speaker_candidates: [<string>, ...] # Calendar-derived known-speaker hints
 speaker_aliases: {<label>: <name>}  # user-confirmed local aliases
@@ -1025,16 +1132,16 @@ meeting directory is published (F12).
 
 ### 7.1 Component Map (layered)
 
-The codebase is organized into five strictly-ordered layers under `src/meeting_memory/`, plus cross-cutting modules. The layering exists so boundary rules are **mechanically enforceable** (§7.5–§7.6): every component maps to exactly one layer. This supersedes the flat component list of SPEC v0.1 — the same components are preserved, regrouped into layers.
+The codebase is organized into five strictly-ordered layers under `src/meeting_memory/`, plus cross-cutting modules. The layering exists so boundary rules are **mechanically enforceable** (§7.5–§7.6): every component maps to exactly one layer. This supersedes the flat component list of SPEC v0.1: the same components are preserved, regrouped into layers.
 
 | Layer | Package | Components (file → responsibility) |
 |---|---|---|
-| **types** | `types/` | `capabilities.py` (`Capability`, `CapabilityState`, `CapabilityStatus`, `MeetingJobState`, `ReadinessReport`) · `configuration.py` / `configuration_resolution.py` (Phase 4 allowlists, secret references, fixed consumer scopes, issues, enablement, and value-free provenance) · `meeting.py` (`MeetingMeta`, slug helpers-as-data) · `transcript.py` (`TranscriptResult`, `TranscriptSegment`) · `notes_profile.py` (profile, section, audience, format, and reusable-field boundary data) · `summary.py` (`SummaryResult` with legacy values or generated profile sections) · `events.py` (UI events emitted to the tray: `MeetingDetected`, `NotifyEvent`, `RecordingStateChanged`). Pure data — **no SDK imports, no cross-layer imports.** |
+| **types** | `types/` | `capabilities.py` (`Capability`, `CapabilityState`, `CapabilityStatus`, `MeetingJobState`, `ReadinessReport`) · `configuration.py` / `configuration_resolution.py` (Phase 4 allowlists, secret references, fixed consumer scopes, issues, enablement, and value-free provenance) · `meeting.py` (`MeetingMeta`, slug helpers-as-data) · `transcript.py` (`TranscriptResult`, `TranscriptSegment`) · `notes_profile.py` (profile, section, audience, format, and reusable-field boundary data) · `summary.py` (`SummaryResult` with legacy values or generated profile sections) · `events.py` (UI events emitted to the tray: `MeetingDetected`, `NotifyEvent`, `RecordingStateChanged`). Pure data: **no SDK imports, no cross-layer imports.** |
 | **config** | `config/` | Capability-scoped settings, typed schema, pure precedence resolution, secret payload codec, `notes_profiles.py` presets/validation/codec, and `notes_template.py` parsing/validation for the private versioned Notes document; depends only on `types`. `settings.py` retains characterized legacy APIs. Source I/O and active composition stay in `service/`. |
 | **repo** | `repo/` | Existing provider/native adapters plus `secret_store.py`, the generic immutable-generation Keychain adapter activated only through opaque preference references. `calendar_client.py` retains the compatible Google OAuth Keychain identity. **The only layer permitted to import external SDKs.** |
 | **service** | `service/` | Existing local orchestration plus readiness, the private atomic preference store, and `configuration_loader.py` with its bounded source readers and fixed runtime/readiness/auth/search/summarize scopes. Calls `repo`, returns `types`; **no `rumps`, no SDKs.** |
 | **ui** | `ui/` | `tray.py` (`rumps.App` subclass; menu state, action dispatch, notifications, status timer, `rumps.Timer` draining the event queue) · `setup_readiness.py` (background setup check + UI rendering) · `controller.py` (recording/pipeline/sync handoff) · `menu.py` (menu label helpers) · `submenus.py` (Configuration and Debugging menu composition) · `preferences.py` (minimal settings window) · `prompt_form.py` / `prompt_window.py` / `prompt_controller.py` plus profile page helpers (native template picker, Advanced section builder, and live preview) · `notes_prompt.py` (compatibility entrypoint) · `notifications.py` (rumps notification wrapper + fallback) · `title_prompt.py` (ad-hoc title prompt) · `macos.py` / `icons.py` (macOS UI helpers). **The only layer permitted to import `rumps`.** |
-| *cross-cutting* | — | `__main__.py` (entrypoint; subcommands; logging; starts the capability-scoped runtime) · `doctor.py` (typed preflight renderer, §7.6) · `logging_config.py` (logs → `~/Library/Logs/meeting-memory/app.log`). |
+| *cross-cutting* | None | `__main__.py` (entrypoint; subcommands; logging; starts the capability-scoped runtime) · `doctor.py` (typed preflight renderer, §7.6) · `logging_config.py` (logs → `~/Library/Logs/meeting-memory/app.log`). |
 
 ### 7.2 Processing Sequence (Happy Path)
 
@@ -1054,7 +1161,7 @@ LocalCommit.run(audio_path, meeting_meta)
 Tray main thread → notify("Recording saved")      ← first value is complete
         │
         ├── Transcription ready? enqueue pending job
-        │     └── AssemblyAI upload → poll → update transcript/status
+        │     └── Selected backend: Local decode/infer or consented AssemblyAI upload/poll
         │           └── event_queue.put(TranscriptReady) on success
         │                 └── background SpeakerReviewFlow.prepare
         │                       └── SpeakerReviewReady → cache review on main thread
@@ -1077,9 +1184,10 @@ Tray starts notes generation automatically
 meeting-memory summarize <meeting-folder> remains available for manual
 backfill/retry after speaker_status is confirmed.
 
-The current runtime performs transcription before it writes full transcript
-metadata. Its behavior is covered by legacy characterization tests and MUST be
-replaced with the local commit boundary above in Phase 2.
+The active runtime commits local metadata/audio before optional work. Legacy
+characterization tests retain isolated compatibility APIs; they do not define
+the current post-commit pipeline. Local inference is serial across meetings and
+uses short-lived subprocesses without blocking the next recording.
 ```
 
 ### 7.3 Threading Model
@@ -1087,10 +1195,13 @@ replaced with the local commit boundary above in Phase 2.
 - **Main thread**: `rumps` event loop (tray, menus, notifications)
 - **Thread 1**: `CalendarWatcher` polling loop (daemon)
 - **Native helper process**: ScreenCaptureKit/Core Audio callbacks, stream mixing, and incremental WAV writing
-- **Thread 3**: `Pipeline` post-recording processing (created per session, joins before app quit)
+- **Local commit workers**: conversion, validation, atomic publication, and recovery cleanup
+- **Optional workers**: independent per-meeting Transcription and Backup; Notes after speaker confirmation
+- **Local inference subprocess**: serial Whisper/Nemotron execution with a cross-instance lock and teardown before release
+- **Preparation workers**: explicit model checks/downloads and typed progress events
 
 The `TrayApp` communicates with background threads via a thread-safe
-`queue.Queue`. Background threads MUST NOT call `rumps` UI methods directly —
+`queue.Queue`. Background threads MUST NOT call `rumps` UI methods directly:
 instead they enqueue `types/events.py` objects (including the target
 `RecordingCommitted`, `TranscriptReady`, and `TranscriptionFailed` events), and a `rumps.Timer` on the
 main thread drains the queue and performs **all** `rumps` calls. This rule is
@@ -1107,7 +1218,7 @@ macos-meeting-notes/
       __main__.py            # entrypoint; subcommands + logging; starts capability-scoped runtime
       doctor.py              # preflight checks (§7.6)
       logging_config.py      # logging → ~/Library/Logs/meeting-memory/app.log
-      types/                 # boundary models — no SDKs, no cross-layer imports
+      types/                 # boundary models: no SDKs, no cross-layer imports
         __init__.py
         capabilities.py
         meeting.py
@@ -1120,7 +1231,9 @@ macos-meeting-notes/
       repo/                  # ALL external-SDK calls live here, nowhere else
         __init__.py
         b2_client.py         # boto3 S3 adapter
-        transcription.py     # AssemblyAI adapter
+        transcription.py     # explicit consented AssemblyAI adapter
+        local_transcription.py # Local MLX adapter
+        local_models.py       # explicit preparation and local readiness
         summarizer.py        # Anthropic adapter
         calendar_client.py   # Google Calendar OAuth + Keychain
         native_audio.py      # native helper build/process adapter
@@ -1186,10 +1299,11 @@ macos-meeting-notes/
 
 ### 7.5 Layering & Boundary Rules
 
-These rules make the codebase predictable for AI coding agents. They are not style guidance — each is enforced by a test in `tests/test_structure.py` (§7.6) or by a lint rule.
+These rules make the codebase predictable for AI coding agents. They are not style guidance: each is enforced by a test in `tests/test_structure.py` (§7.6) or by a lint rule.
 
 - **Downward-only dependencies.** The import direction is `types ← config ← repo ← service ← ui`. A module MUST NOT import from a layer above it. (`__main__`, `doctor`, `logging_config` are cross-cutting entrypoints and may import `config` / `service` / `repo`.)
-- **SDK containment.** External Python SDKs (`boto3`/`botocore`, `assemblyai`, `anthropic`, `googleapiclient`/`google.*`/`google_auth_oauthlib`) MUST be imported only within `repo/`. Every other layer reaches the outside world exclusively through `repo` adapter functions that take and return `types`.
+- **SDK containment.** External Python SDKs (`boto3`/`botocore`, `assemblyai`, `anthropic`, `mlx`/`mlx_audio`,
+  `huggingface_hub`, `googleapiclient`/`google.*`/`google_auth_oauthlib`) MUST be imported only within `repo/`. Every other layer reaches the outside world exclusively through `repo` adapter functions that take and return `types`.
 - **UI containment.** `rumps` MUST be imported only within `ui/`. Background threads communicate with the tray through `types/events.py` + a thread-safe queue (§7.3).
 - **Typed boundaries.** Functions crossing a layer boundary MUST accept and return declared `types` (dataclasses / pydantic models), never raw `dict`s.
 - **File size.** Every `.py` file MUST stay under 300 lines; split by responsibility when approaching the limit.
@@ -1202,20 +1316,20 @@ are independent of the desktop stack.
 
 **Control surface & docs (progressive disclosure):**
 
-- `AGENTS.md` — the authoritative control surface an agent reads first: repository map, the §7.5 invariants, the command set, the quality bar, and the recommended change workflow.
-- `CLAUDE.md` — a thin pointer: "Follow AGENTS.md. Read order: AGENTS.md → ARCHITECTURE.md → docs/features/<feature>.md. Gate: `make check`."
-- `ARCHITECTURE.md` — the layer diagram (§7.1), boundary rules (§7.5), and the threading model (§7.3).
-- `docs/features/<feature>.md` — one doc per feature (inputs, outputs, threading, tests, related files), seeded from `docs/features/_template.md`; plus `docs/dev-workflows.md`.
+- `AGENTS.md`: the authoritative control surface an agent reads first: repository map, the §7.5 invariants, the command set, the quality bar, and the recommended change workflow.
+- `CLAUDE.md`: a thin pointer: "Follow AGENTS.md. Read order: AGENTS.md → ARCHITECTURE.md → docs/features/<feature>.md. Gate: `make check`."
+- `ARCHITECTURE.md`: the layer diagram (§7.1), boundary rules (§7.5), and the threading model (§7.3).
+- `docs/features/<feature>.md`: one doc per feature (inputs, outputs, threading, tests, related files), seeded from `docs/features/_template.md`; plus `docs/dev-workflows.md`.
 
-**Mechanical enforcement — `tests/test_structure.py`** (AST / import-graph based, pure Python):
+**Mechanical enforcement: `tests/test_structure.py`** (AST / import-graph based, pure Python):
 
-- `test_no_backward_imports` — no module imports a higher layer (enforces the §7.5 direction).
-- `test_external_sdks_only_in_repo` — the SDK set is imported only under `repo/`.
-- `test_rumps_only_in_ui` — `rumps` is imported only under `ui/`.
-- `test_file_size_limits` — every `.py` file is ≤ 300 lines.
-- `test_required_modules_exist` — the §7.1 component files are all present (an agent cannot silently drop one).
+- `test_no_backward_imports`: no module imports a higher layer (enforces the §7.5 direction).
+- `test_external_sdks_only_in_repo`: the SDK set is imported only under `repo/`.
+- `test_rumps_only_in_ui`: `rumps` is imported only under `ui/`.
+- `test_file_size_limits`: every `.py` file is ≤ 300 lines.
+- `test_required_modules_exist`: the §7.1 component files are all present (an agent cannot silently drop one).
 
-**Preflight — `python -m meeting_memory.doctor`** and the tray's explicit
+**Preflight: `python -m meeting_memory.doctor`** and the tray's explicit
 **Check Setup & Dependencies** action render the same typed report from
 REQ-LF-04. The report checks Recording Core requirements and each configured
 integration independently; every problem says what is wrong and how to fix it.
@@ -1226,9 +1340,9 @@ needed by configured runtime capabilities. Readiness makes no provider network
 request; configured Calendar may read its existing OAuth token from Keychain
 only during the explicit check.
 
-**Tooling & commands** — `ruff` (lint + format; rule `T20` forbids bare `print()` — use std `logging`), `pytest`, `pre-commit`. A `Makefile` exposes the predictable command set: `make setup | install | run | auth | doctor | install-macos-app | reload-macos-app | open-macos-app | quit-macos-app | install-launch-agent | uninstall-launch-agent | lint | format | test | check:structure | check`, where `check` = lint + tests + structure (the full gate `AGENTS.md` tells agents to run before finishing). The installed CLI also exposes `meeting-memory setup` and `meeting-memory search <query>`.
+**Tooling & commands**: `ruff` (lint + format; rule `T20` forbids bare `print()`: use std `logging`), `pytest`, `pre-commit`. A `Makefile` exposes the predictable command set: `make setup | install | run | auth | doctor | install-macos-app | reload-macos-app | open-macos-app | quit-macos-app | install-launch-agent | uninstall-launch-agent | lint | format | test | check:structure | check`, where `check` = lint + tests + structure (the full gate `AGENTS.md` tells agents to run before finishing). The installed CLI also exposes `meeting-memory setup` and `meeting-memory search <query>`.
 
-**Packaging** — `pyproject.toml` is canonical (PEP 621, src-layout,
+**Packaging**: `pyproject.toml` is canonical (PEP 621, src-layout,
 console-script entrypoint, and `pip install` from a Git URL per REQ-NF-12). A
 thin `requirements.txt` (`-e .`) supports the plain `python -m venv` + `pip`
 path. Setup compiles the repository's Swift helper and the pinned minimal LGPL
@@ -1244,7 +1358,11 @@ ID signing and notarization pass.
 
 Phase 4B actively resolves exact process-environment names, app-owned
 preferences/activated generic Keychain references, legacy `.env`, and defaults
-in that order. A missing preference document preserves the legacy path;
+in that order, except `TRANSCRIPTION_PROVIDER` and `ASSEMBLYAI_CONSENT`,
+which accept app/process sources only and ignore `.env` and import. A missing
+provider selects enabled Local unless explicitly disabled. Existing legacy
+credentials remain preserved; a key alone never selects cloud. A missing
+preference document otherwise preserves the legacy path;
 corrupt or unreadable preferences fail optional egress closed except for a
 complete valid process override. Explicit disable masks legacy values. The
 loader is read-only and scoped per consumer, and it does not construct a
@@ -1262,13 +1380,15 @@ explicitly. No reachable native UI action writes `.env`.
 
 | Variable | Capability | Default | Description |
 |---|---|---|---|
-| `B2_APPLICATION_KEY_ID` | Backup | — | B2 key ID |
-| `B2_APPLICATION_KEY` | Backup | — | B2 application key |
-| `B2_ENDPOINT` | Backup | — | B2 S3 endpoint URL |
-| `B2_REGION` | Backup | — | B2 region (e.g. `us-west-004`) |
-| `B2_BUCKET_NAME` | Backup | — | Target B2 bucket |
-| `ASSEMBLYAI_API_KEY` | Transcription | — | AssemblyAI key |
-| `ANTHROPIC_API_KEY` | Notes | — | Claude key for the `summarize` command |
+| `B2_APPLICATION_KEY_ID` | Backup | None | B2 key ID |
+| `B2_APPLICATION_KEY` | Backup | None | B2 application key |
+| `B2_ENDPOINT` | Backup | None | B2 S3 endpoint URL |
+| `B2_REGION` | Backup | None | B2 region (e.g. `us-west-004`) |
+| `B2_BUCKET_NAME` | Backup | None | Target B2 bucket |
+| `TRANSCRIPTION_PROVIDER` | Transcription | `local` | App/process only; `local` or explicitly selected `assemblyai` |
+| `ASSEMBLYAI_CONSENT` | Transcription | Not accepted | App/process only; `external-audio-v1` after explicit notice acceptance |
+| `ASSEMBLYAI_API_KEY` | Transcription | None | Key for explicitly selected and consented AssemblyAI; never activates cloud alone |
+| `ANTHROPIC_API_KEY` | Notes | None | Claude key for the `summarize` command |
 | `ANTHROPIC_MODEL` | Notes | `claude-sonnet-5` | Summarization model override (OQ-5) |
 | `SUMMARY_PROMPT_FILE` | Notes | `~/Library/Application Support/meeting-memory/prompts/summary.md` | Personal Notes instructions plus local Markdown layout; editable from **Configuration › Notes Customization...**. An explicit process or legacy override may select another path. |
 | `KNOWN_SPEAKERS` | Calendar | `{}` | Optional JSON roster of speaker names, Calendar match aliases/emails, and a 300-character role/topics description; app-managed values live in the private Application Support preference document. |
@@ -1287,7 +1407,11 @@ explicitly. No reachable native UI action writes `.env`.
 
 **C2** A user who enables Calendar has a Google account and OAuth 2.0 client credentials. Recording Core has no Google dependency. The app provides a setup guide (`docs/google-calendar-auth.md`).
 
-**C3** AssemblyAI transcription for a 1-hour meeting costs approximately $0.72 (at $0.012/min). Users should be aware of this cost. The README MUST state estimated costs per hour.
+**C3** Local transcription uses local compute and cached weights without a
+per-minute provider charge. Optional AssemblyAI, Anthropic, and B2 have their
+own current provider pricing. Documentation MUST distinguish Local from those
+external costs and link current pricing rather than imply a cloud charge for
+every transcription.
 
 **C4** Meetings that are not tracked in Google Calendar (ad-hoc calls, manual sessions) can still be recorded manually via the tray menu. The UI prompts for a title when no nearby calendar context exists; `"Untitled"` is the fallback.
 
@@ -1295,7 +1419,12 @@ explicitly. No reachable native UI action writes `.env`.
 preparing review for configured known Calendar attendees. It applies only
 user-confirmed `speaker_aliases` from `transcript.md` with deterministic local code.
 
-**C6** Internet connectivity is required only while an enabled remote capability performs network work. Recording itself works offline. Failed B2 uploads can be retried with **Retry Pending B2 Backups**; failed transcription states can be retried with **Retry Failed Transcriptions**.
+**C6** Recording and prepared Local inference can run without network after
+required setup. Model preparation downloads missing weights explicitly. B2,
+AssemblyAI when selected, Anthropic, and Calendar require network for their
+respective operations. Use **Retry Pending B2 Backups** or **Retry Pending or
+Failed Transcriptions** explicitly for existing work; preparation does not
+process it.
 
 ---
 
@@ -1310,7 +1439,7 @@ user-confirmed `speaker_aliases` from `transcript.md` with deterministic local c
 | Cross-machine sync | Restore local `~/Meetings/` from B2 on a new machine |
 | Meeting calendar enrichment | Write summary bullet points back to the Google Calendar event description |
 | Client-side encryption | Encrypt audio before B2 upload |
-| Local audio retention policy | Optional purge of `recording.m4a` after a successful B2 upload, after a configurable age — see OQ-1 |
+| Local audio retention policy | Optional purge of `recording.m4a` after a successful B2 upload, after a configurable age: see OQ-1 |
 
 ---
 

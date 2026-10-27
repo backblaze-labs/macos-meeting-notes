@@ -7,6 +7,7 @@ from configuration_editing_fakes import (
     FakePreferences,
     FakeSecrets,
     backup_bundle,
+    cloud_fields,
     service,
     transcription_bundle,
 )
@@ -42,7 +43,7 @@ def test_stale_bound_snapshot_rejects_before_keychain_write() -> None:
             view.edit_id,
             Capability.TRANSCRIPTION,
             True,
-            view.fields,
+            cloud_fields(view.fields),
             transcription_bundle("secret-sentinel"),
             disclosure_confirmed=True,
         )
@@ -69,7 +70,7 @@ def test_store_returning_existing_active_ref_never_deletes_or_activates_it() -> 
             view.edit_id,
             Capability.TRANSCRIPTION,
             True,
-            view.fields,
+            cloud_fields(view.fields),
             transcription_bundle("new-secret"),
             disclosure_confirmed=True,
         )
@@ -93,7 +94,7 @@ def test_wrong_provider_ref_is_untrusted_and_never_deleted() -> None:
             view.edit_id,
             Capability.TRANSCRIPTION,
             True,
-            view.fields,
+            cloud_fields(view.fields),
             transcription_bundle("new-secret"),
             disclosure_confirmed=True,
         )
@@ -150,7 +151,7 @@ def test_old_ref_cleanup_failure_does_not_undo_saved_rotation() -> None:
             view.edit_id,
             Capability.TRANSCRIPTION,
             True,
-            view.fields,
+            cloud_fields(view.fields),
             transcription_bundle("new-secret"),
             disclosure_confirmed=True,
         )
@@ -206,7 +207,7 @@ def test_uncertain_rotation_retains_old_and_new_refs(
             view.edit_id,
             Capability.TRANSCRIPTION,
             True,
-            view.fields,
+            cloud_fields(view.fields),
             transcription_bundle("new-secret"),
             disclosure_confirmed=True,
         )

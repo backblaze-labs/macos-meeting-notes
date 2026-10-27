@@ -104,12 +104,32 @@ Available comparative evidence covers three complete English meetings totaling
 126.5 minutes. Aggregate word discrepancy against other AI-generated
 transcripts is approximately 6 percent. This is not an error rate against human
 ground truth. Semantic review found the main meaning preserved with localized
-differences. Universal accuracy is not promised. Spanish execution and text
-preservation validation are pending; multilingual quality is not established by
-the English benchmark.
+differences. Universal accuracy is not promised.
+
+S0A also exercised a 69.8-minute Spanish recording, detected as Spanish, through
+the real local pipeline. Word discrepancy against an existing AI-generated
+transcript was approximately 16.3 percent, not an accuracy score against human
+ground truth. Approximately 99.945 percent of words received a diarization
+assignment. Four anonymous labels were produced against three reviewed
+speakers; the additional label covered five words. Assignment coverage does
+not measure speaker correctness. Short English and Spanish clip checks
+produced matching text with automatic and forced language selection, with
+measured detection overhead below one second in those clips. These observations
+support the selected language-detection path without establishing general
+multilingual or diarization accuracy. Private source audio and detailed results
+remain outside Git.
 
 Model cache and runtime readiness are deployment-specific checks. No personal
 installation state is part of this specification.
+
+The integrated native-decoder adapter also processed the same three complete
+English recordings and one complete Spanish recording. Automatic detection
+returned the expected language for every recording, and input content hashes
+were unchanged. Normalized word discrepancy against the existing AI
+transcripts was 6.06 percent across the English recordings and 15.51 percent for
+the Spanish recording. These observations are not human-reference accuracy or
+a controlled comparison between languages. The earlier 16.3 percent Spanish
+observation belongs to the initial feasibility path.
 
 ## Approved product decisions
 

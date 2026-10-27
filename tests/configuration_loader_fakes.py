@@ -59,6 +59,12 @@ def provider_preferences(
     bundle = _bundle(secret_id, secret or f"app-{secret_id.value}-secret")
     return (
         AppPreferences(
+            values=(
+                PreferenceValue(PreferenceKey.TRANSCRIPTION_PROVIDER, "assemblyai"),
+                PreferenceValue(PreferenceKey.ASSEMBLYAI_CONSENT, "external-audio-v1"),
+            )
+            if secret_id is SecretId.TRANSCRIPTION
+            else (),
             capabilities=(CapabilityPreference(capability, enabled),),
             secret_refs=(ref,),
         ),
@@ -74,7 +80,7 @@ def all_provider_preferences():
         PreferenceValue(PreferenceKey.B2_BUCKET_NAME, "bucket"),
     )
     preferences = AppPreferences(
-        values=values,
+        values=(*values, *(item for pair in pairs for item in pair[0].values)),
         capabilities=tuple(item for pair in pairs for item in pair[0].capabilities),
         secret_refs=tuple(item for pair in pairs for item in pair[0].secret_refs),
     )

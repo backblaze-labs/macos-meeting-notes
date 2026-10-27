@@ -12,11 +12,17 @@ OWNER_FIELDS = {
         {"schema_version", "created_by", "id", "date", "duration_minutes", "calendar_title"}
     ),
     ArtifactFieldOwner.TRANSCRIPTION: frozenset(
-        {"assemblyai_id", "transcription_status", "participants"}
+        {
+            "assemblyai_id",
+            "transcription_status",
+            "participants",
+            "transcription_provider",
+            "transcription_attempt_id",
+            "transcription_audio_sha256",
+            "transcription_audio_size",
+        }
     ),
-    ArtifactFieldOwner.SPEAKERS: frozenset(
-        {"speaker_candidates"}
-    ),
+    ArtifactFieldOwner.SPEAKERS: frozenset({"speaker_candidates"}),
     ArtifactFieldOwner.BACKUP: frozenset(),
 }
 IMMUTABLE_CORE_FIELDS = frozenset({"schema_version", "created_by", "id", "date"})
@@ -74,18 +80,26 @@ def validate_backup_completion_keys(
 def _validate_field_value(field: str, value: object) -> None:
     if field == "schema_version" and (not isinstance(value, int) or isinstance(value, bool)):
         raise ValueError("schema_version must be an integer")
-    if field in {"created_by", "id", "date", "calendar_title"} and not isinstance(
-        value, str
-    ):
+    if field in {"created_by", "id", "date", "calendar_title"} and not isinstance(value, str):
         raise ValueError(f"{field} must be a string")
     if field == "duration_minutes" and (
         not isinstance(value, int) or isinstance(value, bool) or value < 0
     ):
         raise ValueError("duration_minutes must be a non-negative integer")
-    if field == "assemblyai_id" and not (
-        value is None or isinstance(value, str) and value.strip()
-    ):
+    if field == "assemblyai_id" and not (value is None or isinstance(value, str) and value.strip()):
         raise ValueError("assemblyai_id must be null or a non-blank string")
+    if field == "transcription_audio_sha256" and value is not None:
+        validate_backup_revision(value)
+    if field == "transcription_audio_size" and not (
+        value is None or type(value) is int and value > 0
+    ):
+        raise ValueError("transcription_audio_size must be null or a positive integer")
+    if field == "transcription_provider" and value not in {None, "local", "assemblyai"}:
+        raise ValueError("transcription_provider must be null or a supported provider")
+    if field == "transcription_attempt_id" and not (
+        value is None or isinstance(value, str) and re.fullmatch(r"[0-9a-f]{32}", value)
+    ):
+        raise ValueError("transcription_attempt_id must be null or an opaque identifier")
     if field in {"participants", "speaker_candidates"} and not (
         isinstance(value, list) and all(isinstance(item, str) for item in value)
     ):

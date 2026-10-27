@@ -21,6 +21,11 @@ from meeting_memory.config.defaults import (
 )
 from meeting_memory.config.settings import Settings, looks_placeholder
 from meeting_memory.types.speakers import KnownSpeaker
+from meeting_memory.types.transcription import (
+    ASSEMBLYAI_CONSENT_VERSION,
+    NO_ASSEMBLYAI_CONSENT,
+    TranscriptionProvider,
+)
 
 
 class _ImmutableConfig:
@@ -29,13 +34,23 @@ class _ImmutableConfig:
 
 
 class TranscriptionConfig(_ImmutableConfig):
-    __slots__ = ("_api_key",)
+    __slots__ = ("_api_key", "provider", "external_processing_accepted")
 
-    def __init__(self, api_key: str) -> None:
-        object.__setattr__(self, "_api_key", api_key)
+    def __init__(
+        self,
+        api_key: str | None = None,
+        *,
+        provider: TranscriptionProvider = TranscriptionProvider.LOCAL,
+        external_processing_accepted: bool = False,
+    ) -> None:
+        object.__setattr__(
+            self, "_api_key", api_key if provider is TranscriptionProvider.ASSEMBLYAI else None
+        )
+        object.__setattr__(self, "provider", provider)
+        object.__setattr__(self, "external_processing_accepted", external_processing_accepted)
 
     @property
-    def api_key(self) -> str:
+    def api_key(self) -> str | None:
         return self._api_key
 
     def __repr__(self) -> str:
@@ -101,7 +116,7 @@ class NotesConfig(_ImmutableConfig):
         object.__setattr__(self, "prompt_file", prompt_file)
 
     @property
-    def api_key(self) -> str:
+    def api_key(self) -> str | None:
         return self._api_key
 
     def __repr__(self) -> str:
@@ -117,6 +132,8 @@ class RuntimeSettings(BaseSettings):
     max_recording_minutes: int = Field(default=DEFAULT_MAX_RECORDING_MINUTES, gt=0)
     calendar_poll_interval: int | None = DEFAULT_CALENDAR_POLL_INTERVAL
 
+    transcription_provider: str = TranscriptionProvider.LOCAL
+    assemblyai_consent: str = NO_ASSEMBLYAI_CONSENT
     assemblyai_api_key: str | None = Field(default=None, repr=False, exclude=True)
     b2_application_key_id: str | None = Field(default=None, repr=False, exclude=True)
     b2_application_key: str | None = Field(default=None, repr=False, exclude=True)
@@ -199,7 +216,18 @@ class RuntimeSettings(BaseSettings):
 
     @property
     def transcription(self) -> TranscriptionConfig | None:
-        return TranscriptionConfig(self.assemblyai_api_key) if self.assemblyai_api_key else None
+        try:
+            provider = TranscriptionProvider(self.transcription_provider)
+        except ValueError:
+            return None
+        accepted = self.assemblyai_consent == ASSEMBLYAI_CONSENT_VERSION
+        if provider is TranscriptionProvider.ASSEMBLYAI and (
+            not accepted or not self.assemblyai_api_key
+        ):
+            return None
+        return TranscriptionConfig(
+            self.assemblyai_api_key, provider=provider, external_processing_accepted=accepted
+        )
 
     @property
     def backup(self) -> BackupConfig | None:

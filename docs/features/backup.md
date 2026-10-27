@@ -56,14 +56,14 @@ B2 upload runs after the local files and completion event are written. The tray
 - `Retry Pending B2 Backups` scans local meeting directories and retries missing, pending, or
   failed uploads that belong to Meeting Memory, including legacy `meeting.md`
   directories and recordings split across `recording-part-*.m4a` files.
-- Failed transcription is retried through `Retry Failed Transcriptions`, not
+- Failed transcription is retried through `Retry Pending or Failed Transcriptions`, not
   `Retry Pending B2 Backups`.
 - Missing or explicitly disabled B2 configuration routes the app to its setup
   tray until Backup is configured and the app restarts.
 - The snapshot-upload seam verifies the captured directory
   identity, owned schema-v2 transcript slug, regular files, and canonical
   revision before constructing a B2 client. Capture accepts one owned meeting
-  directory—not independent audio/transcript paths—and the upload request
+  directory, rather than independent audio/transcript paths, and the upload request
   cannot supply or retarget its slug. It uploads one object at a time and
   accepts a monotonic per-worker cancellation token before client construction,
   each object, and each retry.

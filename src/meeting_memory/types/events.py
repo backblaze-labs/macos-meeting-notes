@@ -8,6 +8,7 @@ from pathlib import Path
 
 from meeting_memory.types.capabilities import ReadinessReport
 from meeting_memory.types.configuration_editing import ConfigurationOperationId
+from meeting_memory.types.local_transcription import LocalModelProgress
 from meeting_memory.types.meeting import MeetingMeta, MeetingRef
 from meeting_memory.types.recovery import RecoveryIndexEntry
 from meeting_memory.types.transcript import SpeakerReviewState
@@ -99,6 +100,16 @@ class TranscriptionFailed:
     """Transcription failed while the committed local audio remains safe."""
 
     meeting: MeetingRef
+    summary: str = "Transcription failed. Audio remains saved locally."
+    action: str = "Retry transcription from the meeting menu."
+
+
+@dataclass(frozen=True)
+class TranscriptionProgress:
+    """Measured or phase-based progress from a background local job."""
+
+    meeting: MeetingRef
+    progress: LocalModelProgress
 
 
 @dataclass(frozen=True)

@@ -261,7 +261,11 @@ def _fields(
             SettingKey.MEETINGS_DIR,
             SettingKey.MAX_RECORDING_MINUTES,
         ),
-        Capability.TRANSCRIPTION: (SettingKey.ASSEMBLYAI_API_KEY,),
+        Capability.TRANSCRIPTION: (
+            SettingKey.TRANSCRIPTION_PROVIDER,
+            SettingKey.ASSEMBLYAI_CONSENT,
+            SettingKey.ASSEMBLYAI_API_KEY,
+        ),
         Capability.BACKUP: (
             SettingKey.B2_APPLICATION_KEY_ID,
             SettingKey.B2_APPLICATION_KEY,

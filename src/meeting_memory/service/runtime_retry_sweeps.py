@@ -2,9 +2,11 @@
 
 import logging
 
+from meeting_memory.service.local_transcription import LocalTranscriptAdapter
 from meeting_memory.service.processing_retry import retry_failed_processing
 from meeting_memory.service.runtime_retry import retry_v2_backups, retry_v2_transcriptions
 from meeting_memory.service.sync import sync_pending_meetings
+from meeting_memory.types.transcription import TranscriptionProvider
 
 LOGGER = logging.getLogger(__name__)
 
@@ -16,8 +18,13 @@ def _retry_transcriptions(settings, jobs, client) -> None:
     if jobs.transcription_enabled:
         retry_failed_processing(
             settings.meetings_dir_path,
-            client,
+            (
+                LocalTranscriptAdapter(client, enabled=lambda: jobs.transcription_enabled)
+                if getattr(jobs, "transcription_provider", None) is TranscriptionProvider.LOCAL
+                else client
+            ),
             enabled=lambda: jobs.transcription_enabled,
+            event_sink=getattr(jobs, "transcription_event_sink", None),
         )
 
 

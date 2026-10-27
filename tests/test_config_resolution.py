@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 
+from configuration_loader_fakes import provider_preferences
+
 from meeting_memory.config.resolution import resolve_configuration
 from meeting_memory.types.capabilities import Capability
 from meeting_memory.types.configuration import (
@@ -57,7 +59,11 @@ def test_exact_per_field_precedence_and_value_free_provenance() -> None:
 
 def test_first_present_source_wins_even_when_blank_or_invalid() -> None:
     result = _resolve(
-        process={"ASSEMBLYAI_API_KEY": ""},
+        process={
+            "ASSEMBLYAI_API_KEY": "",
+            "TRANSCRIPTION_PROVIDER": "assemblyai",
+            "ASSEMBLYAI_CONSENT": "external-audio-v1",
+        },
         legacy={"ASSEMBLYAI_API_KEY": "legacy-secret-sentinel"},
     )
 
@@ -148,6 +154,10 @@ def test_legacy_b2_endpoint_keeps_compatibility_selection_for_readiness() -> Non
 def test_enabled_missing_activated_ref_fails_closed_without_legacy_fallback() -> None:
     ref = SecretRef(SecretId.TRANSCRIPTION, "b" * 32)
     preferences = AppPreferences(
+        values=(
+            PreferenceValue(PreferenceKey.TRANSCRIPTION_PROVIDER, "assemblyai"),
+            PreferenceValue(PreferenceKey.ASSEMBLYAI_CONSENT, "external-audio-v1"),
+        ),
         capabilities=(CapabilityPreference(Capability.TRANSCRIPTION, True),),
         secret_refs=(ref,),
     )
@@ -261,16 +271,7 @@ def _capability(result, capability: Capability):
 
 
 def _transcription_preferences(secret: str, *, enabled: bool | None):
-    ref = SecretRef(SecretId.TRANSCRIPTION, "a" * 32)
-    preferences = AppPreferences(
-        capabilities=(CapabilityPreference(Capability.TRANSCRIPTION, enabled),),
-        secret_refs=(ref,),
-    )
-    bundle = SecretBundle(
-        SecretId.TRANSCRIPTION,
-        (SecretValue(SettingKey.ASSEMBLYAI_API_KEY, secret),),
-    )
-    return preferences, SecretMaterial(ref, bundle)
+    return provider_preferences(SecretId.TRANSCRIPTION, secret=secret, enabled=enabled)
 
 
 def _backup_preferences(*, enabled: bool):

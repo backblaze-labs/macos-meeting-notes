@@ -44,7 +44,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments[:1] == ["local-model-worker"]:
+        from meeting_memory.repo.local_worker import main as worker_main
+
+        return worker_main(arguments[1:])
+    args = build_parser().parse_args(arguments)
 
     if args.command == "setup":
         return run_setup()
@@ -83,37 +88,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def run_auth() -> int:
-    from meeting_memory.repo.calendar_client import GoogleCalendarClient
-    from meeting_memory.repo.calendar_oauth import CalendarAuthorizationError
-    from meeting_memory.service.configuration_loader import (
-        ConfigurationLoadError,
-        load_configuration,
-    )
-    from meeting_memory.types.configuration_resolution import ConfigurationUse
+    from meeting_memory.service.calendar_auth_command import run_auth as authorize
 
-    try:
-        loaded = load_configuration(ConfigurationUse.AUTH)
-    except ConfigurationLoadError:
-        sys.stderr.write("Calendar configuration could not be loaded.\n")
-        return 2
-    settings = loaded.calendar_auth
-    if settings is None:
-        sys.stderr.write("Calendar is not configured or is disabled.\n")
-        return 2
-
-    try:
-        GoogleCalendarClient(
-            credentials_file=settings.credentials_file,
-            calendar_id=settings.calendar_id,
-            known_speakers=settings.known_speakers,
-        ).authenticate()
-    except CalendarAuthorizationError:
-        sys.stderr.write("Google Calendar authorization failed safely.\n")
-        sys.stderr.write("Check Calendar setup and try the explicit auth command again.\n")
-        return 2
-
-    sys.stderr.write("Google Calendar auth token saved to Keychain.\n")
-    return 0
+    return authorize()
 
 
 def run_setup() -> int:
@@ -139,9 +116,7 @@ def run_setup() -> int:
 
     backup = report.status_for(Capability.BACKUP)
     if backup.usable:
-        sys.stdout.write(
-            "\nRecording Core and required Backblaze B2 backup are configured.\n"
-        )
+        sys.stdout.write("\nRecording Core and required Backblaze B2 backup are configured.\n")
     else:
         sys.stdout.write(
             "\nRecording Core is usable. Configure required Backblaze B2 backup "

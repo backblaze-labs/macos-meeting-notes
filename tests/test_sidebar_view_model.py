@@ -36,6 +36,8 @@ CONFIGURATION_TITLES = [
     "Backup...",
     "Calendar...",
     "Notes...",
+    "Transcription provider: Local (Apple Silicon)",
+    "Prepare Local Models...",
     "Known Speakers...",
     "Notes Customization...",
     "Authorize Google Calendar...",
@@ -44,7 +46,7 @@ CONFIGURATION_TITLES = [
 DIAGNOSTIC_TITLES = [
     "Find Legacy Recordings...",
     "Retry Pending B2 Backups",
-    "Retry Failed Transcriptions",
+    "Retry Pending or Failed Transcriptions",
     "Check Setup & Dependencies",
     "Test macOS Notifications",
 ]

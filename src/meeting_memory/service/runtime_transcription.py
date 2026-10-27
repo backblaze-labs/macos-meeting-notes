@@ -1,63 +1,86 @@
-"""Single-flight durable Transcription runtime for schema-v2 meetings."""
+"""Single-flight durable Transcription with an explicitly selected backend."""
 
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from collections.abc import Callable
+from dataclasses import replace
 from functools import partial
 from pathlib import Path
 from typing import BinaryIO, Protocol
 
-from meeting_memory.service.meeting_state import MeetingStateConflict, MeetingStateStore
+from meeting_memory.service.local_transcription import align_local_transcript
+from meeting_memory.service.meeting_state import MeetingStateConflict
 from meeting_memory.service.runtime_files import (
     RuntimeMeetingHandle,
     bind_runtime_meeting_files,
     validate_runtime_meeting_handle,
 )
 from meeting_memory.service.transcript_state import TranscriptStateStore
+from meeting_memory.service.transcription_attempts import (
+    TranscriptionSourceChanged,
+    check_attempt_source,
+    claim_attempt,
+    defer_attempt,
+    fail_changed_remote_source,
+    stream_digest,
+)
 from meeting_memory.service.transcription_audio import capture_transcription_audio
-from meeting_memory.types.artifacts import MeetingJob
-from meeting_memory.types.capabilities import MeetingJobState
 from meeting_memory.types.egress import EgressPaused
-from meeting_memory.types.events import TranscriptionFailed, TranscriptReady
+from meeting_memory.types.events import TranscriptionFailed, TranscriptionProgress, TranscriptReady
+from meeting_memory.types.local_transcription import (
+    LocalModelsUnavailable,
+    LocalTranscriptionCancelled,
+    LocalTranscriptionError,
+)
 from meeting_memory.types.meeting import MeetingFiles, MeetingRef
 from meeting_memory.types.transcript import TranscriptResult
+from meeting_memory.types.transcription import TranscriptionProvider
 
 LOGGER = logging.getLogger(__name__)
-EventSink = Callable[[object], None]
-ThreadFactory = Callable[..., threading.Thread]
 
 
 class RuntimeTranscriptionClient(Protocol):
-    def submit(self, audio: BinaryIO) -> str:
-        raise NotImplementedError
-
-    def resume(self, job_id: str) -> TranscriptResult:
-        raise NotImplementedError
+    def submit(self, audio: BinaryIO) -> str: ...
+    def resume(self, job_id: str) -> TranscriptResult: ...
 
 
 class RuntimeTranscription:
-    """Claim, submit or resume, and finish one provider job per meeting."""
-
     def __init__(
         self,
         meetings_dir: Path,
-        event_sink: EventSink,
-        client: RuntimeTranscriptionClient,
-        thread_factory: ThreadFactory,
+        event_sink: Callable[[object], None],
+        client,
+        thread_factory: Callable[..., threading.Thread],
         enabled: Callable[[], bool] = lambda: True,
         on_transcript_committed: Callable[[RuntimeMeetingHandle], None] = lambda _handle: None,
+        *,
+        provider: TranscriptionProvider = TranscriptionProvider.ASSEMBLYAI,
     ) -> None:
-        self._state = MeetingStateStore(meetings_dir)
+        self._meetings_dir = meetings_dir
         self._transcripts = TranscriptStateStore(meetings_dir)
-        self._event_sink = event_sink
-        self._client = client
+        self._event_sink, self._client = event_sink, client
+        self._closed = threading.Event()
         self._thread_factory = thread_factory
-        self._enabled = enabled
+        self._enabled = lambda: not self._closed.is_set() and enabled()
         self._on_transcript_committed = on_transcript_committed
+        self._provider = provider
         self._lock = threading.Lock()
         self._active: set[str] = set()
+
+    def shutdown(self) -> None:
+        with self._lock:
+            if self._closed.is_set():
+                return
+            self._closed.set()
+        close = getattr(self._client, "close", None)
+        if close is not None:
+            try:
+                close()
+            except Exception:
+                LOGGER.warning("Could not close the local Transcription worker")
 
     def start(self, meeting: MeetingFiles | RuntimeMeetingHandle) -> None:
         if not self._enabled():
@@ -66,29 +89,22 @@ class RuntimeTranscription:
         if handle is not None and self._reserve(handle.files.meta.slug):
             self._launch_reserved(handle, resume_id=None)
 
-    def retry(
-        self,
-        meeting: MeetingFiles | RuntimeMeetingHandle,
-        resume_id: str | None = None,
-    ) -> None:
+    def retry(self, meeting, resume_id: str | None = None) -> None:
         if not self._enabled():
             return
         handle = self._validated_handle(meeting)
         if handle is None or not self._reserve(handle.files.meta.slug):
             return
-        files = handle.files
+        if self._provider is TranscriptionProvider.LOCAL:
+            resume_id = None
         if resume_id is None:
             try:
                 self._transcripts.prepare_retry(
-                    files.directory,
+                    handle.files.directory,
                     expected_directory_identity=handle.directory_identity,
                 )
-            except MeetingStateConflict:
-                self._release(files.meta.slug)
-                return
             except Exception:
-                self._release(files.meta.slug)
-                LOGGER.exception("Could not prepare Transcription retry")
+                self._release(handle.files.meta.slug)
                 return
         self._launch_reserved(handle, resume_id=resume_id)
 
@@ -99,167 +115,162 @@ class RuntimeTranscription:
             self._active.add(slug)
             return True
 
-    def _launch_reserved(
-        self,
-        handle: RuntimeMeetingHandle,
-        *,
-        resume_id: str | None,
-    ) -> None:
-        callback = partial(self._run_guarded, resume_id=resume_id)
+    def _launch_reserved(self, handle, *, resume_id):
         try:
-            worker = self._thread_factory(target=callback, args=(handle,), daemon=True)
-            worker.start()
+            self._thread_factory(
+                target=partial(self._run_guarded, resume_id=resume_id),
+                args=(handle,),
+                daemon=True,
+            ).start()
         except Exception:
             self._release(handle.files.meta.slug)
-            LOGGER.exception("Could not start Transcription worker")
+            LOGGER.warning("Could not start Transcription worker")
 
-    def _run_guarded(
-        self,
-        handle: RuntimeMeetingHandle,
-        *,
-        resume_id: str | None,
-    ) -> None:
+    def _run_guarded(self, handle, *, resume_id):
         try:
             self._run(handle, resume_id=resume_id)
         finally:
             self._release(handle.files.meta.slug)
 
-    def _run(self, handle: RuntimeMeetingHandle, *, resume_id: str | None) -> None:
+    def _run(self, handle, *, resume_id):
         if not self._enabled():
             return
-        files = handle.files
-        if resume_id is None and not self._claim_pending(handle):
+        try:
+            attempt = claim_attempt(self._meetings_dir, handle, self._provider, resume_id=resume_id)
+        except TranscriptionSourceChanged as changed:
+            try:
+                summary, action = fail_changed_remote_source(
+                    self._meetings_dir, handle, resume_id, changed
+                )
+            except Exception:
+                return
+            self._event_sink(TranscriptionFailed(_meeting_ref(handle.files), summary, action))
+            return
+        except Exception:
             return
         job_id = resume_id
         try:
-            if job_id is None:
-                with capture_transcription_audio(
-                    self._state.meetings_dir,
-                    files,
-                    expected_directory_identity=handle.directory_identity,
-                ) as audio:
-                    if self._defer_if_disabled(handle, has_provider_id=False):
-                        return
-                    job_id = self._client.submit(audio)
-                self._transcripts.record_job_id(
-                    files.directory,
-                    job_id,
-                    expected_directory_identity=handle.directory_identity,
-                )
+            if self._provider is TranscriptionProvider.LOCAL:
+                with self._capture(handle, attempt) as audio:
+                    if not self._enabled():
+                        raise LocalTranscriptionCancelled()
+                    output = self._client.transcribe(
+                        audio,
+                        progress=lambda progress: self._event_sink(
+                            TranscriptionProgress(_meeting_ref(handle.files), progress)
+                        ),
+                        cancelled=lambda: not self._enabled(),
+                    )
+                transcript = align_local_transcript(output, attempt_id=attempt.attempt_id)
             else:
+                if job_id is None:
+                    with self._capture(handle, attempt) as audio:
+                        if not self._enabled():
+                            raise EgressPaused("Transcription is paused")
+                        job_id = self._client.submit(audio)
                 self._transcripts.record_job_id(
-                    files.directory,
+                    handle.files.directory,
                     job_id,
-                    expected_id=job_id,
+                    expected_id=resume_id,
                     expected_directory_identity=handle.directory_identity,
+                    expected_attempt=attempt,
                 )
-            if self._defer_if_disabled(handle, has_provider_id=True):
-                return
-            transcript = self._client.resume(job_id)
+                if not self._enabled():
+                    return
+                result = self._client.resume(job_id)
+                transcript = replace(result, provider=self._provider, attempt_id=attempt.attempt_id)
+            if not self._enabled() and self._provider is TranscriptionProvider.LOCAL:
+                raise LocalTranscriptionCancelled()
             self._transcripts.succeed(
-                files.directory,
-                files.meta,
+                handle.files.directory,
+                handle.files.meta,
                 transcript,
                 expected_directory_identity=handle.directory_identity,
+                expected_attempt=attempt,
             )
+        except (LocalModelsUnavailable, LocalTranscriptionCancelled) as exc:
+            self._defer(handle, attempt)
+            self._event_sink(TranscriptionFailed(_meeting_ref(handle.files), str(exc), exc.action))
+            return
         except EgressPaused:
-            self._defer_if_disabled(handle, has_provider_id=job_id is not None)
+            if job_id is None:
+                self._defer(handle, attempt)
             return
         except MeetingStateConflict:
             return
-        except Exception:
-            if self._record_failure(handle, job_id):
-                self._event_sink(TranscriptionFailed(_meeting_ref(files)))
+        except Exception as exc:
+            summary, action = self._safe_failure(exc)
+            try:
+                self._transcripts.fail(
+                    handle.files.directory,
+                    job_id,
+                    expected_directory_identity=handle.directory_identity,
+                    expected_attempt=attempt,
+                    summary=summary,
+                    action=action,
+                )
+            except Exception:
+                return
+            self._event_sink(TranscriptionFailed(_meeting_ref(handle.files), summary, action))
             return
-        self._notify_transcript_committed(handle)
-        self._event_sink(TranscriptReady(_meeting_ref(files)))
-
-    def _notify_transcript_committed(self, handle: RuntimeMeetingHandle) -> None:
-        """Republish the rewritten transcript without failing the finished job."""
-
         try:
             self._on_transcript_committed(handle)
         except Exception:
-            LOGGER.exception("Could not start Backup after the transcript was committed")
+            LOGGER.warning("Could not start Backup after transcript publication")
+        self._event_sink(TranscriptReady(_meeting_ref(handle.files)))
 
-    def _claim_pending(self, handle: RuntimeMeetingHandle) -> bool:
-        files = handle.files
-        try:
-            self._state.transition_job(
-                files.directory,
-                MeetingJob.TRANSCRIPTION,
-                MeetingJobState.PENDING,
-                MeetingJobState.RUNNING,
+    def _capture(self, handle, attempt):
+        from contextlib import contextmanager
+
+        @contextmanager
+        def snapshot():
+            with capture_transcription_audio(
+                self._meetings_dir,
+                handle.files,
                 expected_directory_identity=handle.directory_identity,
-            )
-        except MeetingStateConflict:
-            return False
-        except Exception:
-            LOGGER.exception("Could not claim Transcription job")
-            return False
-        return True
+            ) as audio:
+                identity = attempt.audio_identity
+                if (
+                    identity is None
+                    or os.fstat(audio.fileno()).st_size != identity.size
+                    or stream_digest(audio.fileno(), identity.size) != identity.sha256
+                ):
+                    raise MeetingStateConflict("Source changed before transcription")
+                check_attempt_source(self._meetings_dir, handle, attempt)
+                audio.seek(0)
+                yield audio
 
-    def _defer_if_disabled(
-        self,
-        handle: RuntimeMeetingHandle,
-        *,
-        has_provider_id: bool,
-    ) -> bool:
-        if self._enabled():
-            return False
-        if has_provider_id:
-            return True
+        return snapshot()
+
+    def _defer(self, handle, attempt):
         try:
-            self._state.transition_job(
-                handle.files.directory,
-                MeetingJob.TRANSCRIPTION,
-                MeetingJobState.RUNNING,
-                MeetingJobState.PENDING,
-                expected_directory_identity=handle.directory_identity,
-            )
-        except MeetingStateConflict:
-            # Another worker already moved the durable job to a safe state.
-            return True
+            defer_attempt(self._meetings_dir, handle, attempt)
         except Exception:
-            LOGGER.warning("Could not defer paused Transcription job")
-        return True
+            LOGGER.warning("Could not defer paused Transcription")
 
-    def _record_failure(
-        self,
-        handle: RuntimeMeetingHandle,
-        job_id: str | None,
-    ) -> bool:
-        files = handle.files
-        try:
-            self._transcripts.fail(
-                files.directory,
-                job_id,
-                expected_directory_identity=handle.directory_identity,
-            )
-        except MeetingStateConflict:
-            return False
-        except Exception:
-            LOGGER.exception("Could not persist Transcription failure")
-            return False
-        return True
+    @staticmethod
+    def _safe_failure(error):
+        if isinstance(error, LocalTranscriptionError):
+            return str(error), error.action
+        return (
+            "Transcription failed. Audio remains saved locally.",
+            "Use Retry Pending or Failed Transcriptions to try again.",
+        )
 
-    def _release(self, slug: str) -> None:
+    def _release(self, slug):
         with self._lock:
             self._active.discard(slug)
 
-    def _validated_handle(
-        self,
-        meeting: MeetingFiles | RuntimeMeetingHandle,
-    ) -> RuntimeMeetingHandle | None:
+    def _validated_handle(self, meeting):
         try:
             if isinstance(meeting, RuntimeMeetingHandle):
-                validate_runtime_meeting_handle(self._state.meetings_dir, meeting)
+                validate_runtime_meeting_handle(self._meetings_dir, meeting)
                 return meeting
-            return bind_runtime_meeting_files(self._state.meetings_dir, meeting)
+            return bind_runtime_meeting_files(self._meetings_dir, meeting)
         except (OSError, TypeError, UnicodeError, ValueError):
             LOGGER.warning("Rejected invalid runtime Transcription files")
             return None
 
 
-def _meeting_ref(files: MeetingFiles) -> MeetingRef:
+def _meeting_ref(files):
     return MeetingRef(files.meta.slug, files.meta.calendar_title, files.directory)

@@ -49,7 +49,8 @@ def test_missing_preferences_preserve_legacy_parity_and_process_precedence(
 
     assert loaded.meetings_dir_path == Path("/process")
     assert loaded.transcription is not None
-    assert loaded.transcription.api_key == "legacy-secret"
+    assert loaded.transcription.api_key is None
+    assert loaded.transcription.provider.value == "local"
     assert source_for(loaded, SettingKey.MEETINGS_DIR) is SettingSource.PROCESS_ENV
     assert env_file.read_bytes() == original
 
@@ -113,7 +114,11 @@ def test_corrupt_preferences_fail_optional_egress_closed_except_process_override
     overridden = load_configuration(
         ConfigurationUse.RUNTIME,
         env_file=None,
-        process_environment={"ASSEMBLYAI_API_KEY": "process-secret"},
+        process_environment={
+            "ASSEMBLYAI_API_KEY": "process-secret",
+            "TRANSCRIPTION_PROVIDER": "assemblyai",
+            "ASSEMBLYAI_CONSENT": "external-audio-v1",
+        },
         preference_reader=corrupt_preferences,
         secret_reader=unexpected_secret,
     )
@@ -228,13 +233,14 @@ def test_generic_keychain_adapter_construction_failure_is_capability_local(
     assert "backend sentinel" not in repr(loaded)
 
 
-def test_bare_and_wrong_case_env_names_never_enable_transcription(tmp_path: Path) -> None:
+def test_bare_and_wrong_case_keys_never_select_remote_transcription(tmp_path: Path) -> None:
     env_file = tmp_path / ".env"
     env_file.write_text("ASSEMBLYAI_API_KEY\nassemblyai_api_key=lower\n", encoding="utf-8")
 
     loaded = load_test_configuration(ConfigurationUse.RUNTIME, env_file=env_file)
 
-    assert loaded.transcription is None
+    assert loaded.transcription.provider.value == "local"
+    assert loaded.transcription.api_key is None
     assert loaded.resolution.value_for(SettingKey.ASSEMBLYAI_API_KEY) == ""
 
 
@@ -246,7 +252,8 @@ def test_materialization_never_rereads_ambient_sources(monkeypatch) -> None:
     loaded = load_test_configuration(ConfigurationUse.RUNTIME, process={})
 
     assert loaded.meetings_dir_path == Path("~/Meetings").expanduser().resolve()
-    assert loaded.transcription is None
+    assert loaded.transcription.provider.value == "local"
+    assert loaded.transcription.api_key is None
 
 
 def test_secret_representations_dumps_and_errors_are_redacted() -> None:
