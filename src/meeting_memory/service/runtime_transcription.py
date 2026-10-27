@@ -43,8 +43,11 @@ LOGGER = logging.getLogger(__name__)
 
 
 class RuntimeTranscriptionClient(Protocol):
-    def submit(self, audio: BinaryIO) -> str: ...
-    def resume(self, job_id: str) -> TranscriptResult: ...
+    def submit(self, audio: BinaryIO) -> str:
+        raise NotImplementedError
+
+    def resume(self, job_id: str) -> TranscriptResult:
+        raise NotImplementedError
 
 
 class RuntimeTranscription:

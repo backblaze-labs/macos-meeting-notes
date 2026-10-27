@@ -401,3 +401,9 @@ changes.
   dispatch and bounded no-weights Metal check also passed. Distribution
   contract/structure tests passed separately (23 tests). A test collection check
   confirmed the final full-gate count remains 1,364.
+
+- 2026-10-27: evaluated the automated code-quality review on the first PR
+  revision. Clarified cleanup-test scope, removed a forwarding lambda, made
+  Protocol stubs explicit, and documented best-effort shutdown cleanup. Cleanup
+  keeps its nonblocking exit semantics rather than raising during parent death.
+  Ruff and 51 focused affected tests passed before publishing the revision.

@@ -50,6 +50,7 @@ class LocalTranscriptionClient:
             try:
                 process.terminate()
             except OSError:
+                # A child may already be gone; continue cancelling the other owned children.
                 pass
 
     def _track_process(self, process) -> None:

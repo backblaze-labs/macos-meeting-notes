@@ -26,7 +26,7 @@ class FakeAssemblyAI:
         self.settings = SimpleNamespace(
             api_key="global-key", polling_interval=3, http_timeout=30, sync_http_timeout=60
         )
-        self.types = SimpleNamespace(Settings=lambda **kwargs: SimpleNamespace(**kwargs))
+        self.types = SimpleNamespace(Settings=SimpleNamespace)
         self.api = SimpleNamespace(get_transcript=self.poll)
         self.clients, self.resumed_ids, self.created_urls = [], [], []
         self.last_transcriber = self.last_config = None

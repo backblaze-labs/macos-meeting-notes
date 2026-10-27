@@ -25,7 +25,8 @@ class LocalTranscriber(Protocol):
         *,
         progress: Callable[[LocalModelProgress], None],
         cancelled: Callable[[], bool],
-    ) -> LocalTranscriptionOutput: ...
+    ) -> LocalTranscriptionOutput:
+        raise NotImplementedError
 
 
 def align_local_transcript(output: LocalTranscriptionOutput, *, attempt_id: str | None = None):

@@ -44,12 +44,14 @@ class PrivateWorkerDirectory:
             try:
                 os.unlink(name, dir_fd=self.fd)
             except OSError:
+                # Cleanup is best effort; filesystem errors must not keep an orphan worker alive.
                 pass
         try:
             current = self.path.lstat()
             if (current.st_dev, current.st_ino) == self.identity:
                 self.path.rmdir()
         except OSError:
+            # A missing or nonempty private directory must not delay worker exit and lock release.
             pass
 
     def close(self) -> None:

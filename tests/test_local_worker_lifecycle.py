@@ -109,6 +109,7 @@ def test_parent_death_keeps_lock_until_private_cleanup_and_child_exit(tmp_path):
             try:
                 os.kill(child_pid, signal.SIGKILL)
             except ProcessLookupError:
+                # The child may already have exited after its parent-death cleanup.
                 pass
         for stream in (parent.stdin, parent.stdout, parent.stderr):
             stream.close()
