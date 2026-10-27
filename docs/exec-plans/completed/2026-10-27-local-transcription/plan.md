@@ -1,5 +1,6 @@
 ---
-status: approved
+status: done
+completed: 2026-10-27
 approved: 2026-10-27
 spec: spec.md
 ---
@@ -270,7 +271,7 @@ Complete the validation table and move this plan and specification to
 | 11 | Preserved audio, unchanged `.env`, unrelated preferences retained | Passed source-unchanged checks for all audio inputs, byte-hash checks for existing .env/preferences, and unrelated-reference preservation tests. |
 | 12 | Full gate, dependency markers, and packaging verification | Passed make check with 1,364 tests plus five structural tests; clean locked arm64 install, arm64/Intel resolution, arm64 bundle build and strict relocated verification. Remote CI remains part of S6. |
 | 13 | Reviewed docs/guides/doctor/licenses and real M4A decoding | Canonical docs and active guides synchronized; notices/licenses reviewed; doctor/provider readiness tested; final native decode verified after lifecycle fixes. |
-| 14 | PR/merge, latest reviews, and official app from main | Pending remote PR checks, merge, primary fast-forward, official installation/restart, and final delivery evidence. |
+| 14 | PR/merge, latest reviews, and official app from main | PR #32 merged after all checks on 8704bc0 passed; primary fast-forwarded; official app reloaded from main; all five doctor capabilities ready; effective provider Local and configuration/recent-recording hashes unchanged. |
 
 ## Progress
 
@@ -283,7 +284,7 @@ Complete the validation table and move this plan and specification to
 | S3 | Complete | Provider/source attempts, retries, alignment, Notes, and Backup regressions passed |
 | S4 | Complete | Native forms/progress, disclosures, canonical docs, and active guides synchronized |
 | S5 | Complete | Local full gate, four real audio checks, independent reviews, and strict arm64 bundle verification passed |
-| S6 | Pending | Remote checks, merge, primary checkout update, official app reload, and final evidence remain required |
+| S6 | Complete | Feature PR merged, primary updated, official app restarted and validated; final record publication and managed-worktree cleanup close delivery |
 
 ### S0A Feasibility Evidence
 
@@ -407,3 +408,24 @@ changes.
   Protocol stubs explicit, and documented best-effort shutdown cleanup. Cleanup
   keeps its nonblocking exit semantics rather than raising during parent death.
   Ruff and 51 focused affected tests passed before publishing the revision.
+
+- 2026-10-27: all checks on feature revision 8704bc0 passed, including macOS,
+  arm64 and Intel standalone builds, and security analysis. The last two
+  code-quality annotations are test-only false positives: an independent trace
+  executed all exception/cleanup assertions and the test passed. Stale CI runs
+  for superseded commits were cancelled; the final revision completed normally.
+- 2026-10-27: [PR #32](https://github.com/backblaze-labs/macos-meeting-notes/pull/32)
+  merged as 5458327. The primary checkout fast-forwarded without discarding
+  pre-existing changes. The merged feature branch was deleted locally and
+  remotely.
+- 2026-10-27: installed the declared local dependencies and ran
+  `make PYTHON=.venv/bin/python reload-macos-app` from the permanent primary
+  checkout. Verified the official launcher owns a live child process, references
+  the permanent checkout, and contains no feature-worktree path. Runtime resolves
+  Local; doctor reports Recording Core, Transcription, Backup, Calendar, and Notes
+  ready. Existing `.env`, preferences, and the newly saved recording/transcript/
+  notes retain their exact content hashes. No historical transcription was queued.
+- 2026-10-27: moved these approved records to completed after every requirement
+  gained observed evidence. A documentation-only publication records delivery;
+  managed-worktree cleanup follows that publication. Private installation and
+  recording evidence remain outside the public repository.
