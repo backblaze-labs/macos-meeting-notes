@@ -65,10 +65,11 @@ class FakeAlert:
 class FakeView(_FakeAlloc):
     def initWithFrame_(self, frame):
         self.frame = frame
+        self.children = []
         return self
 
-    def addSubview_(self, _view) -> None:
-        pass
+    def addSubview_(self, view) -> None:
+        self.children.append(view)
 
 
 class FakeScrollView(_FakeAlloc):

@@ -330,6 +330,13 @@ Calendar prefix, and a fixed identity contract forbids reinference from
 mentions or topics while allowing explicitly stated task recipients. The old
 automatic Notes preference is ignored.
 
+Incomplete speaker assignments return to Review Speakers with the selected names
+and blank fields preserved, and identify the labels that still need a name.
+A save failure also returns to review for correction, retry, or cancellation.
+To keep one anonymous label while naming the others, enter its exact text
+(for example, `Unknown`) as the manual name. **Keep Speaker Labels** keeps
+all labels. Notes start only after a successful confirmation.
+
 Standalone roster Save uses the same private atomic preference document, changes
 only `KNOWN_SPEAKERS`, and requires a matching captured revision. A simultaneous
 Calendar edit fails with a conflict instead of overwriting settings. Saving does
