@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import json
 import os
@@ -106,11 +107,9 @@ def test_parent_death_keeps_lock_until_private_cleanup_and_child_exit(tmp_path):
             parent.kill()
             parent.wait(timeout=5)
         if child_pid:
-            try:
+            # The child may already have exited after its parent-death cleanup.
+            with contextlib.suppress(ProcessLookupError):
                 os.kill(child_pid, signal.SIGKILL)
-            except ProcessLookupError:
-                # The child may already have exited after its parent-death cleanup.
-                pass
         for stream in (parent.stdin, parent.stdout, parent.stderr):
             stream.close()
 

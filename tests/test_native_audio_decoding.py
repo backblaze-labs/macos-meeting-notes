@@ -159,11 +159,15 @@ def test_decode_timeout_terminates_child_and_cleans_temp(tmp_path, monkeypatch):
 def test_consumer_failure_cleans_decoded_audio(tmp_path, monkeypatch):
     monkeypatch.setattr(decoding.subprocess, "Popen", DecoderProcess)
     decoded_parent = None
-    with snapshot(tmp_path) as audio:
-        with pytest.raises(RuntimeError, match="consumer"):
+    failure = None
+    try:
+        with snapshot(tmp_path) as audio:
             with decoding.decoded_native_audio(audio, helper=Path("/native/helper")) as path:
                 decoded_parent = path.parent
                 raise RuntimeError("consumer")
+    except RuntimeError as error:
+        failure = str(error)
+    assert failure == "consumer"
     assert decoded_parent is not None
     assert not decoded_parent.exists()
 

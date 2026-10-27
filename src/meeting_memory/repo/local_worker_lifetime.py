@@ -41,18 +41,14 @@ class PrivateWorkerDirectory:
 
     def remove_owned_files(self) -> None:
         for name in self.names:
-            try:
+            # Filesystem errors must not keep an orphan worker alive.
+            with contextlib.suppress(OSError):
                 os.unlink(name, dir_fd=self.fd)
-            except OSError:
-                # Cleanup is best effort; filesystem errors must not keep an orphan worker alive.
-                pass
-        try:
+        # Missing or nonempty private directories must not delay exit and lock release.
+        with contextlib.suppress(OSError):
             current = self.path.lstat()
             if (current.st_dev, current.st_ino) == self.identity:
                 self.path.rmdir()
-        except OSError:
-            # A missing or nonempty private directory must not delay worker exit and lock release.
-            pass
 
     def close(self) -> None:
         os.close(self.fd)

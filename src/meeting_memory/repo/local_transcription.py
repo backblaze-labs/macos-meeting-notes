@@ -7,6 +7,7 @@ import os
 import tempfile
 import threading
 import wave
+from contextlib import suppress
 from pathlib import Path
 from typing import BinaryIO
 
@@ -47,11 +48,9 @@ class LocalTranscriptionClient:
         with self._process_lock:
             active = tuple(self._processes)
         for process in active:
-            try:
+            # A child may already be gone; continue cancelling the other owned children.
+            with suppress(OSError):
                 process.terminate()
-            except OSError:
-                # A child may already be gone; continue cancelling the other owned children.
-                pass
 
     def _track_process(self, process) -> None:
         with self._process_lock:
