@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     b2_region: str
     b2_bucket_name: str
     assemblyai_api_key: str
+    transcription_provider: str = "local"
+    assemblyai_consent: str = "not-accepted"
 
     anthropic_api_key: str | None = None
     anthropic_model: str = DEFAULT_ANTHROPIC_MODEL

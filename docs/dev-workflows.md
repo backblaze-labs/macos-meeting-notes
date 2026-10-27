@@ -12,13 +12,33 @@ make doctor
 - `make check:structure`: repository architecture checks.
 - `make test`: all tests.
 - `make lint`: Ruff linting.
-- `make check`: full gate.
+- `make check`: full deterministic gate with fakes, no GPU, model weights, or
+  network required.
+- `make check-local-transcription`: explicit real-audio Apple Silicon
+  integration; see the example below.
 
 ## App Validation
 
 Use [manual-validation.md](manual-validation.md) for a real credentialed run.
 The automated test suite uses fakes and mocks for external services; it does not
 spend API credits or require local audio hardware.
+
+### Local Transcription Hardware Check
+
+Prepare models explicitly from the native app, then run with an English or
+Spanish M4A sample and a private output directory:
+
+```bash
+make PYTHON=.venv/bin/python check-local-transcription \
+  LOCAL_CHECK_ARGS='"/path/to/recording.m4a" --expected-language es --helper .build/MeetingMemoryCapture --output /path/to/private-results/result.json'
+```
+
+Use `--expected-language en` for English. This exercises native mono 16 kHz
+PCM decoding and pinned offline model inference without system FFmpeg. Keep
+recordings and generated evidence outside Git. Doctor does not download or
+load weights, and preparation does not process pending meetings. The separate
+**Retry Pending or Failed Transcriptions** action confirms the provider before
+processing history.
 
 ## Local macOS App
 
@@ -87,5 +107,5 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
 `Quit`.
 
 The tray's **Debugging** submenu exposes `Retry Pending B2 Backups`, `Retry
-Failed Transcriptions`, `Check Setup & Dependencies`, and `Test macOS
+Pending or Failed Transcriptions`, `Check Setup & Dependencies`, and `Test macOS
 Notifications` for local validation without adding new CLI commands.

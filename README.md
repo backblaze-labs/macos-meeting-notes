@@ -7,8 +7,9 @@
 `macos-meeting-notes` is the repository for **Meeting Memory**, a local-first
 macOS menu-bar app that records meetings, saves portable artifacts locally,
 and backs up each meeting's audio and transcript to Backblaze B2 over the
-S3-compatible API. It can also add speaker-diarized transcription (AssemblyAI),
-Calendar context, and summaries (Anthropic Claude).
+S3-compatible API. On Apple Silicon, speech recognition and diarization run
+locally by default through MLX. Calendar context and Anthropic Notes are
+optional; AssemblyAI is an explicit external transcription choice.
 
 The repository/distribution name is `macos-meeting-notes`; the app visible to
 users remains **Meeting Memory**, the Python import package remains
@@ -30,7 +31,8 @@ Completing setup requires a Backblaze B2 account, a dedicated private bucket,
 and a bucket-scoped application key. The app keeps local recording durable when
 the network or B2 is temporarily unavailable, while Transcription, Calendar,
 and Notes remain optional. The tray's native **Configuration** submenu stores
-credentials in macOS Keychain; complete legacy `.env` groups remain compatible.
+credentials in macOS Keychain; legacy `.env` credentials remain compatible.
+A legacy AssemblyAI key does not select cloud transcription or grant consent.
 See [the capability contract](docs/local-first-contract.md).
 
 After required B2 setup, the first-value acceptance test is concrete: record
@@ -45,8 +47,9 @@ directory in Finder, and confirm its private B2 objects.
 - A Backblaze B2 account, dedicated private bucket, and bucket-scoped
   S3-compatible application key
 - Optional Google Calendar OAuth desktop credentials
-- Optional AssemblyAI API key
-- Optional Anthropic API key for summaries
+- Apple Silicon with a native arm64 process and Metal for Local transcription
+- Optional AssemblyAI API key plus explicit external-processing consent
+- Optional Anthropic API key for Notes and speaker suggestions
 
 The standalone `.app` validation artifact bundles Python, the Swift capture
 helper, and its minimal offline AAC encoder; it does not require Python, Xcode,
@@ -107,8 +110,9 @@ flow and enter credentials only in the app's secure form.
    `make setup` creates `.venv`, installs dependencies, copies `.env.example`
    to `.env`, compiles the Swift capture helper and a minimal FFmpeg AAC
    encoder from source, installs `~/Applications/Meeting Memory.app`, and
-   prints local diagnostics. Budget a few minutes for the compile. It is
-   normal for Backup to be `unconfigured` until the next step.
+   prints local diagnostics. It is normal for Backup to be `unconfigured`
+   until the next step. Model weights are not downloaded during installation
+   or startup; prepare them explicitly from the app.
 
 4. Open the app:
 
@@ -140,6 +144,14 @@ flow and enter credentials only in the app's secure form.
    confirm the local meeting folder is created. If an upload fails, use
    **Debugging › Retry Pending B2 Backups**.
 
+8. On Apple Silicon, choose **Configuration › Prepare Local Models...** and
+   start preparation. The app reuses the validated standard Hugging Face cache
+   and downloads missing weights without sending meeting content. Cancel or
+   retry in the native panel. Missing models do not prevent recording. Once
+   preparation completes, new recordings can transcribe locally; choose
+   **Debugging › Retry Pending or Failed Transcriptions** separately for
+   recordings that were already pending.
+
 For the full walkthrough, provider setup, permissions, and troubleshooting,
 read [docs/setup-tutorial.md](docs/setup-tutorial.md).
 
@@ -158,8 +170,10 @@ make install-launch-agent
 
 `make doctor` renders one status for Recording Core, Transcription, Backup,
 Calendar, and Notes. Its exit status requires usable Recording Core and Backup;
-missing optional integrations remain `unconfigured`. The tray's **Debugging ›
-Check Setup & Dependencies** action renders the same report on a background
+disabled or missing optional integrations remain separate from those gates.
+Transcription defaults to Local and reports a preparation action when weights
+are missing, or an actionable incompatibility on unsupported systems. The
+tray's **Debugging › Check Setup & Dependencies** action renders the same report on a background
 worker. Neither path contacts a provider; configured Calendar may read its
 existing OAuth token from Keychain during the explicit check. The local check
 does not request macOS capture permissions, but it reads their current status.
@@ -224,7 +238,7 @@ bundled, offline minimal LGPL encoder only when the host lacks AAC encoding.
 While recording, the status bar shows a dot and a live timer next to the icon
 and the menu switches to `Stop Recording`. The sidebar's record button turns
 into a red stop button with the same timer. Drag the panel by its `⠿` grip to
-snap it to any screen edge — top and bottom turn it into a horizontal row.
+snap it to any screen edge: top and bottom turn it into a horizontal row.
 Turn on **Configuration › Hide sidebar while recording** if you never want
 the panel to appear on its own; you can still open it from the menu. Selecting
 `Record` dismisses that meeting-start notification. When a
@@ -245,12 +259,13 @@ and recovered warning history are saved as `capture_diagnostics` in
 
 You can stop one call and immediately start the next. Conversion, local commit,
 transcription, backup, and notes for the earlier call continue independently;
-the next recording does not wait for its transcript.
+the next recording does not wait for its transcript. Local inference is serial
+across meetings and runs in a separate process, leaving the tray responsive.
 
 If the app crashes during recording, restart it and check the tray for
 **Debugging › Interrupted Recordings**. Failed B2 uploads can be retried with
-**Debugging › Retry Pending B2 Backups**, and failed transcription states can
-be retried with **Debugging › Retry Failed Transcriptions**. Old recordings
+**Debugging › Retry Pending B2 Backups**. Pending or failed transcription can
+be retried with **Debugging › Retry Pending or Failed Transcriptions**. Old recordings
 left in the former macOS temp location are scanned only when you choose
 **Debugging › Find Legacy Recordings...**; the scan itself never starts cloud
 work.
@@ -275,8 +290,10 @@ specific calendar ID to narrow the watcher.
 
 The app resolves configuration with this precedence: exact process-environment
 name, active app preference/Keychain reference, legacy `.env`, then built-in
-default. A missing app preference document preserves legacy behavior. An
-unreadable app document fails optional egress closed unless a complete valid
+default. `TRANSCRIPTION_PROVIDER` and `ASSEMBLYAI_CONSENT` are accepted only
+from app preferences or the actual process environment, never from legacy
+`.env` or import. An inherited key alone is inert. A missing provider setting
+selects Local, enabled unless explicitly disabled. An unreadable app document fails optional egress closed unless a complete valid
 process group overrides it; Recording Core remains local and available.
 
 Recording Core (all have defaults):
@@ -284,9 +301,17 @@ Recording Core (all have defaults):
 - `MEETINGS_DIR`
 - `MAX_RECORDING_MINUTES`
 
-Optional Transcription:
+Transcription, enabled with Local by default unless explicitly disabled:
 
-- `ASSEMBLYAI_API_KEY`
+- `TRANSCRIPTION_PROVIDER`: `local` (default) or `assemblyai`; app/process only
+- `ASSEMBLYAI_CONSENT`: `external-audio-v1` after acceptance; app/process only
+- `ASSEMBLYAI_API_KEY`: required only for explicitly selected AssemblyAI
+
+Prefer **Configuration › Transcription...** to select a provider and review its
+notice. Saving pauses new transcription jobs until the app restarts. A local
+failure never selects cloud transcription. Development or automation that
+intentionally uses AssemblyAI must set both app/process-only values explicitly;
+putting them in `.env` does not authorize external audio processing.
 
 Required Backup (the complete group unlocks the normal recording UI):
 
@@ -318,7 +343,25 @@ Other optional local settings:
 
 See [.env.example](.env.example).
 
-## Privacy and Secrets
+## Data Boundaries and Secrets
+
+Local recognition and diarization can run offline after model preparation.
+Meeting Memory as a whole still uses the configured external capabilities:
+
+| Capability | Data leaving the Mac | Trigger |
+| --- | --- | --- |
+| Model preparation | Requests for pinned weights from Hugging Face; no meeting content | Explicit Prepare action |
+| B2 Backup | Meeting audio and transcript | After local commit and owned-artifact updates |
+| AssemblyAI | Meeting audio | New recordings or explicit retry after provider selection and consent |
+| Anthropic | Transcript excerpts and relevant context | Speaker suggestions before review when Notes is enabled, Notes after confirmation, or explicit topic suggestions |
+| Google Calendar | OAuth and Calendar API requests | Explicit authorization and enabled watcher |
+
+AssemblyAI's notice explains that the free plan participates in model
+improvement without opt-out. Paid accounts can explicitly opt out; payment
+alone is not exclusion, and opt-out affects future requests only. Handling also
+depends on account controls and contract. Meeting Memory does not read the
+account's actual opt-out setting. See the dated official sources in
+[the transcription guide](docs/features/transcription.md#external-provider-consent).
 
 Real credentials, OAuth files, local recordings, transcripts, generated meeting
 folders, and `.env` are ignored by git. Before publishing or pushing changes,
@@ -353,10 +396,10 @@ name and zero or more attendee names, emails, or email local-parts to match.
 
 Prices change; check provider pricing before recording long meetings.
 
-As of 2026-06-11, AssemblyAI lists Universal-2 pre-recorded transcription at
-`$0.15/hr` and speaker diarization at `$0.02/hr`, so this app's diarized
-transcription path is roughly `$0.17/hr` before any optional features. See
-[AssemblyAI pricing](https://www.assemblyai.com/pricing).
+Local transcription has no per-minute provider charge. It uses local compute
+and disk space for model weights. If you explicitly choose cloud transcription,
+check [AssemblyAI pricing](https://www.assemblyai.com/pricing) for current
+transcription and diarization charges.
 
 As of 2026-08-12, Backblaze lists B2 pay-as-you-go storage starting at
 `$6.95/TB/month`, with free transactions and free egress up to 3x average
@@ -391,8 +434,8 @@ edits in the checkout. Other explicit legacy and process paths remain honored.
 Choose **Configuration › Notes Customization...** in the tray. Start in
 **Templates** with either:
 
-- **Classic meeting notes** — Summary, Decisions, and Action Items for everyone.
-- **Personal focus** — bullet updates grouped by participant, followed only by
+- **Classic meeting notes**: Summary, Decisions, and Action Items for everyone.
+- **Personal focus**: bullet updates grouped by participant, followed only by
   tasks explicitly assigned to you. Enter **Your name** so the model can apply
   that boundary without guessing.
 
@@ -415,7 +458,7 @@ the new workspace.
 `transcript.md` is the source-of-truth transcript. It carries candidate
 speaker names from the Google Calendar event's attendee list (by Calendar
 full name, except configured matches from `KNOWN_SPEAKERS`), the diarized
-`Speaker A`, `Speaker B` labels AssemblyAI returned, and an editable alias
+`Speaker A`, `Speaker B` labels the selected backend produced, and an editable alias
 map:
 
 ```yaml
@@ -523,7 +566,7 @@ notes generation.
 
 Per-meeting `speaker_aliases` are the source of truth for who spoke in a
 specific recording. Global `Speaker A` / `Speaker B` mappings are intentionally
-not supported because AssemblyAI labels can change between transcription jobs.
+not supported because anonymous labels can change between transcription jobs.
 
 ## Local Search
 
@@ -532,6 +575,23 @@ Search saved meeting markdown from the terminal:
 ```bash
 meeting-memory search "launch risks"
 ```
+
+## FAQ
+
+**Do I need an AssemblyAI key to transcribe?** No. Prepare Local models on a
+native Apple Silicon Mac with Metal. Existing AssemblyAI keys do not activate
+cloud transcription; select it explicitly and accept its notice if desired.
+
+**Does Local keep all meeting content on my Mac?** Recognition and diarization
+run locally, but required B2 Backup sends audio/transcripts. Enabled Anthropic
+speaker suggestions and Notes send bounded transcript context at their
+respective triggers. Model preparation downloads weights without meeting
+content.
+
+**Why did preparing models not transcribe an older recording?** Preparation
+changes readiness only. Use **Retry Pending or Failed Transcriptions**
+separately and confirm the provider. Restart does not process history, and
+successful transcripts stay terminal.
 
 ## Known Limitations
 
@@ -548,9 +608,20 @@ meeting-memory search "launch risks"
   `transcript.md`.
 - Calendar watching uses all accessible calendars by default; set
   `GOOGLE_CALENDAR_ID` to a specific ID to narrow it.
-- Failed B2 uploads can be retried with `Retry Pending B2 Backups`. Failed
-  transcription can be retried with `Retry Failed Transcriptions`; fully automatic
-  connectivity-aware background queueing is future work.
+- Local transcription requires native arm64 macOS on Apple Silicon with Metal.
+  Intel and translated x86_64 processes cannot run this backend. Recording
+  remains available under the existing setup contract; cloud transcription
+  requires a separate explicit selection and consent.
+- Local uses pinned Whisper and Nemotron models with automatic language
+  detection and preserves the spoken language. English and Spanish have been
+  exercised; this does not establish accuracy for every language or recording.
+  Diarization supports up to eight labels and does not fully resolve overlap.
+- Missing or corrupt local models leave transcription pending with audio
+  preserved. Prepare models, then explicitly retry pending work. A complete
+  diarization failure publishes no partial transcript or automatic Notes.
+- Failed B2 uploads can be retried with `Retry Pending B2 Backups`. Transcription
+  uses `Retry Pending or Failed Transcriptions`; automatic connectivity-aware
+  retry remains future work. Preparation and restart do not process history.
 - Enabling a capability or changing its credentials/destination requires
   quitting and reopening the app. Disable pauses new current-session egress;
   process environment overrides can enable it again after restart.

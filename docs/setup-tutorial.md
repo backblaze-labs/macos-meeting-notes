@@ -34,7 +34,9 @@ Required for setup:
 Optional services:
 
 - Google account with Calendar access for context and reminders
-- AssemblyAI API key for diarized transcription
+- Apple Silicon with a native arm64 process and Metal for Local transcription
+  (no service credential; prepare models explicitly)
+- AssemblyAI API key only for explicitly selected external transcription
 - Anthropic API key for generated notes after speaker review
 
 Install the system build tools once if they are not already present:
@@ -89,16 +91,29 @@ history. Meeting Memory stores the pair in macOS Keychain.
 
 ## 5. Optionally Create Other Service Credentials
 
-AssemblyAI:
+Local transcription needs no account or API key. On compatible Apple Silicon,
+choose **Configuration › Prepare Local Models...**. The panel reuses validated
+standard Hugging Face weights or downloads missing files without meeting
+content, with progress, Cancel, and Retry. It does not transcribe old recordings.
 
-1. Create or open an AssemblyAI account.
-2. Copy an API key for transcription.
+AssemblyAI, only if you want external transcription:
+
+1. Create or open an AssemblyAI account and obtain its API key.
+2. Choose **Configuration › Transcription...**, select AssemblyAI, and accept
+   its external-audio notice before saving. The free plan participates in model
+   improvement without opt-out; paid accounts can explicitly opt out, but
+   payment alone is not exclusion. Opt-out applies to future requests only.
+3. Save and restart. An existing key alone, legacy import, or local error never
+   selects cloud. Meeting Memory does not know your account's opt-out setting.
+   See [the dated official sources](features/transcription.md#external-provider-consent).
 
 Anthropic, optional:
 
 1. Create or open an Anthropic account.
 2. Copy an API key if you want `notes.md` generation.
-3. Leave `ANTHROPIC_API_KEY` blank to record and transcribe without notes.
+3. Leave `ANTHROPIC_API_KEY` blank to record and transcribe without Notes or
+   pre-review speaker suggestions. When enabled, those suggestions send
+   transcript context to Anthropic before speaker confirmation.
 
 Google Calendar:
 
@@ -122,9 +137,11 @@ native secure controls, are stored in Keychain, and are blank every time the
 form reopens. Save, quit, and reopen Meeting Memory to unlock the normal
 recording UI.
 
-Then configure only the optional capabilities you want:
-**Transcription...**, **Calendar...**, or **Notes...**. Saved enablement or
-credential/destination changes require quitting and reopening Meeting Memory;
+Transcription defaults to Local and enabled unless explicitly disabled.
+Prepare its models on supported Apple Silicon. Use **Transcription...** to
+disable it or explicitly select a consented cloud provider. Configure only the
+optional **Calendar...** and **Notes...** capabilities you want. Saved
+enablement or credential/destination changes require quitting and reopening Meeting Memory;
 Disable pauses new work in the current session before reporting success.
 
 Use **Configuration › Calendar...** for the native Known Speakers row editor.
@@ -135,8 +152,11 @@ Existing `.env` profiles remain compatible. Use **Import Legacy
 Configuration...** to preview exact recognized key names and states, choose
 whole capabilities, review their disclosures, and confirm import. Nothing is
 selected by default; process values are never imported and `.env` remains
-byte-identical. Manual `.env` editing is a legacy/development fallback only;
-do not commit it.
+byte-identical. `TRANSCRIPTION_PROVIDER` and `ASSEMBLYAI_CONSENT` accept only
+app preferences and actual process overrides; values in `.env` or legacy
+imports are intentionally ignored. Existing keys are preserved but do not
+authorize external processing. Manual `.env` editing is a legacy/development
+fallback only; do not commit it.
 
 ## 7. Run Preflight Checks
 
@@ -146,10 +166,11 @@ make doctor
 
 `make doctor` renders Recording Core, Transcription, Backup, Calendar, and Notes
 independently. Its exit status requires both a usable Recording Core and a
-usable Backup configuration. Missing Transcription, Calendar, or Notes settings
-remain `unconfigured`; invalid local configuration or Calendar authorization
-affects only that capability.
-The check makes no provider network request. You can rerun the same report from
+usable Backup configuration. Disabled or missing optional integrations remain
+independent. Missing local models show a preparation action; unsupported
+hardware/runtime and Calendar authorization affect only their own capability.
+The check makes no provider network request and neither downloads nor loads
+model weights. You can rerun the same report from
 **Debugging › Check Setup & Dependencies** without blocking the tray UI.
 The check verifies the helper and durable local storage but does not request
 macOS capture permissions; those remain mode-specific and are validated when a
@@ -203,7 +224,10 @@ make PYTHON=.venv/bin/python reload-macos-app
 7. Confirm that `recording.m4a` and `transcript.md` were uploaded under the
    matching `meetings/<slug>/` prefix in the private B2 bucket. If the upload
    failed, use **Debugging › Retry Pending B2 Backups**.
-8. If Transcription is configured, wait for `transcript.md` to update.
+8. If Local is ready, wait for `transcript.md` to update. If models were missing,
+   prepare them, then choose **Debugging › Retry Pending or Failed
+   Transcriptions** separately and confirm the provider. Preparation and
+   restart do not process history; successful transcripts remain terminal.
 
 Expected files:
 
@@ -232,6 +256,14 @@ make PYTHON=.venv/bin/python uninstall-launch-agent
 
 ## Troubleshooting
 
+- Local models missing or corrupt: use **Prepare Local Models...**, then
+  explicitly retry pending recordings. Recording remains available.
+- Local incompatible: run a native arm64 app on Apple Silicon with Metal, or
+  explicitly select AssemblyAI after reviewing its external-audio notice. The
+  app does not switch providers automatically.
+- Local inference or diarization failed: retain the original audio and use the
+  explicit pending/failed retry action. Complete diarization failure does not
+  publish partial text or start speaker review/Notes.
 - Native audio build fails: confirm Xcode Command Line Tools are installed and
   the vendored FFmpeg source archive is present, then rerun `make setup`. The
   checksum is verified before any source is extracted or compiled.

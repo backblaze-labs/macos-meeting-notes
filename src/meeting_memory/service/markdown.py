@@ -13,6 +13,11 @@ from meeting_memory.config.notes_template import (
     validate_notes_report_template,
 )
 from meeting_memory.service.frontmatter import dump_frontmatter
+from meeting_memory.service.markdown_fields import (
+    NOTES_FRONTMATTER_FIELDS,
+    TRANSCRIPT_FRONTMATTER_FIELDS,
+    TRANSCRIPT_STUB_FIELDS,
+)
 from meeting_memory.service.notes_rendering import (
     action_item_text,
     decision_text,
@@ -24,53 +29,6 @@ from meeting_memory.types.capabilities import MeetingJobState
 from meeting_memory.types.meeting import MeetingMeta, PostCommitPolicy
 from meeting_memory.types.summary import SummaryResult
 from meeting_memory.types.transcript import TranscriptResult
-
-TRANSCRIPT_FRONTMATTER_FIELDS = (
-    "id",
-    "date",
-    "duration_minutes",
-    "calendar_title",
-    "participants",
-    "assemblyai_id",
-    "speaker_candidates",
-    "speaker_aliases",
-    "speaker_status",
-    "b2_audio",
-    "b2_transcript",
-    "b2_status",
-)
-
-TRANSCRIPT_STUB_FIELDS = (
-    "schema_version",
-    "created_by",
-    "id",
-    "date",
-    "duration_minutes",
-    "calendar_title",
-    "participants",
-    "assemblyai_id",
-    "transcription_status",
-    "speaker_candidates",
-    "speaker_aliases",
-    "speaker_status",
-    "b2_audio",
-    "b2_transcript",
-    "backup_status",
-    "backup_uploaded_revision",
-    "capture_mode",
-    "capture_status",
-    "capture_diagnostics",
-)
-
-NOTES_FRONTMATTER_FIELDS = (
-    "id",
-    "date",
-    "duration_minutes",
-    "calendar_title",
-    "source_transcript",
-    "speaker_status",
-    "summary_status",
-)
 
 AI_TRANSCRIPTION_WARNING = (
     "**Aviso:** Esta información proviene de transcripciones generadas por IA y puede "
@@ -96,6 +54,10 @@ def render_transcript_stub(
         "calendar_title": safe_frontmatter_text(meta.calendar_title),
         "participants": [],
         "assemblyai_id": None,
+        "transcription_provider": None,
+        "transcription_attempt_id": None,
+        "transcription_audio_sha256": None,
+        "transcription_audio_size": None,
         "transcription_status": status.value,
         "speaker_candidates": [safe_frontmatter_text(value) for value in meta.speaker_candidates],
         "speaker_aliases": {},
@@ -168,6 +130,9 @@ def render_transcript_markdown(
             "calendar_title": meta.calendar_title,
             "participants": list(rendered_transcript.participants),
             "assemblyai_id": transcript.assemblyai_id,
+            "transcription_provider": transcript.provider.value,
+            "transcription_attempt_id": transcript.attempt_id,
+            "transcription_status": "failed" if transcript.error else "succeeded",
             "speaker_candidates": list(speaker_candidates),
             "speaker_aliases": aliases,
             "speaker_status": speaker_status,
@@ -199,17 +164,23 @@ def render_transcript_body(meta: MeetingMeta, transcript: TranscriptResult) -> s
     )
 
 
-def render_transcription_failure_body() -> str:
+def render_transcription_failure_body(
+    *, summary: str | None = None, action: str | None = None
+) -> str:
     """Render a provider-detail-free retry state for a committed recording."""
 
+    summary = safe_frontmatter_text(summary or "Transcription failed. Audio remains saved locally.")
+    action = safe_frontmatter_text(
+        action or "Use Retry Pending or Failed Transcriptions to try again."
+    )
     return "\n".join(
         [
             "# Transcript",
             "",
             AI_TRANSCRIPTION_WARNING,
             "",
-            "_Transcription failed. Audio remains saved locally._",
-            "_Use Retry Failed Transcriptions to try again._",
+            f"_{summary}_",
+            f"_{action}_",
             "",
         ]
     )

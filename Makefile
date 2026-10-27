@@ -5,7 +5,7 @@ PYTHON_CANDIDATES ?= python3.11 python3.12 python3.13 python3.14 python3
 ARCH ?= $(shell uname -m)
 SIGN_IDENTITY ?= -
 
-.PHONY: setup install build-native-audio build-distribution verify-distribution run auth doctor install-macos-app reload-macos-app open-macos-app quit-macos-app install-launch-agent uninstall-launch-agent lint format test check check-structure check\:structure
+.PHONY: check-local-transcription setup install build-native-audio build-distribution verify-distribution run auth doctor install-macos-app reload-macos-app open-macos-app quit-macos-app install-launch-agent uninstall-launch-agent lint format test check check-structure check\:structure
 
 setup:
 	@set -e; \
@@ -105,3 +105,7 @@ check-structure:
 check\:structure: check-structure
 
 check: lint test check-structure
+
+# Explicit hardware integration check; excluded from the deterministic make check gate.
+check-local-transcription:
+	PYTHONPATH=src $(PYTHON) scripts/check_local_transcription.py $(LOCAL_CHECK_ARGS)

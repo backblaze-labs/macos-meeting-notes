@@ -11,6 +11,7 @@ from meeting_memory.config.runtime_layout import current_runtime_layout
 from meeting_memory.config.schema import definitions_for, required_keys
 from meeting_memory.config.settings import Settings
 from meeting_memory.config.validation import configured_value, valid_required_setting
+from meeting_memory.service.configuration_sources import read_secret_materials
 from meeting_memory.types.capabilities import Capability
 from meeting_memory.types.configuration import (
     AppPreferences,
@@ -27,6 +28,7 @@ from meeting_memory.types.configuration_editing import (
     ConfigurationChange,
     ConfigurationField,
     ConfigurationValue,
+    SecretAvailability,
 )
 from meeting_memory.types.configuration_resolution import SettingSource
 from meeting_memory.types.runtime_layout import RelativeRuntimePathError, RuntimeLayout
@@ -72,6 +74,12 @@ def valid_change(change: ConfigurationChange, *, can_retain_secret: bool) -> boo
         return change.secret is None
     if not all(_valid_field(field) for field in change.fields):
         return False
+    if change.capability is Capability.TRANSCRIPTION:
+        values = {field.key: field.value.value for field in change.fields}
+        if values.get(SettingKey.TRANSCRIPTION_PROVIDER) == "local":
+            return change.secret is None
+        if values.get(SettingKey.ASSEMBLYAI_CONSENT) != "external-audio-v1":
+            return False
     secret_id = secret_id_for_capability(change.capability)
     return secret_id is None or change.secret is not None or can_retain_secret
 
@@ -180,3 +188,34 @@ def _default_text(value: object) -> str:
             separators=(",", ":"),
         )
     return str(value)
+
+
+def editing_secret_state(capability, snapshot, reader):
+    secret_id = secret_id_for_capability(capability)
+    if secret_id is None:
+        return SecretAvailability.NONE, ()
+    ref = snapshot.preferences.secret_ref_for(secret_id)
+    if ref is None:
+        return SecretAvailability.UNAVAILABLE, ()
+    if (
+        capability is Capability.TRANSCRIPTION
+        and snapshot.preferences.value_for(PreferenceKey.TRANSCRIPTION_PROVIDER) != "assemblyai"
+    ):
+        return SecretAvailability.AVAILABLE, ()
+    materials, failed = read_secret_materials((ref,), reader)
+    if failed or len(materials) != 1 or materials[0].ref != ref:
+        return SecretAvailability.UNAVAILABLE, ()
+    return SecretAvailability.AVAILABLE, materials
+
+
+def can_retain_editing_secret(change, snapshot, availability, reader):
+    if change.capability is not Capability.TRANSCRIPTION:
+        return availability is SecretAvailability.AVAILABLE
+    values = {field.key: field.value.value for field in change.fields}
+    if values.get(SettingKey.TRANSCRIPTION_PROVIDER) != "assemblyai" or change.secret is not None:
+        return False
+    ref = snapshot.preferences.secret_ref_for(SecretId.TRANSCRIPTION)
+    if ref is None:
+        return False
+    materials, failed = read_secret_materials((ref,), reader)
+    return not failed and len(materials) == 1 and materials[0].ref == ref

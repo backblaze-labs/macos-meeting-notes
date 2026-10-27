@@ -17,11 +17,11 @@ def isolate_runtime_settings(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.chdir(tmp_path)
 
 
-def test_fresh_runtime_has_core_and_no_optional_capabilities(tmp_path: Path) -> None:
+def test_fresh_runtime_has_local_transcription_without_cloud_capabilities(tmp_path: Path) -> None:
     settings = load_runtime_settings(tmp_path / "missing.env")
 
     assert settings.meetings_dir_path
-    assert settings.transcription is None
+    assert settings.transcription.provider.value == "local"
     assert settings.backup is None
     assert settings.calendar is None
     assert settings.notes is None

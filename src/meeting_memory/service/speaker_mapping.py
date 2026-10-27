@@ -22,6 +22,8 @@ def apply_speaker_mapping(
         assemblyai_id=transcript.assemblyai_id,
         segments=tuple(_map_segment(segment, mapping) for segment in transcript.segments),
         error=transcript.error,
+        provider=transcript.provider,
+        attempt_id=transcript.attempt_id,
     )
 
 

@@ -1,7 +1,5 @@
 """Local transcript review and derived-notes generation."""
 
-from __future__ import annotations
-
 import re
 from collections.abc import Mapping
 from datetime import datetime
@@ -61,6 +59,8 @@ def load_speaker_review(path: Path) -> SpeakerReviewState:
         speaker_status=str(frontmatter.get("speaker_status") or "needs_review"),
         speaker_longest_lines=_speaker_longest_lines(body),
         assemblyai_id=str(frontmatter.get("assemblyai_id") or "") or None,
+        transcription_provider=str(frontmatter.get("transcription_provider") or "") or None,
+        transcription_attempt_id=str(frontmatter.get("transcription_attempt_id") or "") or None,
         speaker_utterances=speaker_excerpt(body),
     )
 

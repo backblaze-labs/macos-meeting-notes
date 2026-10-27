@@ -1,7 +1,5 @@
 """Optional post-commit jobs for owned schema-v2 meetings."""
 
-from __future__ import annotations
-
 import logging
 import threading
 from collections.abc import Callable
@@ -32,6 +30,7 @@ from meeting_memory.types.artifacts import (
 from meeting_memory.types.capabilities import Capability, MeetingJobState
 from meeting_memory.types.egress import EgressPaused
 from meeting_memory.types.meeting import MeetingFiles
+from meeting_memory.types.transcription import TranscriptionProvider
 
 LOGGER = logging.getLogger(__name__)
 EventSink = Callable[[object], None]
@@ -39,18 +38,19 @@ ThreadFactory = Callable[..., threading.Thread]
 
 
 class RuntimeJobs:
-    """Run independently optional jobs after local publication and notification."""
-
     def __init__(
         self,
         meetings_dir: Path,
         event_sink: EventSink,
         *,
         transcription_client: RuntimeTranscriptionClient | None = None,
+        transcription_provider: TranscriptionProvider = TranscriptionProvider.ASSEMBLYAI,
         backup_client: RuntimeBackupClient | None = None,
         thread_factory: ThreadFactory = threading.Thread,
         capability_enabled: Callable[[Capability], bool] = lambda _capability: True,
     ) -> None:
+        self.transcription_event_sink = event_sink
+        self.transcription_provider = transcription_provider
         self._state = MeetingStateStore(meetings_dir)
         self._backup_client = backup_client
         self._thread_factory = thread_factory
@@ -62,6 +62,7 @@ class RuntimeJobs:
                 transcription_client,
                 thread_factory,
                 enabled=lambda: self.transcription_enabled,
+                provider=transcription_provider,
                 on_transcript_committed=lambda handle: (
                     self._start(self._run_backup, handle) if self.backup_enabled else None
                 ),
@@ -76,6 +77,12 @@ class RuntimeJobs:
         self._transcription_lock = threading.Lock()
         self._transcription_enabled = transcription_client is not None
 
+    def shutdown(self) -> None:
+        self.set_transcription_enabled(False)
+        self.set_backup_enabled(False)
+        if self._transcription is not None:
+            self._transcription.shutdown()
+
     def launch_for_commit(
         self,
         files: MeetingFiles,
@@ -83,8 +90,6 @@ class RuntimeJobs:
         transcription: bool,
         backup: bool,
     ) -> None:
-        """Start requested jobs only after the caller has emitted RecordingCommitted."""
-
         handle = self._bind(files)
         if handle is None:
             return
@@ -98,8 +103,6 @@ class RuntimeJobs:
         return self._backup_gate.enabled
 
     def set_backup_enabled(self, enabled: bool) -> None:
-        """Cancel current attempts monotonically; re-enable affects only new work."""
-
         self._backup_gate.set_enabled(
             enabled,
             client_present=self._backup_client is not None,
@@ -113,8 +116,6 @@ class RuntimeJobs:
             return self._transcription_enabled
 
     def set_transcription_enabled(self, enabled: bool) -> None:
-        """Stop new claims/retries; an already-started provider request may finish."""
-
         with self._transcription_lock:
             self._transcription_enabled = enabled and self._transcription is not None
 
@@ -197,7 +198,6 @@ class RuntimeJobs:
             self._backup_gate.abandon(files.meta.slug, token)
             LOGGER.exception("Could not claim Backup job")
             return
-
         try:
             with capture_backup_snapshot(
                 files.directory,

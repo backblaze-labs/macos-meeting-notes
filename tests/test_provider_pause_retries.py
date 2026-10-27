@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 from calendar_client_fakes import InMemoryTokenStore, authorized_token_json
 from test_runtime_jobs import ImmediateThread, TranscriptionClient, _meeting
+from transcription_fakes import FakeAssemblyAI
 
 from meeting_memory.repo import calendar_client, summarizer, transcription
 from meeting_memory.repo.b2_client import B2S3Client
@@ -25,8 +26,7 @@ from meeting_memory.types.egress import EgressPaused
 
 def test_transcription_pause_prevents_retry_after_inflight_failure(monkeypatch) -> None:
     allowed = True
-    transcriber = _FailingTranscriber()
-    fake_aai = _AssemblyModule(transcriber)
+    fake_aai = FakeAssemblyAI(SimpleNamespace(id="job"), failures=(TimeoutError("in-flight"),))
     monkeypatch.setattr(transcription, "_load_assemblyai", lambda: fake_aai)
 
     def pause(_delay: float) -> None:
@@ -35,6 +35,7 @@ def test_transcription_pause_prevents_retry_after_inflight_failure(monkeypatch) 
 
     client = AssemblyAITranscriptionClient(
         "key",
+        external_processing_accepted=True,
         retry_delays=(0.0,),
         sleeper=pause,
         admit_request=lambda: allowed,
@@ -43,21 +44,17 @@ def test_transcription_pause_prevents_retry_after_inflight_failure(monkeypatch) 
     with pytest.raises(EgressPaused, match="disabled"):
         client.transcribe(BytesIO(b"audio"))
 
-    assert transcriber.attempts == 1
+    assert fake_aai.last_transcriber.attempts == 1
 
 
 def test_transcription_submit_checks_adapter_admission(monkeypatch) -> None:
-    transcriber = _FailingTranscriber()
-    monkeypatch.setattr(
-        transcription,
-        "_load_assemblyai",
-        lambda: _AssemblyModule(transcriber),
-    )
-
+    fake_aai = FakeAssemblyAI(SimpleNamespace(id="job"))
+    monkeypatch.setattr(transcription, "_load_assemblyai", lambda: fake_aai)
     with pytest.raises(EgressPaused):
-        AssemblyAITranscriptionClient("key", admit_request=lambda: False).submit(BytesIO(b"audio"))
-
-    assert transcriber.submit_attempts == 0
+        AssemblyAITranscriptionClient(
+            "key", external_processing_accepted=True, admit_request=lambda: False
+        ).submit(BytesIO(b"audio"))
+    assert fake_aai.clients == []
 
 
 def test_notes_pause_prevents_retry_after_inflight_failure(monkeypatch) -> None:
@@ -257,30 +254,3 @@ class _FailingMessages:
     def create(self, **_kwargs):
         self.attempts += 1
         raise TimeoutError("in-flight failure")
-
-
-class _FailingTranscriber:
-    def __init__(self) -> None:
-        self.attempts = 0
-        self.submit_attempts = 0
-
-    def transcribe(self, *_args, **_kwargs):
-        self.attempts += 1
-        raise TimeoutError("in-flight failure")
-
-    def submit(self, *_args, **_kwargs):
-        self.submit_attempts += 1
-        raise AssertionError("submit must not be admitted")
-
-
-class _AssemblyModule:
-    settings = SimpleNamespace()
-
-    def __init__(self, transcriber) -> None:
-        self._transcriber = transcriber
-
-    def TranscriptionConfig(self, **_kwargs):
-        return object()
-
-    def Transcriber(self):
-        return self._transcriber

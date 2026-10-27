@@ -27,6 +27,14 @@ struct MeetingMemoryNativeCapture {
             try await convertWAV(inputPath: arguments[1], outputPath: arguments[3])
             return
         }
+        if
+            arguments.count == 3,
+            arguments[0] == "decode-fd",
+            let descriptor = Int32(arguments[1])
+        {
+            try decodeM4A(descriptor: descriptor, snapshotDirectory: arguments[2])
+            return
+        }
         if arguments.count == 2, arguments[0] == "validate" {
             try await validateM4A(inputPath: arguments[1])
             return

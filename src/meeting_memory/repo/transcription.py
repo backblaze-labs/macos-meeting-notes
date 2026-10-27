@@ -8,15 +8,19 @@ from pathlib import Path
 from typing import BinaryIO
 
 from meeting_memory.config.settings import Settings
-from meeting_memory.repo.retry import DEFAULT_RETRY_DELAYS, RetryPolicy, is_likely_transient_error
+from meeting_memory.repo.assemblyai_session import assemblyai_session
+from meeting_memory.repo.retry import DEFAULT_RETRY_DELAYS, is_likely_transient_error
 from meeting_memory.types.egress import EgressPaused
 from meeting_memory.types.transcript import TranscriptResult, TranscriptSegment
+from meeting_memory.types.transcription import TranscriptionProvider
 
 DEFAULT_POLL_INTERVAL_SECONDS = 5
 DEFAULT_TIMEOUT_SECONDS = 30 * 60
 
 
 class AssemblyAITranscriptionClient:
+    provider = TranscriptionProvider.ASSEMBLYAI
+
     __slots__ = (
         "_api_key",
         "poll_interval_seconds",
@@ -25,6 +29,7 @@ class AssemblyAITranscriptionClient:
         "sleeper",
         "clock",
         "_admit_request",
+        "external_processing_accepted",
     )
 
     def __init__(
@@ -36,6 +41,7 @@ class AssemblyAITranscriptionClient:
         sleeper: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
         admit_request: Callable[[], bool] = lambda: True,
+        external_processing_accepted: bool = False,
     ) -> None:
         object.__setattr__(self, "_api_key", api_key)
         object.__setattr__(self, "poll_interval_seconds", poll_interval_seconds)
@@ -44,6 +50,7 @@ class AssemblyAITranscriptionClient:
         object.__setattr__(self, "sleeper", sleeper)
         object.__setattr__(self, "clock", clock)
         object.__setattr__(self, "_admit_request", admit_request)
+        object.__setattr__(self, "external_processing_accepted", external_processing_accepted)
 
     def __setattr__(self, _name: str, _value: object) -> None:
         raise AttributeError("transcription adapter is immutable")
@@ -57,82 +64,123 @@ class AssemblyAITranscriptionClient:
 
     @classmethod
     def from_settings(cls, settings: Settings) -> AssemblyAITranscriptionClient:
-        return cls(api_key=settings.assemblyai_api_key)
+        return cls(
+            api_key=settings.assemblyai_api_key,
+            external_processing_accepted=(
+                getattr(settings, "transcription_provider", "local") == "assemblyai"
+                and getattr(settings, "assemblyai_consent", None) == "external-audio-v1"
+            ),
+        )
 
     def transcribe(self, audio_path: Path | BinaryIO) -> TranscriptResult:
-        """Run the legacy synchronous API; runtime uses submit then resume."""
-
-        aai = _load_assemblyai()
-        self._configure(aai)
-        config = aai.TranscriptionConfig(speaker_labels=True)
-        transcriber = aai.Transcriber()
-
-        def transcribe_once():
-            if hasattr(audio_path, "read"):
-                audio_path.seek(0)  # type: ignore[union-attr]
-                return transcriber.transcribe(audio_path, config=config)
-            return transcriber.transcribe(str(audio_path), config=config)
-
-        transcript = self._retry_policy().call(
-            transcribe_once,
-            is_retryable=is_likely_transient_error,
-            timeout_message="AssemblyAI transcription timed out before retry",
-            enabled=self._admit_request,
-        )
-        return transcript_result_from_response(transcript)
+        """Use the guarded submission and polling path for explicit legacy retries."""
+        deadline = self.clock() + self.timeout_seconds
+        self._before_request(deadline)
+        if isinstance(audio_path, Path):
+            with audio_path.open("rb") as audio:
+                identifier = self._submit(audio, deadline)
+        else:
+            identifier = self._submit(audio_path, deadline)
+        return self._resume(identifier, deadline)
 
     def submit(self, audio: BinaryIO) -> str:
-        """Create one provider job and return its ID before polling."""
+        """Guard upload and create separately; never retry an ambiguous create."""
+        return self._submit(audio, self.clock() + self.timeout_seconds)
 
+    def _submit(self, audio, deadline):
+        self._before_request(deadline)
         aai = _load_assemblyai()
-        self._configure(aai)
-        config = aai.TranscriptionConfig(speaker_labels=True)
-        transcriber = aai.Transcriber()
-        audio.seek(0)
-        if not self._admit_request():
-            raise EgressPaused("Transcription provider operation is disabled")
-        transcript = transcriber.submit(audio, config=config)
-        job_id = str(getattr(transcript, "id", "") or "").strip()
-        if not job_id:
-            raise RuntimeError("AssemblyAI submission returned no job ID")
-        return job_id
+        with assemblyai_session(
+            aai, self.api_key, self.poll_interval_seconds, lambda: self._before_request(deadline)
+        ) as client:
+            transcriber = aai.Transcriber(client=client)
+
+            def upload():
+                audio.seek(0)
+                return transcriber.upload_file(audio)
+
+            url = self._request(upload, deadline)
+            transcript = self._request(
+                lambda: transcriber.submit(
+                    url, config=aai.TranscriptionConfig(speaker_labels=True)
+                ),
+                deadline,
+                retry=False,
+                retain_result=True,
+            )
+            identifier = str(getattr(transcript, "id", "") or "").strip()
+            if not identifier:
+                raise RuntimeError("AssemblyAI submission returned no job ID")
+            return identifier
 
     def resume(self, job_id: str) -> TranscriptResult:
-        """Wait for the exact previously persisted provider job."""
+        return self._resume(job_id, self.clock() + self.timeout_seconds)
 
+    def _resume(self, job_id, deadline):
         identifier = job_id.strip()
         if not identifier:
             raise ValueError("AssemblyAI job ID must not be blank")
+        self._before_request(deadline)
         aai = _load_assemblyai()
-        self._configure(aai)
-        transcript = self._retry_policy().call(
-            lambda: aai.Transcript.get_by_id(identifier),
-            is_retryable=is_likely_transient_error,
-            timeout_message="AssemblyAI transcription timed out before retry",
-            enabled=self._admit_request,
-        )
-        return transcript_result_from_response(transcript)
+        with assemblyai_session(
+            aai, self.api_key, self.poll_interval_seconds, lambda: self._before_request(deadline)
+        ) as client:
+            while True:
+                response = self._request(
+                    lambda: aai.api.get_transcript(client.http_client, identifier),
+                    deadline,
+                )
+                if str(getattr(response, "id", "") or "").strip() != identifier:
+                    raise RuntimeError("AssemblyAI returned a different transcript job")
+                status = _response_status(response)
+                if status in {"completed", "error"}:
+                    return transcript_result_from_response(response)
+                if status not in {"queued", "processing"}:
+                    raise RuntimeError("AssemblyAI returned an unknown transcript state")
+                self._sleep(self.poll_interval_seconds, deadline)
 
-    def _retry_policy(self) -> RetryPolicy:
-        return RetryPolicy(
-            delays=self.retry_delays,
-            sleeper=self.sleeper,
-            clock=self.clock,
-            timeout_seconds=float(self.timeout_seconds),
-        )
+    def _request(self, operation, deadline, *, retry=True, retain_result=False):
+        delays = self.retry_delays if retry else ()
+        for delay in (*delays, None):
+            self._before_request(deadline)
+            try:
+                result = operation()
+            except Exception as exc:
+                if delay is None or not is_likely_transient_error(exc):
+                    raise
+                self._sleep(delay, deadline)
+            else:
+                if not retain_result:
+                    self._remaining(deadline)
+                return result
+        raise RuntimeError("Unreachable AssemblyAI retry state")
 
-    def _configure(self, aai) -> None:
-        _configure_assemblyai_settings(
-            aai.settings,
-            api_key=self.api_key,
-            poll_interval_seconds=self.poll_interval_seconds,
-            timeout_seconds=self.timeout_seconds,
-        )
+    def _sleep(self, delay, deadline):
+        remaining = self._before_request(deadline)
+        self.sleeper(min(float(delay), remaining))
+        self._before_request(deadline)
+
+    def _remaining(self, deadline):
+        remaining = deadline - self.clock()
+        if remaining <= 0:
+            raise TimeoutError(
+                "AssemblyAI transcription timed out; the existing job ID is retained."
+            )
+        return remaining
+
+    def _before_request(self, deadline):
+        if self.external_processing_accepted is not True:
+            raise PermissionError("Explicit AssemblyAI external-processing acceptance is required.")
+        if not self._admit_request():
+            raise EgressPaused("Transcription provider operation is disabled")
+        return self._remaining(deadline)
 
 
 def transcript_result_from_response(response) -> TranscriptResult:
-    transcript_id = str(getattr(response, "id", "") or "assemblyai-unknown")
-    status = str(getattr(response, "status", "") or "").lower()
+    transcript_id = str(getattr(response, "id", "") or "").strip()
+    if not transcript_id:
+        raise RuntimeError("AssemblyAI returned no transcript ID")
+    status = _response_status(response)
     error = getattr(response, "error", None)
     if status == "error" or error:
         return TranscriptResult(assemblyai_id=transcript_id, segments=(), error=str(error))
@@ -171,30 +219,6 @@ def _load_assemblyai():
     return assemblyai
 
 
-def _configure_assemblyai_settings(
-    settings,
-    *,
-    api_key: str,
-    poll_interval_seconds: int,
-    timeout_seconds: int,
-) -> None:
-    settings.api_key = api_key
-    _set_existing_float(settings, "polling_interval", poll_interval_seconds)
-    _set_existing_float(settings, "sync_http_timeout", timeout_seconds)
-    _cap_existing_http_timeout(settings, timeout_seconds)
-
-
-def _set_existing_float(settings, name: str, value: float) -> None:
-    if hasattr(settings, name):
-        setattr(settings, name, float(value))
-
-
-def _cap_existing_http_timeout(settings, timeout_seconds: int) -> None:
-    if not hasattr(settings, "http_timeout"):
-        return
-    current = getattr(settings, "http_timeout", None)
-    try:
-        value = min(float(current), float(timeout_seconds))
-    except (TypeError, ValueError):
-        value = float(timeout_seconds)
-    setattr(settings, "http_timeout", value)
+def _response_status(response):
+    value = getattr(response, "status", "")
+    return str(getattr(value, "value", value)).lower()

@@ -146,6 +146,11 @@ def _scoped_secret_refs(
     keys = set(_USE_KEYS[use])
     refs: list[SecretRef] = []
     for secret_id in SecretId:
+        if secret_id is SecretId.TRANSCRIPTION and (
+            preliminary.value_for(SettingKey.TRANSCRIPTION_PROVIDER) != "assemblyai"
+            or preliminary.value_for(SettingKey.ASSEMBLYAI_CONSENT) != "external-audio-v1"
+        ):
+            continue
         capability = _secret_capability(secret_id)
         if capability not in _USE_CAPABILITIES[use]:
             continue

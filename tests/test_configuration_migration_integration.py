@@ -62,7 +62,8 @@ def test_success_activates_composed_refs_process_still_wins_and_legacy_stays(
         secret_reader=lambda ref: reads.append(ref.secret_id) or secrets.read(ref),
     )
     assert loaded.transcription is not None
-    assert loaded.transcription.api_key == "effective-process"
+    assert loaded.transcription.api_key is None
+    assert loaded.transcription.provider.value == "local"
     assert loaded.backup is not None
     assert loaded.backup.application_key == "legacy-key"
     assert loaded.notes is not None

@@ -14,7 +14,10 @@ acceptance. The checkout commands remain useful for developer diagnostics.
 - A writable local `MEETINGS_DIR`
 - Optional Calendar: OAuth credentials JSON plus successful
   `.venv/bin/meeting-memory auth`
-- Optional Transcription: AssemblyAI account with available credit
+- Default Local transcription: native arm64 Apple Silicon with Metal, runtime,
+  and explicitly prepared weights
+- Optional cloud transcription: AssemblyAI key, explicit provider selection,
+  and accepted `external-audio-v1` notice
 - Required Backup: private B2 bucket and bucket-scoped S3-compatible credentials
 - Optional Notes: Anthropic key
 
@@ -36,8 +39,9 @@ Pass criteria:
   reports local hardware support.
 - The doctor explains that mode-specific macOS capture permissions are checked
   when a recording starts; it does not claim to pre-authorize them.
-- Missing optional Transcription, Calendar, or Notes groups appear as
-  `unconfigured`, not as app failures.
+- Missing/disabled optional integrations do not gate recording. Local models
+  needing preparation show an action; unsupported local execution remains
+  isolated from Recording Core. Doctor loads/downloads no model weights.
 - Invalid configured integrations show their own action without changing the
   Recording Core state. Backup configuration failure makes doctor exit
   non-zero; optional integration failures do not.
@@ -151,11 +155,32 @@ speech, and macOS must still have the same input/output devices selected.
 
 ## 5. Transcription
 
-Pass criteria after stopping recording:
+1. Without an AssemblyAI key or provider preference, verify Local is selected
+   and enabled. Confirm an explicit disabled preference stays disabled.
+2. Open **Configuration › Prepare Local Models...**. Verify cache reuse,
+   measured or indeterminate progress, Cancel, Retry, and a responsive tray.
+   Preparation must not process existing pending or failed recordings.
+3. Record new English and Spanish audio after preparation. Verify the spoken
+   language is preserved with automatic detection, not translated.
+4. With models missing/corrupt, verify a committed recording remains pending
+   and playable. Prepare models and separately choose **Retry Pending or Failed
+   Transcriptions**; confirm the effective provider. Restart alone must not
+   process history. Successful transcripts must remain terminal.
+5. On unsupported hardware/runtime, verify an actionable local failure without
+   automatic cloud fallback. Complete diarization failure must preserve audio
+   and publish no partial transcript, speaker review, or automatic Notes.
+6. If validating AssemblyAI, verify its notice before selection/save; cancel
+   must leave provider and permission unchanged. A legacy key/import alone must
+   never send audio. Verify the explicit provider save pauses new jobs and
+   requires restart.
+
+Pass criteria after successful transcription:
 
 - `transcript.md` appears in the same meeting directory.
 - YAML frontmatter exists at the top.
-- `assemblyai_id` is present.
+- Provider and attempt identity are recorded. `assemblyai_id` remains null
+  under Local and is a real remote ID only for an explicitly consented cloud
+  job. Stale attempts or replaced source audio/directories cannot complete it.
 - `# Transcript` exists.
 - Speaker labels are preserved by default, for example `Speaker A`.
 - Calendar-backed recordings include `speaker_candidates` from event attendees.
@@ -273,8 +298,10 @@ If upload fails:
 
 - `b2_status: upload_failed` is written.
 - `Retry Pending B2 Backups` retries pending or failed meetings.
-- `Retry Failed Transcriptions` retries meetings with
-  `assemblyai_id: transcription-failed`.
+- `Retry Pending or Failed Transcriptions` uses durable pending/failed
+  `transcription_status`, confirms the effective provider, and preserves
+  successful transcripts. Legacy sentinels are read only for compatibility; new
+  work writes none. This action does not start Backup.
 
 ## 9. Recent Meeting Browsing
 

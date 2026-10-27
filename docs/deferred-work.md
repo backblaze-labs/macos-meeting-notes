@@ -154,8 +154,10 @@ Request: retry failed transcription and backup work when
 connectivity returns.
 
 Outcome: partially implemented. B2 has retry behavior plus manual `Retry Pending B2 Backups`.
-Failed transcription can be retried through `Retry Failed Transcriptions`, using
-existing transcript frontmatter as durable state. What remains deferred is
+Pending or failed transcription can be retried through `Retry Pending or
+Failed Transcriptions`, using existing frontmatter and provider/attempt identity
+as durable state. Model preparation does not run this action, and successful
+transcriptions remain terminal. What remains deferred is
 automatic connectivity-triggered retry.
 
 First thing to check if this comes up again: inspect
@@ -299,7 +301,7 @@ First thing to check if this comes up again: launch the installed bundle,
 left-click the icon, drag the panel by the `⠿` strip to the top edge, and
 confirm it becomes the horizontal bar with `⋯` opening a popover downward.
 If the status item does nothing, check `ui/sidebar_toggle.py`'s install log
-line first — it restores the rumps menu on failure.
+line first: it restores the rumps menu on failure.
 
 ## 2026-09-06 Sidebar Refinements From Competitor Research
 
@@ -323,7 +325,7 @@ Deliberately not implemented yet, in value order:
 - **Global start/stop hotkey** (Superwhisper, MacWhisper, Cleft). Needs a
   Carbon `RegisterEventHotKey` binding or an `NSEvent` global monitor; the
   latter requires Input Monitoring permission. Worth a small plan of its own.
-- **Meeting-app detection** ("Zoom call detected — Record", Notion/Granola/
+- **Meeting-app detection** ("Zoom call detected: Record", Notion/Granola/
   MacWhisper). Needs mic-in-use polling; belongs with the calendar watcher in
   `service/`, not the sidebar.
 - **Pause/Resume** (Otter, Apple Notes). The recorder has no pause; backend.
@@ -439,7 +441,9 @@ The fixed Haiku 5.5 low-effort request reuses Notes credentials and the private
 and aliases stay local. Fenced JSON uses the existing Notes object normalizer,
 then strict fields and exact same-speaker evidence validation. Request,
 response-format, and output-limit failures expose only sanitized diagnostics.
-AssemblyAI continues to provide diarization only.
+This historical change kept AssemblyAI responsible for anonymous diarization
+only. The subsequent Local transcription implementation now defaults to
+Whisper/Nemotron; speaker identification remains an optional Anthropic flow.
 
 Confirm Names or Keep Speaker Labels is the sole identity-confirmation action
 before Notes. The old automatic Notes toggle and Calendar summarizer prefix

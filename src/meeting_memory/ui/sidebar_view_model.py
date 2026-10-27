@@ -24,7 +24,7 @@ from meeting_memory.ui.setup_readiness import readiness_menu_label, readiness_to
 RECENT_MEETINGS_CAP = 3
 RECOVERED_ROW_TOOLTIP = "Recover this recording and resume transcription."
 B2_SYNC_TOOLTIP = "Upload meetings whose B2 backup is pending or failed."
-TRANSCRIPTION_RETRY_TOOLTIP = "Re-run AssemblyAI transcription using the saved local audio."
+TRANSCRIPTION_RETRY_TOOLTIP = "Retry pending or failed transcription with the current provider."
 DIAGNOSTICS_TOOLTIP = (
     "Check all five capabilities without making optional services block recording."
 )
@@ -38,6 +38,8 @@ class ConfigurationActions:
     authorize_calendar: Callable[[], None]
     open_notes_prompt: Callable[[], None]
     open_known_speakers: Callable[[], None] = lambda: None
+    open_local_models: Callable[[], None] = lambda: None
+    transcription_progress: str | None = None
 
 
 @dataclass(frozen=True)
@@ -229,6 +231,12 @@ def _configuration_rows(actions: ConfigurationActions) -> tuple[RowView, ...]:
     )
     return (
         *capability_rows,
+        *(
+            (RowView(label=actions.transcription_progress, enabled=False),)
+            if actions.transcription_progress
+            else ()
+        ),
+        RowView(label="Prepare Local Models...", action=actions.open_local_models),
         RowView(label="Known Speakers...", action=actions.open_known_speakers),
         RowView(
             label=menu.NOTES_PROMPT_LABEL,

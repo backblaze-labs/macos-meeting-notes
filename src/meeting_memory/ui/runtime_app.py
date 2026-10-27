@@ -12,6 +12,7 @@ from meeting_memory.config.runtime import RuntimeSettings
 from meeting_memory.logging_config import configure_logging
 from meeting_memory.repo.b2_client import B2S3Client
 from meeting_memory.repo.calendar_client import GoogleCalendarClient
+from meeting_memory.repo.local_transcription import LocalTranscriptionClient
 from meeting_memory.repo.native_audio import convert_native_audio, start_native_capture
 from meeting_memory.repo.native_audio_validation import validate_native_m4a
 from meeting_memory.repo.summarizer import ClaudeSummarizer, load_prompt_document
@@ -39,6 +40,7 @@ from meeting_memory.service.speaker_suggestions_composition import speaker_revie
 from meeting_memory.types.capabilities import Capability
 from meeting_memory.types.configuration_resolution import ConfigurationUse
 from meeting_memory.types.meeting import PostCommitPolicy
+from meeting_memory.types.transcription import TranscriptionProvider
 from meeting_memory.ui.controller import TrayController
 from meeting_memory.ui.setup_tray import RumpsSetupApp
 from meeting_memory.ui.tray import RumpsTrayApp
@@ -70,6 +72,11 @@ def run_runtime_app() -> int:
         settings.meetings_dir_path,
         event_queue.put,
         transcription_client=transcription_client,
+        transcription_provider=(
+            configuration.transcription.provider
+            if configuration.transcription is not None
+            else TranscriptionProvider.LOCAL
+        ),
         backup_client=backup_client,
         capability_enabled=runtime_capabilities.allows,
     )
@@ -156,6 +163,7 @@ def run_runtime_app() -> int:
     RumpsTrayApp(
         controller,
         readiness_report=None,
+        shutdown_callback=jobs.shutdown,
         configuration_surface=configuration_surface,
         speaker_knowledge=speaker_knowledge_service(
             configuration, enabled=lambda: runtime_capabilities.allows(Capability.NOTES)
@@ -168,12 +176,18 @@ def _transcription_client(
     configuration: LoadedConfiguration,
     *,
     enabled=lambda: True,
-) -> AssemblyAITranscriptionClient | None:
+) -> AssemblyAITranscriptionClient | LocalTranscriptionClient | None:
     config = configuration.transcription
     if config is None:
         return None
     try:
-        return AssemblyAITranscriptionClient(config.api_key, admit_request=enabled)
+        if config.provider is TranscriptionProvider.LOCAL:
+            return LocalTranscriptionClient()
+        return AssemblyAITranscriptionClient(
+            config.api_key,
+            admit_request=enabled,
+            external_processing_accepted=config.external_processing_accepted,
+        )
     except Exception as exc:
         LOGGER.error("Transcription capability could not start error_type=%s", type(exc).__name__)
         return None

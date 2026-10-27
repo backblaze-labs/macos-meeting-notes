@@ -42,10 +42,10 @@ def test_unbounded_or_nonregular_legacy_env_fails_locally_without_hanging(
     )
 
     assert loaded.meetings_dir_path
-    assert loaded.transcription is None
+    assert loaded.transcription.provider.value == "local"
     issue = issue_for(loaded, Capability.TRANSCRIPTION)
     assert issue.code is ConfigurationIssueCode.LEGACY_ENV_UNAVAILABLE
-    assert issue.blocking is True
+    assert issue.blocking is False
 
 
 def test_regular_legacy_env_symlink_is_read_only_and_preserved(tmp_path: Path) -> None:
@@ -72,7 +72,7 @@ def test_legacy_env_device_is_rejected_with_sanitized_capability_issue() -> None
 
     issue = issue_for(loaded, Capability.TRANSCRIPTION)
     assert issue.code is ConfigurationIssueCode.LEGACY_ENV_UNAVAILABLE
-    assert issue.blocking is True
+    assert issue.blocking is False
     assert "/dev/null" not in repr(loaded)
 
 

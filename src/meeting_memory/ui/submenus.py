@@ -21,7 +21,11 @@ __all__ = [
 
 
 def configuration_surface_actions(
-    surface: Any, *, known_speakers=lambda: None
+    surface: Any,
+    *,
+    known_speakers=lambda: None,
+    local_models=lambda: None,
+    transcription_progress=None,
 ) -> ConfigurationActions:
     return ConfigurationActions(
         open_capability=surface.open_capability,
@@ -29,6 +33,8 @@ def configuration_surface_actions(
         authorize_calendar=surface.authorize_calendar,
         open_notes_prompt=surface.edit_notes_prompt,
         open_known_speakers=known_speakers,
+        open_local_models=local_models,
+        transcription_progress=transcription_progress,
     )
 
 
@@ -46,6 +52,9 @@ def configuration_submenu(
                 lambda _sender, item=capability: actions.open_capability(item),
             )
         )
+    submenu.add(
+        rumps.MenuItem("Prepare Local Models...", lambda _sender: actions.open_local_models())
+    )
     submenu.add(rumps.MenuItem("Known Speakers...", lambda _sender: actions.open_known_speakers()))
     submenu.add(None)
     submenu.add(

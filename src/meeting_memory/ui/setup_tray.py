@@ -15,6 +15,8 @@ from meeting_memory.types.events import NotifyEvent, ReadinessChecked
 from meeting_memory.ui import menu
 from meeting_memory.ui.configuration_surface import ConfigurationSurfaceUI
 from meeting_memory.ui.icons import tray_icon_path
+from meeting_memory.ui.local_models import LocalModelsUI
+from meeting_memory.ui.local_shutdown import LocalShutdown
 from meeting_memory.ui.macos import (
     allow_foreground_notifications,
     configure_background_app_identity,
@@ -42,8 +44,16 @@ class RumpsSetupApp:
         readiness_report: ReadinessReport | None = None,
         rumps_module=None,
         configuration_surface: ConfigurationSurfaceCoordinator | None = None,
+        local_model_preparation=None,
+        shutdown_callback=lambda: None,
     ):
         self.rumps = rumps_module or _load_rumps()
+        self.shutdown = LocalShutdown(
+            self.rumps.quit_application,
+            lambda: self.local_models.coordinator.shutdown(),
+            shutdown_callback,
+            native=rumps_module is None,
+        )
         self.readiness_report = readiness_report
         self.event_queue: queue.Queue[object] = queue.Queue()
         self.readiness_check = ReadinessCheck(self.event_queue.put)
@@ -74,11 +84,17 @@ class RumpsSetupApp:
             self.rumps,
             service_factory=local_speaker_knowledge_service,
         )
+        self.local_models = LocalModelsUI(
+            self.event_queue.put,
+            self.rumps,
+            coordinator=local_model_preparation,
+            on_change=self.rebuild_menu,
+        )
         self.rebuild_menu()
 
     def run(self) -> None:
         self.timer.start()
-        self.app.run()
+        self.shutdown.run(self.app.run)
 
     def rebuild_menu(self, _sender=None) -> None:
         self.app.menu.clear()
@@ -91,7 +107,9 @@ class RumpsSetupApp:
             configuration_submenu(
                 self.rumps,
                 configuration_surface_actions(
-                    self.configuration_ui, known_speakers=self.people_base.open
+                    self.configuration_ui,
+                    known_speakers=self.people_base.open,
+                    local_models=self.local_models.open,
                 ),
                 notes_prompt_available=False,
             )
@@ -109,7 +127,7 @@ class RumpsSetupApp:
         self.app.menu.add(
             self.rumps.MenuItem(menu.TEST_NOTIFICATION_LABEL, self.send_test_notification)
         )
-        self.app.menu.add(self.rumps.MenuItem(menu.QUIT_LABEL, self.rumps.quit_application))
+        self.app.menu.add(self.rumps.MenuItem(menu.QUIT_LABEL, self.shutdown.quit))
 
     def run_diagnostics(self, _sender=None) -> None:
         if self.readiness_check.start() is not None:
@@ -122,6 +140,8 @@ class RumpsSetupApp:
                 event = self.event_queue.get_nowait()
             except queue.Empty:
                 return
+            if self.local_models.handle_event(event):
+                continue
             if self.people_base.handle_event(event):
                 continue
             if self.configuration_ui.handle_event(event):

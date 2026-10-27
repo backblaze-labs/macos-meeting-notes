@@ -13,7 +13,10 @@ speaker review, and note generation to require little attention.
 
 A first-time user is not assumed to have a Terminal workflow. They do need a
 Backblaze B2 account and bucket-scoped credentials to complete onboarding;
-Transcription, Calendar, and Notes remain progressive enhancements.
+Transcription defaults to Local, enabled unless explicitly disabled, and
+requires prepared models on native Apple Silicon with Metal. Calendar and
+Notes remain progressive enhancements. Recording remains available when local
+models are missing or incompatible.
 
 ## Product Purpose
 
@@ -76,7 +79,18 @@ any suggested-name evidence. Both clues remain visible in the scrollable review.
 - Explain failures with a concrete recovery action.
 - Let provider failures, including B2 upload failures after setup, preserve and
   expose the local recording with a concrete retry path.
-- Name data egress before enabling an external integration.
+- Use Local recognition and diarization by default without a cloud credential.
+  Keep model preparation explicit and separate from retrying existing work.
+  Show actionable pending states without blocking recording.
+- Name data egress before enabling an external integration. AssemblyAI requires
+  provider selection and versioned external-audio consent. Existing keys and
+  local failures never activate it. Saving a provider pauses new jobs until
+  restart.
+- Explain each data boundary: weights download from Hugging Face without
+  meeting content; required B2 Backup sends audio and transcripts; enabled
+  Notes can send transcript context to Anthropic for suggestions before review
+  and for Notes after confirmation. Local transcription is not a promise that
+  the whole app runs offline or keeps all content on the Mac.
 
 ## Accessibility & Inclusion
 

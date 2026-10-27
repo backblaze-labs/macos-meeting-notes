@@ -21,6 +21,10 @@ def valid_required_setting(key: SettingKey, value: object) -> bool:
 
     if not configured_value(value):
         return False
+    if key is SettingKey.TRANSCRIPTION_PROVIDER:
+        return value in {"local", "assemblyai"}
+    if key is SettingKey.ASSEMBLYAI_CONSENT:
+        return value in {"not-accepted", "external-audio-v1"}
     if key is SettingKey.B2_ENDPOINT:
         return valid_b2_endpoint(value)
     return True

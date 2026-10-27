@@ -149,7 +149,11 @@ def test_blank_process_secret_masks_valid_legacy_without_fallback(tmp_path: Path
     loaded = load_test_configuration(
         ConfigurationUse.READINESS,
         env_file=write_env(tmp_path, {"ASSEMBLYAI_API_KEY": "legacy-sentinel"}),
-        process={"ASSEMBLYAI_API_KEY": ""},
+        process={
+            "ASSEMBLYAI_API_KEY": "",
+            "TRANSCRIPTION_PROVIDER": "assemblyai",
+            "ASSEMBLYAI_CONSENT": "external-audio-v1",
+        },
     )
 
     _assert_process_failure(

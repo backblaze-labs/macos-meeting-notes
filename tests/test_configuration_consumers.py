@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
 from configuration_loader_fakes import (
     load_test_configuration,
     provider_preferences,
@@ -21,6 +22,8 @@ from meeting_memory.types.configuration import (
 from meeting_memory.types.configuration_resolution import (
     ConfigurationUse,
 )
+
+pytestmark = pytest.mark.usefixtures("local_models_ready")
 
 
 def test_cli_consumers_request_their_fixed_scopes(tmp_path, monkeypatch) -> None:
@@ -169,6 +172,8 @@ def test_composed_readiness_fails_app_errors_closed_but_degrades_override(
         process_environment={
             "MEETINGS_DIR": str(tmp_path / "overridden"),
             "ASSEMBLYAI_API_KEY": "process-sentinel",
+            "TRANSCRIPTION_PROVIDER": "assemblyai",
+            "ASSEMBLYAI_CONSENT": "external-audio-v1",
         },
         preference_reader=corrupt_preferences,
     )

@@ -14,10 +14,10 @@ REVISION_RE = re.compile(r"[0-9a-f]{64}")
 
 
 class SettingKey(StrEnum):
-    """Recognized compatibility names for runtime settings."""
-
     MEETINGS_DIR = "MEETINGS_DIR"
     MAX_RECORDING_MINUTES = "MAX_RECORDING_MINUTES"
+    TRANSCRIPTION_PROVIDER = "TRANSCRIPTION_PROVIDER"
+    ASSEMBLYAI_CONSENT = "ASSEMBLYAI_CONSENT"
     ASSEMBLYAI_API_KEY = "ASSEMBLYAI_API_KEY"
     B2_APPLICATION_KEY_ID = "B2_APPLICATION_KEY_ID"
     B2_APPLICATION_KEY = "B2_APPLICATION_KEY"
@@ -35,10 +35,10 @@ class SettingKey(StrEnum):
 
 
 class PreferenceKey(StrEnum):
-    """The exhaustive allowlist that may be persisted outside Keychain."""
-
     MEETINGS_DIR = "MEETINGS_DIR"
     MAX_RECORDING_MINUTES = "MAX_RECORDING_MINUTES"
+    TRANSCRIPTION_PROVIDER = "TRANSCRIPTION_PROVIDER"
+    ASSEMBLYAI_CONSENT = "ASSEMBLYAI_CONSENT"
     B2_ENDPOINT = "B2_ENDPOINT"
     B2_REGION = "B2_REGION"
     B2_BUCKET_NAME = "B2_BUCKET_NAME"
@@ -56,8 +56,6 @@ class PreferenceKey(StrEnum):
 
 
 class SecretId(StrEnum):
-    """Atomic Keychain payload groups."""
-
     TRANSCRIPTION = "transcription"
     BACKUP = "backup"
     NOTES = "notes"
@@ -87,8 +85,6 @@ def secret_setting_keys(secret_id: SecretId) -> tuple[SettingKey, ...]:
 
 @dataclass(frozen=True, slots=True)
 class PreferenceValue:
-    """One allowlisted non-secret app-owned value."""
-
     key: PreferenceKey
     value: str = field(repr=False)
 

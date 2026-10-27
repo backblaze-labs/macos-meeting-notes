@@ -19,6 +19,7 @@ from meeting_memory.service.readiness_configuration import (
     effective_optional_status,
     safe_optional_status,
 )
+from meeting_memory.service.readiness_transcription import transcription_status
 from meeting_memory.types.capabilities import Capability, CapabilityState, CapabilityStatus
 
 TokenReader = Callable[[], str | None]
@@ -36,7 +37,7 @@ def optional_statuses(
         effective_optional_status(
             Capability.TRANSCRIPTION,
             configuration,
-            lambda: _transcription_status(settings),
+            lambda: transcription_status(settings),
         ),
         effective_optional_status(
             Capability.BACKUP,
@@ -56,19 +57,6 @@ def optional_statuses(
             configuration,
             lambda: _notes_status(settings),
         ),
-    )
-
-
-def _transcription_status(settings: RuntimeSettings) -> CapabilityStatus:
-    if settings.transcription is None:
-        return _unconfigured(
-            Capability.TRANSCRIPTION,
-            "Transcription is not configured; recordings remain local audio.",
-            "Set ASSEMBLYAI_API_KEY to enable transcription for new recordings.",
-        )
-    return _ready(
-        Capability.TRANSCRIPTION,
-        "AssemblyAI transcription is configured for new recordings.",
     )
 
 

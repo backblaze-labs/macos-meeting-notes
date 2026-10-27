@@ -85,9 +85,10 @@ Common fixes:
 - Ensure the account you authorize has Calendar enabled.
 
 The auth command only requires the Google credentials settings. You can finish
-Calendar authorization while B2 or AssemblyAI is pending, but `make doctor`
-does not pass until required B2 Backup is configured. AssemblyAI remains
-optional.
+Calendar authorization while B2 or Local model preparation is pending, but
+`make doctor` does not pass until required B2 Backup is configured. Local
+transcription is the default; AssemblyAI requires a separate explicit provider
+choice and external-processing consent.
 
 ## Calendar Detection
 

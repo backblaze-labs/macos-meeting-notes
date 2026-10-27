@@ -14,7 +14,7 @@ from meeting_memory.types.configuration import AppPreferences, PreferenceSnapsho
 
 
 @pytest.fixture(autouse=True)
-def isolate_runtime_environment(monkeypatch, tmp_path: Path) -> None:
+def isolate_runtime_environment(monkeypatch, tmp_path: Path, local_models_ready) -> None:
     for field_name in RuntimeSettings.model_fields:
         monkeypatch.delenv(field_name, raising=False)
         monkeypatch.delenv(field_name.upper(), raising=False)
@@ -46,7 +46,7 @@ def test_fresh_profile_has_usable_local_core_and_unconfigured_optionals_without_
     assert report.recording_ready is True
     assert [status.state for status in report.statuses] == [
         CapabilityState.DEGRADED,
-        CapabilityState.UNCONFIGURED,
+        CapabilityState.READY,
         CapabilityState.UNCONFIGURED,
         CapabilityState.UNCONFIGURED,
         CapabilityState.UNCONFIGURED,
@@ -109,7 +109,7 @@ def test_non_directory_meetings_root_fails_only_recording_core(tmp_path: Path) -
 
     assert report.recording_ready is False
     assert report.status_for(Capability.RECORDING_CORE).state is CapabilityState.FAILED
-    assert report.status_for(Capability.TRANSCRIPTION).state is CapabilityState.UNCONFIGURED
+    assert report.status_for(Capability.TRANSCRIPTION).state is CapabilityState.READY
 
 
 def test_optional_groups_are_independent_and_local_problems_are_isolated(

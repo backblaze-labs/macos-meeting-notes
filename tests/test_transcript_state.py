@@ -58,7 +58,7 @@ def test_failure_preserves_existing_remote_id_and_sanitizes_provider_error(
     frontmatter = read_frontmatter(meeting / "transcript.md")
     assert frontmatter["assemblyai_id"] == "tx-existing"
     assert frontmatter["transcription_status"] == "failed"
-    assert "Retry Failed Transcriptions" in text
+    assert "Retry Pending or Failed Transcriptions" in text
     assert "provider-secret-detail" not in text
 
 
@@ -91,11 +91,11 @@ def test_provider_id_and_meta_conflicts_leave_bytes_unchanged(tmp_path: Path) ->
     before = (meeting / "transcript.md").read_bytes()
     store = TranscriptStateStore(meeting.parent)
 
-    with pytest.raises(MeetingStateConflict, match="not tx-b"):
+    with pytest.raises(MeetingStateConflict, match="provider job"):
         store.succeed(meeting, meta, _transcript("tx-b"))
     with pytest.raises(MeetingStateConflict, match="calendar_title"):
         store.succeed(meeting, meta.with_title("Changed"), _transcript("tx-a"))
-    with pytest.raises(MeetingStateConflict, match="not tx-b"):
+    with pytest.raises(MeetingStateConflict, match="provider job"):
         store.fail(meeting, "tx-b")
 
     assert (meeting / "transcript.md").read_bytes() == before
@@ -110,9 +110,7 @@ def test_two_competing_finishers_only_one_wins(tmp_path: Path) -> None:
     def finish(identifier: str) -> None:
         barrier.wait()
         try:
-            TranscriptStateStore(meeting.parent).succeed(
-                meeting, meta, _transcript(identifier)
-            )
+            TranscriptStateStore(meeting.parent).succeed(meeting, meta, _transcript(identifier))
             completed.append(identifier)
         except MeetingStateConflict as exc:
             conflicts.append(exc)
@@ -186,11 +184,15 @@ def _running_transcription(
         title,
         2,
     )
-    meeting = MeetingStore(tmp_path / "meetings").commit(
-        audio,
-        meta,
-        PostCommitPolicy(transcription=True, backup=complete_backup),
-    ).directory
+    meeting = (
+        MeetingStore(tmp_path / "meetings")
+        .commit(
+            audio,
+            meta,
+            PostCommitPolicy(transcription=True, backup=complete_backup),
+        )
+        .directory
+    )
     state = MeetingStateStore(meeting.parent)
     updates = {"assemblyai_id": provider_id} if provider_id else None
     state.transition_job(

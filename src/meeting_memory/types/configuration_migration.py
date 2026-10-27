@@ -8,26 +8,9 @@ from enum import StrEnum
 
 from meeting_memory.types.capabilities import Capability
 from meeting_memory.types.configuration import SECRET_KEYS, SettingKey
+from meeting_memory.types.configuration_capabilities import SETTING_CAPABILITY
 
 _PREVIEW_ID_RE = re.compile(r"[0-9a-f]{32}")
-_SETTING_CAPABILITY = {
-    SettingKey.MEETINGS_DIR: Capability.RECORDING_CORE,
-    SettingKey.MAX_RECORDING_MINUTES: Capability.RECORDING_CORE,
-    SettingKey.ASSEMBLYAI_API_KEY: Capability.TRANSCRIPTION,
-    SettingKey.B2_APPLICATION_KEY_ID: Capability.BACKUP,
-    SettingKey.B2_APPLICATION_KEY: Capability.BACKUP,
-    SettingKey.B2_ENDPOINT: Capability.BACKUP,
-    SettingKey.B2_REGION: Capability.BACKUP,
-    SettingKey.B2_BUCKET_NAME: Capability.BACKUP,
-    SettingKey.GOOGLE_CALENDAR_CREDENTIALS_FILE: Capability.CALENDAR,
-    SettingKey.GOOGLE_CALENDAR_ID: Capability.CALENDAR,
-    SettingKey.KNOWN_SPEAKERS: Capability.CALENDAR,
-    SettingKey.NOTIFY_MINUTES_BEFORE: Capability.CALENDAR,
-    SettingKey.CALENDAR_POLL_INTERVAL: Capability.CALENDAR,
-    SettingKey.ANTHROPIC_API_KEY: Capability.NOTES,
-    SettingKey.ANTHROPIC_MODEL: Capability.NOTES,
-    SettingKey.SUMMARY_PROMPT_FILE: Capability.NOTES,
-}
 
 
 class MigrationFieldState(StrEnum):
@@ -110,7 +93,7 @@ class MigrationField:
             raise ValueError("migration fields require a typed state")
         if type(self.secret) is not bool or type(self.process_present) is not bool:
             raise ValueError("migration field flags must be boolean")
-        if _SETTING_CAPABILITY[self.key] is not self.capability:
+        if SETTING_CAPABILITY[self.key] is not self.capability:
             raise ValueError("migration field does not belong to its capability")
         if self.secret != (self.key in SECRET_KEYS):
             raise ValueError("migration field secret classification is invalid")

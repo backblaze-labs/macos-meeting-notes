@@ -156,6 +156,7 @@ def test_app_launch_never_uploads_the_backup_backlog(tmp_path: Path, monkeypatch
             readiness_report,
             configuration_surface=None,
             speaker_knowledge=None,
+            shutdown_callback=lambda: None,
         ) -> None:
             type(self).controller = controller
 

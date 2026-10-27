@@ -48,7 +48,11 @@ def runtime_notification(event: object) -> NotifyEvent | None:
     if isinstance(event, TranscriptionFailed):
         return NotifyEvent(
             "Transcription failed",
-            f"{event.meeting.calendar_title} · audio saved locally",
+            (
+                f"{event.meeting.calendar_title} · audio saved locally"
+                if event.summary == "Transcription failed. Audio remains saved locally."
+                else f"{event.meeting.calendar_title} · {event.summary} {event.action}"
+            ),
             action_label="Open",
             action="open_meeting",
             meeting_directory=event.meeting.directory,

@@ -92,7 +92,6 @@ def test_paused_legacy_transcription_preserves_retryable_metadata(tmp_path: Path
         TranscriptResult("transcription-failed", (), error="offline"),
         SummaryResult.failed(),
     )
-    before = failed.transcript_path.read_bytes()
 
     class Paused:
         def transcribe(self, _audio):
@@ -101,7 +100,10 @@ def test_paused_legacy_transcription_preserves_retryable_metadata(tmp_path: Path
     result = retry_failed_processing(meetings, Paused())
 
     assert result.failed == result.completed == 0
-    assert failed.transcript_path.read_bytes() == before
+    after, _ = split_frontmatter(failed.transcript_path.read_text())
+    assert after["transcription_status"] == "pending"
+    assert after["transcription_provider"] == "assemblyai"
+    assert failed.audio_path.read_bytes() == b"audio"
 
 
 def test_legacy_transcription_path_swap_never_reads_or_mutates_v2(tmp_path: Path) -> None:

@@ -61,7 +61,9 @@ processed.
 - Claude Haiku uses the existing Notes key and receives only relevant canonical
   names, descriptions, and diarized local transcript text, capped at 60,000
   characters on complete utterances. Matching emails/aliases, frontmatter,
-  paths, and provider IDs stay local. AssemblyAI performs diarization only.
+  paths, and provider IDs stay local. The selected transcription backend
+  supplies anonymous diarization labels; it does not identify people. Local
+  transcription does not disable these optional Anthropic requests.
 - Proposed names preselect the existing controls and show exact supporting
   quotes spoken by that label. Users must verify and confirm them. Existing
   manual selections take precedence; Cancel changes no meeting files.

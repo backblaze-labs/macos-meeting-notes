@@ -18,6 +18,7 @@ from meeting_memory.types.meeting import (
     MeetingFiles,
     MeetingMeta,
 )
+from meeting_memory.types.transcription import TranscriptionProvider
 
 RETRYABLE = {
     MeetingJobState.PENDING,
@@ -36,6 +37,7 @@ class RuntimeMeeting:
     backup_status: MeetingJobState
     provider_job_id: str | None
     directory_identity: MeetingDirectoryIdentity
+    transcription_provider: str | None = None
 
     @property
     def handle(self) -> RuntimeMeetingHandle:
@@ -53,6 +55,9 @@ def retry_v2_transcriptions(meetings_dir: Path, jobs: RuntimeJobs) -> int:
             resume_id = (
                 meeting.provider_job_id
                 if meeting.transcription_status is MeetingJobState.RUNNING
+                and getattr(jobs, "transcription_provider", TranscriptionProvider.ASSEMBLYAI)
+                is TranscriptionProvider.ASSEMBLYAI
+                and meeting.transcription_provider in {None, "assemblyai"}
                 else None
             )
             jobs.retry_transcription(meeting.handle, resume_id=resume_id)
@@ -104,6 +109,7 @@ def _runtime_meeting(meetings_dir: Path, meeting_dir: Path) -> RuntimeMeeting | 
         with open_meeting_document(meetings_dir, meeting_dir) as document:
             meta = _meeting_meta(document.frontmatter)
             provider_id = _provider_id(document.frontmatter.get("assemblyai_id"))
+            provider = _provider_id(document.frontmatter.get("transcription_provider"))
             directory = os.fstat(document.directory_fd)
     except (KeyError, OSError, TypeError, UnicodeError, ValueError):
         return None
@@ -120,6 +126,7 @@ def _runtime_meeting(meetings_dir: Path, meeting_dir: Path) -> RuntimeMeeting | 
         artifact.backup_status,
         provider_id,
         identity,
+        provider,
     )
 
 

@@ -142,6 +142,8 @@ def validate_suggestions(
 
 def review_identity(state: SpeakerReviewState) -> tuple:
     return (
+        state.transcription_provider,
+        state.transcription_attempt_id,
         state.assemblyai_id,
         state.speaker_labels,
         state.speaker_candidates,
