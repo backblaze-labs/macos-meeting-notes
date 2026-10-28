@@ -67,9 +67,8 @@ def test_proposals_are_read_only_and_cached(monkeypatch, state):
 @pytest.mark.parametrize(
     "change, roster",
     [
-        ({"speaker_candidates": ("External",)}, people("Alex")),
         ({"speaker_candidates": ()}, people("Alex")),
-        ({}, ()),
+        ({"speaker_candidates": ("external@example.com",)}, ()),
         ({"speaker_utterances": ()}, people("Alex", "Casey", "Drew")),
         (
             {"speaker_status": "confirmed", "speaker_aliases": {"A": "Alex"}},

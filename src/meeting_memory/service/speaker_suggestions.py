@@ -38,7 +38,7 @@ class SpeakerSuggestionLoader:
         enabled: Callable[[], bool] = lambda: True,
     ) -> None:
         self._client = client
-        self._people = {person.name: person for person in people}
+        self._people = people
         self._enabled = enabled
         self._cache: dict[tuple, tuple[SpeakerSuggestion, ...]] = {}
         self._lock = threading.Lock()
@@ -48,15 +48,17 @@ class SpeakerSuggestionLoader:
         if state.speaker_status == "confirmed" and state.speaker_aliases:
             return state
         candidates = tuple(dict.fromkeys(state.speaker_candidates))
-        if not candidates or not set(candidates) <= self._people.keys():
-            return replace(state, suggestion_message="Assign names manually for unknown attendees.")
+        people = self._candidate_people(candidates)
+        if not people:
+            return replace(state, suggestion_message="No named attendees. Assign names manually.")
         if not state.speaker_utterances:
             return replace(state, suggestion_message="No diarized text available for suggestions.")
         if not self._enabled():
             return replace(state, suggestion_message="Notes is paused. Assign names manually.")
         request = SpeakerIdentificationRequest(
             tuple(turn for turn in state.speaker_utterances if turn.label in state.speaker_labels),
-            tuple(self._people[name] for name in candidates),
+            people,
+            allow_elimination=len(people) == len(candidates),
         )
         key = (str(state.transcript_path), review_identity(state), request.people)
         with self._lock:
@@ -83,6 +85,7 @@ class SpeakerSuggestionLoader:
                             "evidence": item.evidence[:2000],
                             "evidence_truncated": len(item.evidence) > 2000,
                             "accepted": item in suggestions,
+                            "method": item.method,
                         }
                         for item in result.suggestions[:100]
                     ],
@@ -109,6 +112,23 @@ class SpeakerSuggestionLoader:
             return self._with_suggestions(state, suggestions)
         return replace(state, suggestion_message="No clear assignments. Assign names manually.")
 
+    def _candidate_people(self, candidates: tuple[str, ...]) -> tuple[KnownSpeaker, ...]:
+        """Resolve exact local aliases, retaining named attendees without a profile."""
+        people: dict[str, KnownSpeaker] = {}
+        for candidate in candidates:
+            matches = tuple(
+                person
+                for person in self._people
+                if candidate.casefold()
+                in {value.casefold() for value in (person.name, *person.matches)}
+            )
+            if len(matches) > 1:
+                continue
+            person = matches[0] if matches else KnownSpeaker(candidate)
+            if "@" not in person.name:
+                people[person.name] = person
+        return tuple(people.values())
+
     @staticmethod
     def _with_suggestions(
         state: SpeakerReviewState, suggestions: tuple[SpeakerSuggestion, ...]
@@ -116,7 +136,14 @@ class SpeakerSuggestionLoader:
         return replace(
             state,
             speaker_suggestions={item.label: item.name for item in suggestions},
-            speaker_evidence={item.label: item.evidence for item in suggestions},
+            speaker_evidence={
+                item.label: (
+                    f"By elimination (verify): {item.evidence}"
+                    if item.method == "elimination"
+                    else item.evidence
+                )
+                for item in suggestions
+            },
             suggestion_message="Suggested by Claude Haiku. Verify each name before confirming.",
         )
 
@@ -132,12 +159,31 @@ def validate_suggestions(
         item
         for item in result.suggestions
         if item.name in names
+        and item.method in {"direct", "elimination"}
         and bool(item.evidence.strip())
         and any(turn.label == item.label and item.evidence in turn.text for turn in turns)
     )
     labels = Counter(item.label for item in proposed)
     people = Counter(item.name for item in proposed)
-    return tuple(item for item in proposed if labels[item.label] == 1 and people[item.name] == 1)
+    unique = tuple(item for item in proposed if labels[item.label] == 1 and people[item.name] == 1)
+    direct = tuple(item for item in unique if item.method == "direct")
+    remaining_names = names - {item.name for item in direct}
+    remaining_labels = {
+        turn.label for turn in turns if turn.label.casefold() not in {"unknown", "speaker unknown"}
+    } - {item.label for item in direct}
+    elimination = tuple(item for item in unique if item.method == "elimination")
+    return tuple(
+        item
+        for item in unique
+        if item.method == "direct"
+        or (
+            request.allow_elimination
+            and len(elimination) == 1
+            and bool(direct)
+            and remaining_names == {item.name}
+            and remaining_labels == {item.label}
+        )
+    )
 
 
 def review_identity(state: SpeakerReviewState) -> tuple:

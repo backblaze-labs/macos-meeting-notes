@@ -13,6 +13,9 @@ def _options_for(state: SpeakerReviewState, label: str) -> list[str]:
     alias = state.speaker_aliases.get(label, "")
     if alias and alias not in options:
         options.append(alias)
+    suggestion = state.speaker_suggestions.get(label, "")
+    if suggestion and suggestion not in options:
+        options.append(suggestion)
     options.append(MANUAL_OPTION)
     return options
 

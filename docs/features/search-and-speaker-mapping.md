@@ -52,8 +52,11 @@ processed.
   `KNOWN_SPEAKERS` when the attendee name or email matches. The tray asks for
   explicit speaker review after every transcription (`transcription.md`).
 - After transcription, a worker prepares review before the actionable
-  **Transcript ready** notification. It fetches proposed names when every
-  Calendar candidate matches the local roster. Clicking **Review Speakers**
+  **Transcript ready** notification. It fetches proposed names for named
+  Calendar candidates, using local roster descriptions when available. A missing
+  profile does not block suggestions for other attendees. Exact local aliases
+  resolve stored names/emails; unresolved email-only candidates stay local.
+  Clicking **Review Speakers**
   reuses the prepared result or joins the pending worker. Historical Debugging
   review actions prepare on demand.
   The existing native Known Speakers editor adds optional role/topics context
@@ -67,11 +70,18 @@ processed.
 - Proposed names preselect the existing controls and show exact supporting
   quotes spoken by that label. Users must verify and confirm them. Existing
   manual selections take precedence; Cancel changes no meeting files.
+- After validated direct matches leave one candidate and one substantive speaker,
+  Haiku may propose the remaining name by elimination when context supports it.
+  The review marks **By elimination (verify)** beside a same-speaker utterance.
+  Equal counts alone, silent invitees, extra labels, and Unknown fragments must
+  not force a match. Unknown is never assigned by elimination. Unresolved
+  email-only or ambiguous candidates disable elimination, leaving direct matches
+  available. Exact evidence and unique assignments are validated for both methods.
 - Speaker identification allows up to 8,192 response tokens, including model
   reasoning, with fixed Haiku 5.5 low effort. Output-limit responses are rejected
   before JSON parsing and expose a sanitized incomplete-response fallback. This
   does not change the Notes or topic-description response budget or add retries.
-- Unknown attendees, insufficient evidence, ambiguous duplicates, paused Notes,
+- Unresolved assignments, insufficient evidence, ambiguous duplicates, paused Notes,
   and provider failures retain manual review. Partial proposals may leave
   speakers unresolved; every invited person need not have spoken.
 - Prepared reviews, including empty/error manual fallbacks, are cached only
@@ -91,8 +101,8 @@ Speaker proposal diagnostics are retained locally in
 label/name, evidence quote (up to 2,000 characters, with truncation marked), and
 whether validation accepted the proposal. JSON escaping keeps each diagnostic
 on one log line. Raw provider responses and the full transcript are excluded.
-The identification prompt requires a concise quote showing the distinguishing
-identity signal rather than a generic acknowledgement.
+For direct identification, the prompt requires a concise quote showing the
+distinguishing identity signal rather than a generic acknowledgement.
 
 Review Speakers always displays each speaker's longest line as a clue, alongside
 any suggested-name evidence. Both clues remain visible in the scrollable review.

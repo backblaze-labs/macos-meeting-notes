@@ -91,6 +91,10 @@ repo, or service modules as needed.
 
 ## Change Workflow
 
+Spec and plan approval are required only for particularly large changes in this
+repository. Implement ordinary fixes and scoped behavior changes directly,
+using the existing canonical requirements and appropriate checks.
+
 1. Read the relevant spec and plan sections.
 2. For every user-visible behavior or capability change, synchronize the
    relevant canonical documentation: `README.md`, `PRODUCT.md`, `SPEC.md`,
