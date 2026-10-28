@@ -13,6 +13,7 @@ class SpeakerSuggestion:
     label: str
     name: str
     evidence: str = ""
+    method: str = "direct"
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ class SpeakerUtterance:
 class SpeakerIdentificationRequest:
     utterances: tuple[SpeakerUtterance, ...]
     people: tuple[KnownSpeaker, ...]
+    allow_elimination: bool = True
 
 
 class SpeakerIdentificationFailure(StrEnum):

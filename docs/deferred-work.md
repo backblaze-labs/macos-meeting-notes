@@ -429,8 +429,9 @@ and `service/screenshots.py` for the session key.
 ## 2026-10-09 Unified Speaker Review and Name Suggestions
 
 After successful transcription, a worker prepares unconfirmed Claude Haiku
-assignments from a bounded local diarized excerpt when all Calendar candidates
-match the local roster. Only after proposals or a manual fallback are ready
+assignments from a bounded local diarized excerpt. This historical slice required
+all Calendar candidates to match the local roster; the partial-candidate fix
+described below supersedes that gate. Only after proposals or a manual fallback are ready
 does the tray offer Review Speakers. Prepared state, including empty/error
 fallbacks, remains in memory for clicking, cancellation, and reopening without
 another request. Historical Debugging actions prepare on demand. Changed
@@ -529,3 +530,23 @@ bounded proposed names/quotes and validation acceptance for future inspection.
 This does not prove improved model behavior or add semantic quote validation.
 First inspect the next real proposal diagnostics against the user's review,
 including any truncation marker, before changing the identification model.
+
+## 2026-10-28 Partial Calendar Candidates and Elimination
+
+The all-candidates-known gate is superseded. Named attendees without saved
+profiles now participate in suggestions, using empty descriptions. Exact local
+roster aliases resolve stored candidates without changing transcript metadata.
+Unresolved email-only or ambiguous candidates stay local and disable elimination
+without blocking direct suggestions for other names.
+
+The identification contract distinguishes direct and elimination proposals.
+Elimination requires validated direct matches for every other candidate, one
+remaining substantive label, exact same-label quote evidence, and supporting
+conversation context. The review explicitly marks the method. Unknown fragments
+are not assigned by elimination. The native dropdown accepts resolved canonical
+names while preserving manual selections and the stored review identity.
+
+Future first checks: candidate composition and validation in
+`service/speaker_suggestions.py`, the fixed identification prompt, and the method
+in local proposal diagnostics. Semantic identity accuracy still depends on the
+model and user confirmation; exact quote validation does not prove identity.

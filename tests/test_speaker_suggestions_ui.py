@@ -52,6 +52,19 @@ def test_existing_manual_alias_overrides_proposal(monkeypatch, tmp_path):
     assert aliases == {"Speaker A": "Drew", "Speaker B": "Casey"}
 
 
+def test_resolved_email_candidate_proposal_is_selectable(monkeypatch, tmp_path):
+    monkeypatch.setitem(sys.modules, "AppKit", FakeAppKit([1000]))
+    state = replace(
+        _state(tmp_path),
+        speaker_candidates=("Alex", "casey@example.com"),
+        speaker_suggestions={"Speaker A": "Alex", "Speaker B": "Casey"},
+    )
+    assert _prompt_aliases_appkit(state, lambda _p: None, lambda _p: None) == {
+        "Speaker A": "Alex",
+        "Speaker B": "Casey",
+    }
+
+
 def test_background_flow_presents_only_on_ready_event(monkeypatch, tmp_path):
     state = _state(tmp_path)
     queue = Mock()

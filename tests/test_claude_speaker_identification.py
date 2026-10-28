@@ -39,7 +39,7 @@ def client(response_text):
 def test_request_uses_fixed_haiku_and_no_email_ids_or_frontmatter():
     sdk = client(
         '{"suggestions":[{"label":"A","name":"Alex",'
-        '"evidence":"I am Alex and handle the launch plan."}]}'
+        '"evidence":"I am Alex and handle the launch plan.","method":"direct"}]}'
     )
     adapter = ClaudeSpeakerIdentificationClient("test-key", client_factory=lambda _key: sdk)
     result = adapter.identify(request())
@@ -49,6 +49,7 @@ def test_request_uses_fixed_haiku_and_no_email_ids_or_frontmatter():
     payload = json.loads(kwargs["messages"][0]["content"])
     assert payload == {
         "known_people": [{"name": "Alex", "description": "Launch planning"}],
+        "allow_elimination": True,
         "transcript": [{"label": "A", "text": "I am Alex and handle the launch plan."}],
     }
     assert "temperature" not in kwargs and not hasattr(result.suggestions[0], "confidence")
@@ -84,6 +85,8 @@ def test_pause_prevents_outbound_and_is_rechecked_after_client_creation():
         '{"suggestions":[],"extra":true}',
         '{"suggestions":[{"label":"A","name":"Alex"}]}',
         '{"suggestions":[{"label":"A","name":"Alex","evidence":""}]}',
+        '{"suggestions":[{"label":"A","name":"Alex","evidence":"Quote"}]}',
+        '{"suggestions":[{"label":"A","name":"Alex","evidence":"Quote","method":"guess"}]}',
     ],
 )
 def test_malformed_json_is_safe_manual_fallback(text):
@@ -115,7 +118,8 @@ def test_request_always_sends_low_effort_via_sdk_extra_body():
 
 def test_markdown_wrapped_json_uses_same_normalizer_as_notes():
     sdk = client(
-        '```json\n{"suggestions":[{"label":"A","name":"Alex","evidence":"I am Alex"}]}\n```'
+        '```json\n{"suggestions":[{"label":"A","name":"Alex",'
+        '"evidence":"I am Alex","method":"direct"}]}\n```'
     )
     result = ClaudeSpeakerIdentificationClient(
         "test-key", client_factory=lambda _key: sdk
@@ -141,3 +145,18 @@ def test_truncation_is_reported_separately_even_with_valid_partial_json(caplog):
             request()
         )
     assert "stage=truncated" in caplog.text
+
+
+def test_elimination_method_survives_parsing_and_request_gate():
+    from dataclasses import replace
+
+    sdk = client(
+        '{"suggestions":[{"label":"A","name":"Alex",'
+        '"evidence":"I handle the launch plan.","method":"elimination"}]}'
+    )
+    result = ClaudeSpeakerIdentificationClient(
+        "test-key", client_factory=lambda _key: sdk
+    ).identify(replace(request(), allow_elimination=False))
+    assert result.suggestions[0].method == "elimination"
+    payload = json.loads(sdk.messages.create.call_args.kwargs["messages"][0]["content"])
+    assert payload["allow_elimination"] is False

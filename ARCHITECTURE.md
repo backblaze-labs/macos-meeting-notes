@@ -405,10 +405,20 @@ manual-fallback messages; logs contain counts and error categories plus local sp
 (meeting folder name, proposed labels/names, bounded evidence quotes, and validation
 acceptance). Diagnostics JSON-escape text and exclude raw provider payloads. `service/speaker_excerpt.py` extracts bounded
 whole utterances without frontmatter. `service/speaker_suggestions.py` gates
-requests on the local roster, validates exact same-speaker evidence, and caches
+requests on available named candidates, resolves exact local roster aliases,
+validates exact same-speaker evidence, and caches
 successful proposals only for the session. The roster reuses private
 `KNOWN_SPEAKERS` preferences with descriptions; matching aliases/emails stay
 local.
+
+Named attendees without profiles use empty descriptions. Unresolved email-only
+or ambiguous candidates stay local and disable elimination without blocking
+direct proposals. The typed proposal method distinguishes direct matches from
+elimination. Validation accepts at most one elimination after direct matches
+leave one candidate and one substantive label; Unknown is excluded and never
+assigned by elimination. The native review marks the method beside the quote
+and includes resolved canonical names in its selectable options without
+changing the stored candidates or review identity.
 
 The tray intercepts `TranscriptReady` and starts `SpeakerReviewFlow.prepare`
 on a worker. Typed `SpeakerReviewReady` returns to the main thread, which

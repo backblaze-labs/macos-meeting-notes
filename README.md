@@ -468,9 +468,11 @@ speaker_status: "needs_review"
 ```
 
 After each transcription, the app prepares speaker review in a background
-worker before sending the **Transcript ready** notification. When every
-Calendar candidate matches the local `KNOWN_SPEAKERS` roster, it prepares
-unconfirmed name suggestions. Clicking **Review Speakers** opens that prepared
+worker before sending the **Transcript ready** notification. It prepares
+unconfirmed name suggestions for named Calendar attendees, using optional
+`KNOWN_SPEAKERS` profiles where available. An attendee without a profile does
+not block the other suggestions. Email-only candidates are resolved through
+exact local roster matches; unresolved emails stay local. Clicking **Review Speakers** opens that prepared
 review, including a manual fallback when no proposals were accepted, without
 another API request. Historical **Debugging** review actions prepare review
 on demand. Claude Haiku receives only a diarized local transcript
@@ -481,19 +483,25 @@ AssemblyAI continues to supply diarized audio transcription only.
 
 The review preselects proposals and shows an exact supporting quote from that
 speaker. Verify each name before choosing **Confirm Names**. Cancel leaves
-meeting files unchanged. Unknown attendees, insufficient evidence, ambiguous
+meeting files unchanged. Insufficient evidence, ambiguous
 assignments, paused Notes, or provider failures keep manual review available.
 Partial proposals leave unresolved speakers for manual selection. Prepared
 reviews, including empty or failed proposals, are cached only for the app
 session. Canceling and reopening the same review reuses that result. Changed
 transcript text or participants invalidate it; a restart also clears the cache.
+When direct matches leave one candidate and one substantive speaker, Haiku may
+propose that remaining name by elimination if the conversation supports it.
+The review marks this **By elimination (verify)** alongside a real utterance
+from the proposed speaker. Silent invitees, extra speaker labels, and Unknown
+fragments must not force a match. Unresolved email-only attendees disable
+elimination while leaving direct suggestions available.
 Speaker proposal diagnostics are retained locally in
 `~/Library/Logs/meeting-memory/app.log`: the meeting folder name, proposed
 label/name, evidence quote (up to 2,000 characters, with truncation marked), and
 whether validation accepted the proposal. JSON escaping keeps each diagnostic
 on one log line. Raw provider responses and the full transcript are excluded.
-The identification prompt requires a concise quote showing the distinguishing
-identity signal rather than a generic acknowledgement.
+For direct identification, the prompt requires a concise quote showing the
+distinguishing identity signal rather than a generic acknowledgement.
 
 Review Speakers always displays each speaker's longest line as a clue, alongside
 any suggested-name evidence. Both clues remain visible in the scrollable review.

@@ -57,16 +57,18 @@ that competes with the user's meeting.
   panel for an upcoming meeting while the status-bar timer keeps recording
   state visible after the panel hides.
 - Require user-confirmed speaker identities before Notes. Prepare Claude Haiku
-  suggestions for configured known Calendar attendees before offering Review
-  Speakers. Unknown or ambiguous assignments remain manual. Opening prepared
+  suggestions for named Calendar attendees, using optional saved profiles, before
+  offering Review Speakers. An unknown attendee does not block other suggestions.
+  A unique remaining match may be proposed by elimination with an explicit review
+  clue; unresolved or ambiguous assignments remain manual. Opening prepared
   review reuses its result, and Notes preserve the reviewed identities.
 Speaker proposal diagnostics are retained locally in
 `~/Library/Logs/meeting-memory/app.log`: the meeting folder name, proposed
 label/name, evidence quote (up to 2,000 characters, with truncation marked), and
 whether validation accepted the proposal. JSON escaping keeps each diagnostic
 on one log line. Raw provider responses and the full transcript are excluded.
-The identification prompt requires a concise quote showing the distinguishing
-identity signal rather than a generic acknowledgement.
+For direct identification, the prompt requires a concise quote showing the
+distinguishing identity signal rather than a generic acknowledgement.
 
 Review Speakers always displays each speaker's longest line as a clue, alongside
 any suggested-name evidence. Both clues remain visible in the scrollable review.

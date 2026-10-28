@@ -486,11 +486,24 @@ pause. It MUST include only diarized local transcript text (at most 60,000
 characters, at a whole-utterance boundary), relevant candidate names, and local
 known-person descriptions. Calendar matching aliases/emails and frontmatter metadata (including local
 paths, meeting dates, and provider transcript IDs) MUST NOT be sent for identification.
-Every candidate MUST match a canonical name in configured `KNOWN_SPEAKERS`;
-unknown candidates or an empty roster MUST leave review manual. Suggestions
+Named Calendar candidates MUST remain eligible without a `KNOWN_SPEAKERS`
+profile; missing profiles MUST NOT block suggestions for other candidates.
+Exact local roster names or matching aliases/emails MAY resolve stored
+candidates to canonical names. Ambiguous matches and unresolved email-only
+candidates MUST stay local and MUST NOT block direct proposals for other names.
+If any candidate remains unresolved or the bounded excerpt omits a detected
+speaker label, elimination MUST be disabled. Suggestions
 MUST accept only supplied labels and exact candidate names with an exact
 evidence quote spoken by that label, reject ambiguous duplicate assignments,
-and preserve existing manual selections. Missing or invalid proposals, paused
+and preserve existing manual selections. Proposals MUST distinguish direct
+identification from elimination. Elimination MAY propose a single remaining
+candidate only after all other candidates receive validated direct matches and
+only one substantive speaker label remains. The conversation MUST support that
+remaining identity; equal counts alone are insufficient. Unknown fragments MUST
+NOT be assigned by elimination, and extra labels or silent invitees MUST NOT
+force an assignment. The review MUST mark elimination explicitly and show a
+real same-label utterance as a clue rather than direct identity evidence.
+Missing or invalid proposals, paused
 Notes, and provider failures MUST leave manual review available. ASR confidence
 MUST NOT be presented as speaker identity confidence. Prepared reviews and successful proposals MAY
 be cached only in memory, bound to transcript text, labels, candidates, review
@@ -513,8 +526,8 @@ Speaker proposal diagnostics are retained locally in
 label/name, evidence quote (up to 2,000 characters, with truncation marked), and
 whether validation accepted the proposal. JSON escaping keeps each diagnostic
 on one log line. Raw provider responses and the full transcript are excluded.
-The identification prompt requires a concise quote showing the distinguishing
-identity signal rather than a generic acknowledgement.
+For direct identification, the prompt requires a concise quote showing the
+distinguishing identity signal rather than a generic acknowledgement.
 
 Review Speakers always displays each speaker's longest line as a clue, alongside
 any suggested-name evidence. Both clues remain visible in the scrollable review.
@@ -1423,7 +1436,7 @@ every transcription.
 **C4** Meetings that are not tracked in Google Calendar (ad-hoc calls, manual sessions) can still be recorded manually via the tray menu. The UI prompts for a title when no nearby calendar context exists; `"Untitled"` is the fallback.
 
 **C5** The application may propose speaker names from Claude Haiku while
-preparing review for configured known Calendar attendees. It applies only
+preparing review for named Calendar attendees with optional local profiles. It applies only
 user-confirmed `speaker_aliases` from `transcript.md` with deterministic local code.
 
 **C6** Recording and prepared Local inference can run without network after

@@ -159,12 +159,17 @@ preparation automatically retry history.
 After successful transcription, a background worker prepares review before the
 main thread sends **Transcript ready** with **Review Speakers**. Configured
 Calendar attendees populate candidates; explicit `KNOWN_SPEAKERS` matches
-normalize their names. If every candidate matches the roster and Notes is
-enabled, preparation can send a bounded diarized excerpt, relevant canonical
-names, and descriptions to Claude Haiku before confirmation. Matching
+normalize their names. When Notes is enabled, preparation can send a bounded
+diarized excerpt, named Calendar candidates, and available roster descriptions
+to Claude Haiku before confirmation. Missing profiles do not block other
+suggestions; unresolved email-only candidates stay local and disable elimination.
+Matching
 emails/aliases, frontmatter, and provider IDs remain local. Suggestions honor
 Notes pause, require exact evidence from the indicated label, and never assign
-identities without user confirmation. Unknown or ambiguous cases remain
+identities without user confirmation. After direct matches leave one candidate
+and one substantive speaker, a context-supported elimination proposal may be
+shown with an explicit **By elimination (verify)** clue. Unknown fragments and
+extra labels do not force an assignment. Unresolved or ambiguous cases remain
 manual. Prepared suggestions and manual fallbacks are session-only; opening
 unchanged review reuses them. Historical review prepares on demand.
 

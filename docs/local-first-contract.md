@@ -276,7 +276,7 @@ an external integration:
 | AssemblyAI | Completed meeting audio after explicit provider selection and consent | External diarized transcription |
 | Backblaze B2 | `recording.m4a` and `transcript.md` for eligible schema-v2 meetings | Durable private backup |
 | Google Calendar | OAuth/API requests; event metadata is received locally | Context and reminders |
-| Anthropic | Notes receive fixed schema/identity instructions, editable guidance, and only the reviewed transcript excerpt capped at 60,000 characters; the Markdown layout stays local, and no Calendar prefix is included. For new transcripts, background review preparation sends a diarized local excerpt capped at 60,000 characters, canonical known attendee names, and relevant roster descriptions to Claude Haiku before confirmation. Historical review actions trigger that request explicitly; matching aliases/emails, frontmatter, and provider IDs stay local | Derived notes and unconfirmed speaker suggestions |
+| Anthropic | Notes receive fixed schema/identity instructions, editable guidance, and only the reviewed transcript excerpt capped at 60,000 characters; the Markdown layout stays local, and no Calendar prefix is included. For new transcripts, background review preparation sends a diarized local excerpt capped at 60,000 characters, named attendee candidates, and relevant roster descriptions to Claude Haiku before confirmation. Historical review actions trigger that request explicitly; matching aliases/emails, frontmatter, and provider IDs stay local | Derived notes and unconfirmed speaker suggestions |
 
 AssemblyAI requires explicit provider selection plus versioned
 `external-audio-v1` acceptance before submit, polling, or retry. Canceling does
@@ -311,19 +311,29 @@ clicking or reopening unchanged review does not repeat a paid request.
 The local known-speaker roster stores canonical names, matching aliases/emails,
 and optional descriptions in the existing private preference document. Haiku
 receives only relevant canonical names and descriptions with the bounded
-diarized excerpt. No speaker-identification requests are sent to AssemblyAI.
+diarized excerpt. Named Calendar attendees remain eligible without a roster
+profile. Exact local aliases may resolve stored candidates to canonical names;
+ambiguous aliases and unresolved email-only candidates stay local without
+blocking direct proposals for other names. Unresolved candidates disable
+elimination. An excerpt missing a detected label also disables elimination.
+No speaker-identification requests are sent to AssemblyAI.
 Speaker proposal diagnostics are retained locally in
 `~/Library/Logs/meeting-memory/app.log`: the meeting folder name, proposed
 label/name, evidence quote (up to 2,000 characters, with truncation marked), and
 whether validation accepted the proposal. JSON escaping keeps each diagnostic
 on one log line. Raw provider responses and the full transcript are excluded.
-The identification prompt requires a concise quote showing the distinguishing
-identity signal rather than a generic acknowledgement.
+For direct identification, the prompt requires a concise quote showing the
+distinguishing identity signal rather than a generic acknowledgement.
 
-Suggestions require exact evidence from the indicated speaker. Review caches
+Suggestions require exact evidence from the indicated speaker. A proposal may
+use elimination only after validated direct matches leave one candidate and
+one substantive speaker, with supporting conversation context. The review marks
+the method explicitly; its same-speaker quote is a clue rather than direct
+identity evidence. Silent invitees, extra labels, and Unknown fragments must
+not force a match. Unknown is never assigned by elimination. Review caches
 remain in memory; diagnostic copies persist in the local log. Suggestions change
 no meeting artifacts until the user confirms names. Missing,
-unknown, ambiguous, or failed proposals preserve manual review; ASR confidence
+unresolved, ambiguous, or failed proposals preserve manual review; ASR confidence
 does not measure speaker identity. Notes start only after Confirm Names or
 Keep Speaker Labels and preserve those reviewed identities. They receive no
 Calendar prefix, and a fixed identity contract forbids reinference from
