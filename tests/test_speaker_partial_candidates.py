@@ -149,3 +149,19 @@ def test_elimination_is_marked_in_review_and_cached(monkeypatch, state):
     assert loaded.speaker_evidence["B"] == "By elimination (verify): The launch is ready."
     assert loader(state.meeting_directory) == loaded
     client.identify.assert_called_once()
+
+
+def test_excerpt_missing_a_detected_label_disables_elimination(monkeypatch, state):
+    request = elimination_request()
+    state = replace(
+        state,
+        speaker_candidates=("Alex", "Casey"),
+        speaker_labels=("A", "B", "C"),
+        speaker_utterances=request.utterances,
+    )
+    load_fixture(monkeypatch, state)
+    client = Mock()
+    client.identify.return_value = elimination_result()
+    loaded = SpeakerSuggestionLoader(client, people("Alex"))(state.meeting_directory)
+    assert loaded.speaker_suggestions == {"A": "Alex"}
+    assert not client.identify.call_args.args[0].allow_elimination

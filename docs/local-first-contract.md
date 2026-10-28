@@ -315,7 +315,8 @@ diarized excerpt. Named Calendar attendees remain eligible without a roster
 profile. Exact local aliases may resolve stored candidates to canonical names;
 ambiguous aliases and unresolved email-only candidates stay local without
 blocking direct proposals for other names. Unresolved candidates disable
-elimination. No speaker-identification requests are sent to AssemblyAI.
+elimination. An excerpt missing a detected label also disables elimination.
+No speaker-identification requests are sent to AssemblyAI.
 Speaker proposal diagnostics are retained locally in
 `~/Library/Logs/meeting-memory/app.log`: the meeting folder name, proposed
 label/name, evidence quote (up to 2,000 characters, with truncation marked), and

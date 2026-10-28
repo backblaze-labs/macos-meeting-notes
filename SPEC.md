@@ -491,7 +491,8 @@ profile; missing profiles MUST NOT block suggestions for other candidates.
 Exact local roster names or matching aliases/emails MAY resolve stored
 candidates to canonical names. Ambiguous matches and unresolved email-only
 candidates MUST stay local and MUST NOT block direct proposals for other names.
-If any candidate remains unresolved, elimination MUST be disabled. Suggestions
+If any candidate remains unresolved or the bounded excerpt omits a detected
+speaker label, elimination MUST be disabled. Suggestions
 MUST accept only supplied labels and exact candidate names with an exact
 evidence quote spoken by that label, reject ambiguous duplicate assignments,
 and preserve existing manual selections. Proposals MUST distinguish direct

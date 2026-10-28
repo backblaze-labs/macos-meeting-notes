@@ -58,7 +58,10 @@ class SpeakerSuggestionLoader:
         request = SpeakerIdentificationRequest(
             tuple(turn for turn in state.speaker_utterances if turn.label in state.speaker_labels),
             people,
-            allow_elimination=len(people) == len(candidates),
+            allow_elimination=(
+                len(people) == len(candidates)
+                and set(state.speaker_labels) <= {turn.label for turn in state.speaker_utterances}
+            ),
         )
         key = (str(state.transcript_path), review_identity(state), request.people)
         with self._lock:
