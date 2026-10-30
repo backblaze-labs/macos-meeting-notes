@@ -6,7 +6,7 @@
 
 `macos-meeting-notes` is the repository for **Meeting Memory**, a local-first
 macOS menu-bar app that records meetings, saves portable artifacts locally,
-and backs up each meeting's audio and transcript to Backblaze B2 over the
+and optionally backs up each meeting's audio and transcript to Backblaze B2 over the
 S3-compatible API. On Apple Silicon, speech recognition and diarization run
 locally by default through MLX. Calendar context and Anthropic Notes are
 optional; AssemblyAI is an explicit external transcription choice.
@@ -24,28 +24,32 @@ The app is local-first: each completed recording creates a directory under
 - `screenshot-*.png` (or a `screenshots/` folder) when you captured the screen
   during the recording
 
-B2 is the required durable backup layer. The local files remain the user's
+B2 is the optional durable backup layer. The local files remain the user's
 readable meeting archive and are committed before any upload begins.
 
-Completing setup requires a Backblaze B2 account, a dedicated private bucket,
-and a bucket-scoped application key. The app keeps local recording durable when
+Backup is optional and unconfigured on a fresh installation. To enable it, use
+a Backblaze B2 account, a dedicated private bucket, and a bucket-scoped
+application key. **Enable Backup only if you are authorized to send the meeting
+audio and transcripts to that bucket, including under your organization's policies.**
+To keep meeting backups local, choose **Disabled** in **Configuration › Backup...**
+and restart the app. Disabling Backup does not delete existing remote copies. The app keeps local recording durable when
 the network or B2 is temporarily unavailable, while Transcription, Calendar,
 and Notes remain optional. The tray's native **Configuration** submenu stores
 credentials in macOS Keychain; legacy `.env` credentials remain compatible.
 A legacy AssemblyAI key does not select cloud transcription or grant consent.
 See [the capability contract](docs/local-first-contract.md).
 
-After required B2 setup, the first-value acceptance test is concrete: record
+The first-value acceptance test needs no B2 account: record
 about 30 seconds of real audio, stop, play the saved result, reveal its meeting
-directory in Finder, and confirm its private B2 objects.
+directory in Finder. If you enabled Backup, also confirm its private B2 objects.
 
 ## Checkout Requirements
 
 - macOS 15 Sequoia or later
 - Python 3.11 or later
 - Xcode Command Line Tools (`xcode-select --install`)
-- A Backblaze B2 account, dedicated private bucket, and bucket-scoped
-  S3-compatible application key
+- Optional Backup: a Backblaze B2 account, dedicated private bucket, and
+  bucket-scoped S3-compatible application key
 - Optional Google Calendar OAuth desktop credentials
 - Apple Silicon with a native arm64 process and Metal for Local transcription
 - Optional AssemblyAI API key plus explicit external-processing consent
@@ -66,7 +70,7 @@ coding agent. Paste this prompt:
 
 ```text
 Install Meeting Memory from https://github.com/backblaze-labs/macos-meeting-notes.
-Follow docs/agent-setup.md and guide me through the required B2 setup.
+Follow docs/agent-setup.md and guide me through the optional B2 setup.
 ```
 
 The dedicated [agent setup guide](docs/agent-setup.md) gives the agent the full
@@ -120,10 +124,10 @@ flow and enter credentials only in the app's secure form.
    make open-macos-app
    ```
 
-   Until B2 is configured the menu bar shows a reduced **Setup Required** menu
-   with no **Start Recording** item. That is expected; the next step unlocks it.
+   Recording is available without B2 configuration. Leave Backup disabled
+   to keep backup artifacts only on this Mac.
 
-5. From the menu bar, open **Configuration › Backup...**, select
+5. Optionally, from the menu bar, open **Configuration › Backup...**, select
    **Enabled (app-managed)**, and enter the B2 endpoint, region, bucket name,
    application key ID, and application key. Review the upload disclosure,
    save, then quit and reopen Meeting Memory. Secret fields are native secure
@@ -135,8 +139,8 @@ flow and enter credentials only in the app's secure form.
    make doctor
    ```
 
-   Both `Recording Core` and `Backup` must report `READY` (or a usable
-   `DEGRADED` state) for the command to succeed. The check validates local
+   Only `Recording Core` must report `READY` (or a usable `DEGRADED` state)
+   for the command to succeed. Backup status is non-blocking. The check validates local
    configuration without contacting B2; the first completed recording verifies
    the real upload path.
 
@@ -313,7 +317,7 @@ failure never selects cloud transcription. Development or automation that
 intentionally uses AssemblyAI must set both app/process-only values explicitly;
 putting them in `.env` does not authorize external audio processing.
 
-Required Backup (the complete group unlocks the normal recording UI):
+Optional Backup (the complete group is needed only when enabled):
 
 - `B2_APPLICATION_KEY_ID`
 - `B2_APPLICATION_KEY`
@@ -598,7 +602,7 @@ native Apple Silicon Mac with Metal. Existing AssemblyAI keys do not activate
 cloud transcription; select it explicitly and accept its notice if desired.
 
 **Does Local keep all meeting content on my Mac?** Recognition and diarization
-run locally, but required B2 Backup sends audio/transcripts. Enabled Anthropic
+run locally, but optional B2 Backup sends audio/transcripts. Enabled Anthropic
 speaker suggestions and Notes send bounded transcript context at their
 respective triggers. Model preparation downloads weights without meeting
 content.

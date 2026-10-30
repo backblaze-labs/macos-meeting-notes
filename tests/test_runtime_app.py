@@ -49,7 +49,7 @@ def _loaded(settings: RuntimeSettings) -> SimpleNamespace:
     )
 
 
-def test_fresh_profile_routes_to_setup_until_required_backup_is_configured(
+def test_fresh_profile_records_without_backup(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -65,6 +65,8 @@ def test_fresh_profile_routes_to_setup_until_required_backup_is_configured(
 
     monkeypatch.setattr(runtime_app, "load_configuration", lambda _use: _loaded(settings))
     monkeypatch.setattr(runtime_app, "RumpsSetupApp", SetupApp)
+    monkeypatch.setattr(runtime_app, "RumpsTrayApp", Tray)
+    monkeypatch.setattr(runtime_app, "configure_logging", lambda: None)
     assert not hasattr(runtime_app, "load_readiness_report")
     monkeypatch.setattr(
         runtime_app,
@@ -89,7 +91,7 @@ def test_fresh_profile_routes_to_setup_until_required_backup_is_configured(
 
     assert runtime_app.run_runtime_app() == 0
 
-    assert setup.ran is True
+    assert setup.ran is False
 
 
 def test_optional_constructor_failures_do_not_block_core(
@@ -199,7 +201,7 @@ def test_invalid_optional_settings_never_route_core_to_setup(
 
 
 @pytest.mark.parametrize("preference_state", ["disabled", "corrupt"])
-def test_unavailable_required_backup_routes_composed_configuration_to_setup(
+def test_unavailable_backup_does_not_block_local_runtime(
     tmp_path: Path,
     monkeypatch,
     preference_state: str,
@@ -259,13 +261,15 @@ def test_unavailable_required_backup_routes_composed_configuration_to_setup(
     monkeypatch.setattr(runtime_app, "load_configuration", lambda _use: loaded)
     monkeypatch.setattr(runtime_app, "configure_logging", lambda: None)
     monkeypatch.setattr(runtime_app, "RumpsSetupApp", SetupApp)
+    monkeypatch.setattr(runtime_app, "RumpsTrayApp", Tray)
     monkeypatch.setattr(runtime_app, "AssemblyAITranscriptionClient", fail_provider)
     monkeypatch.setattr(runtime_app, "B2S3Client", fail_provider)
     monkeypatch.setattr(runtime_app, "GoogleCalendarClient", fail_provider)
     monkeypatch.setattr(runtime_app, "ClaudeSummarizer", fail_provider)
 
     assert runtime_app.run_runtime_app() == 0
-    assert setup.ran is True
+    assert setup.ran is False
+    assert Tray.ran is True
     assert calls == []
 
 

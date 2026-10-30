@@ -11,8 +11,7 @@ want a private, searchable record without managing a server. They use the menu
 bar app while moving between meetings and expect recording, transcription,
 speaker review, and note generation to require little attention.
 
-A first-time user is not assumed to have a Terminal workflow. They do need a
-Backblaze B2 account and bucket-scoped credentials to complete onboarding;
+A first-time user is not assumed to have a Terminal workflow. Backup is optional and does not require an account to complete onboarding;
 Transcription defaults to Local, enabled unless explicitly disabled, and
 requires prepared models on native Apple Silicon with Metal. Calendar and
 Notes remain progressive enhancements. Recording remains available when local
@@ -22,13 +21,12 @@ models are missing or incompatible.
 
 Meeting Memory records meetings, creates diarized transcripts, derives useful
 notes, keeps the canonical artifacts on the user's Mac, and backs them up to
-required Backblaze B2 storage. Success means the user can capture a
+optional Backblaze B2 storage. Success means the user can capture a
 meeting reliably, understand what is happening at a glance, and later find
 portable Markdown notes without having to reconstruct context.
 
-The first success starts after required B2 setup: launch the app, record about
-30 seconds of real audio, stop, play the local result, and confirm its private
-B2 backup. Recording Core preserves the local artifact independently;
+The first success requires no B2 setup: launch the app, record about
+30 seconds of real audio, stop, play the local result, and reveal it in Finder. Recording Core preserves the local artifact independently;
 Transcription, Calendar, and Notes are optional capabilities.
 Their composition and readiness semantics are defined in
 [`docs/local-first-contract.md`](docs/local-first-contract.md).
@@ -96,7 +94,7 @@ all labels. Notes start only after a successful confirmation.
   local failures never activate it. Saving a provider pauses new jobs until
   restart.
 - Explain each data boundary: weights download from Hugging Face without
-  meeting content; required B2 Backup sends audio and transcripts; enabled
+  meeting content; optional B2 Backup sends audio and transcripts; enabled
   Notes can send transcript context to Anthropic for suggestions before review
   and for Notes after confirmation. Local transcription is not a promise that
   the whole app runs offline or keeps all content on the Mac.

@@ -3,8 +3,8 @@
 This tutorial gets Meeting Memory running as a local macOS menu-bar app from a
 fresh clone of the `macos-meeting-notes` repository.
 
-This is the current source-checkout setup. A Backblaze B2 account and complete
-Backup configuration are required before the normal recording UI opens; see
+This is the current source-checkout setup. B2 Backup is optional and does not block the normal recording UI.
+Enable only when authorized to upload meeting content; see
 [`local-first-contract.md`](local-first-contract.md). Recording still commits
 locally before attempting an upload and remains recoverable through temporary
 network or provider failures. Phase 4B composes
@@ -76,7 +76,10 @@ Devices, and Multi-Output Devices are not required. On first use, allow the
 Microphone and Screen & System Audio permissions requested by macOS.
 No system or Homebrew FFmpeg installation is used.
 
-## 4. Create the Required Backblaze B2 Credentials
+## 4. Create Backblaze B2 Credentials (Optional)
+
+Skip this section to keep backups local. Enable Backup only if authorized to
+send meeting audio and transcripts to the destination bucket.
 
 1. [Create a Backblaze B2 account](https://www.backblaze.com/sign-up/cloud-storage).
 2. In the B2 web console, create a bucket dedicated to Meeting Memory and keep
@@ -128,14 +131,15 @@ Google Calendar:
 `credentials.json` is ignored by git. OAuth tokens are stored in macOS Keychain,
 not in the repository.
 
-## 6. Configure Required Backup and Optional Integrations
+## 6. Configure Optional Backup and Integrations
 
-Open **Configuration › Backup...** from the tray, select **Enabled
+If you want remote backup and are authorized to send meeting content, open
+**Configuration › Backup...** from the tray, select **Enabled
 (app-managed)**, and enter all five required B2 values. Each form names the
 provider, data sent, and trigger before it can be enabled. Credential fields use
 native secure controls, are stored in Keychain, and are blank every time the
-form reopens. Save, quit, and reopen Meeting Memory to unlock the normal
-recording UI.
+form reopens. Save, quit, and reopen Meeting Memory to activate uploads.
+Leave Backup disabled to keep backup artifacts on this Mac only.
 
 Transcription defaults to Local and enabled unless explicitly disabled.
 Prepare its models on supported Apple Silicon. Use **Transcription...** to

@@ -86,7 +86,7 @@ Common fixes:
 
 The auth command only requires the Google credentials settings. You can finish
 Calendar authorization while B2 or Local model preparation is pending, but
-`make doctor` does not pass until required B2 Backup is configured. Local
+`make doctor` requires only usable Recording Core. Backup is optional. Local
 transcription is the default; AssemblyAI requires a separate explicit provider
 choice and external-processing consent.
 
