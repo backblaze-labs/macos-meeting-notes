@@ -6,7 +6,8 @@ Use this guide when a user asks you to install Meeting Memory from
 ## Safety Boundaries
 
 - Read `AGENTS.md` and `README.md` before running commands.
-- Backblaze B2 configuration is required. Local transcription is the enabled
+- Backblaze B2 configuration is optional. Enable only when the user is authorized
+  to upload meeting audio and transcripts to the destination bucket. Local transcription is the enabled
   default unless explicitly disabled. It requires native Apple Silicon macOS,
   Metal, and explicit model preparation; missing models do not block recording.
 - AssemblyAI, Google Calendar, and Anthropic are optional. Do not configure an
@@ -34,7 +35,7 @@ Use this guide when a user asks you to install Meeting Memory from
    make setup
    ```
 
-3. Guide the user to [create a Backblaze B2 account](https://www.backblaze.com/sign-up/cloud-storage),
+3. Only if Backup is requested, guide the user to [create a Backblaze B2 account](https://www.backblaze.com/sign-up/cloud-storage),
    a dedicated private bucket, and a Read and Write application key restricted
    to that bucket. The user keeps the key ID and application key private.
 4. Open the installed app:
@@ -43,7 +44,7 @@ Use this guide when a user asks you to install Meeting Memory from
    make PYTHON=.venv/bin/python open-macos-app
    ```
 
-5. Ask the user to open **Configuration › Backup...**, select **Enabled
+5. Only if Backup is requested, ask the user to open **Configuration › Backup...**, select **Enabled
    (app-managed)**, enter the endpoint, region, bucket name, key ID, and
    application key, then save and quit the app. Wait for the user to confirm
    completion; do not request the entered values.
@@ -53,11 +54,11 @@ Use this guide when a user asks you to install Meeting Memory from
    make doctor
    ```
 
-   Recording Core and Backup must be usable. The check validates configuration
+   Only Recording Core must be usable; Backup is non-blocking. The check validates configuration
    locally and does not contact B2, download weights, or load models.
 7. Guide the user through a short recording. Confirm the local meeting folder
-   exists and ask the user to verify the matching private B2 objects. If the
-   upload failed, use **Debugging › Retry Pending B2 Backups**.
+   exists. If Backup was requested, ask the user to verify the matching private
+   B2 objects. If the upload failed, use **Debugging › Retry Pending B2 Backups**.
 8. On compatible Apple Silicon, guide the user to **Configuration › Prepare
    Local Models...**. Preparation reuses validated cached weights and downloads
    only missing content; its panel supports progress, cancellation, and retry.
@@ -74,9 +75,9 @@ Use this guide when a user asks you to install Meeting Memory from
 Do not declare setup complete until:
 
 - Meeting Memory opens from `~/Applications/Meeting Memory.app`;
-- `make doctor` succeeds with usable Recording Core and Backup;
+- `make doctor` succeeds with usable Recording Core;
 - a short recording is committed locally; and
-- the user confirms its objects reached the dedicated private B2 bucket.
+- if Backup was requested, the user confirms its objects reached the dedicated private B2 bucket.
 
 For troubleshooting and optional integrations, follow
 [`setup-tutorial.md`](setup-tutorial.md).

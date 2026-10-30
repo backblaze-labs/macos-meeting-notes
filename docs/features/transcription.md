@@ -197,7 +197,7 @@ Anthropic. See [search and speaker mapping](search-and-speaker-mapping.md) for
 roster and evidence rules.
 
 Local transcription does not make the whole application offline or wholly
-local: required B2 Backup sends audio/transcripts, and enabled Anthropic
+local: enabled B2 Backup sends audio/transcripts, and enabled Anthropic
 suggestions and Notes send bounded content at the triggers above.
 
 ## Verification

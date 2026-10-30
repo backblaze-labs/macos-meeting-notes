@@ -13,7 +13,7 @@ from meeting_memory.types.capabilities import (
 )
 
 
-def test_setup_requires_recording_core_and_backup() -> None:
+def test_setup_requires_only_recording_core() -> None:
     report = _report(
         CapabilityStatus(
             Capability.RECORDING_CORE,
@@ -27,7 +27,7 @@ def test_setup_requires_recording_core_and_backup() -> None:
     )
 
     assert report.recording_ready is True
-    assert report.setup_ready is False
+    assert report.setup_ready is True
     assert [status.capability for status in report.optional_attention] == [
         Capability.BACKUP,
         Capability.NOTES,

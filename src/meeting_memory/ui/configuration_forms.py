@@ -66,7 +66,9 @@ DISCLOSURES = {
     ),
     Capability.BACKUP: (
         "Backblaze B2 receives recording.m4a and transcript.md automatically for "
-        "new eligible meetings. Notes and historical meetings are not uploaded."
+        "new eligible meetings. Enable only if you are authorized to send this meeting "
+        "content to the configured bucket, including under your organization's policies. "
+        "Notes and historical meetings are not uploaded."
     ),
     Capability.CALENDAR: (
         "A browser opens for OAuth only after the explicit Authorize action. After "

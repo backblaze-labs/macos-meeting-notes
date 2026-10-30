@@ -6,8 +6,8 @@ Capture audio from the selected tray mode without changing macOS audio devices.
 `Full Meeting` records system audio plus the current microphone; `Silent System
 Only` records system audio with the microphone off and playback muted.
 
-Recording is the local-first core. Complete B2 configuration is also required
-to leave setup, while live B2 reachability never gates local commit. Its
+Recording is the local-first core. B2 Backup is optional; neither its
+configuration nor live reachability gates local recording. Its
 composition and durable lifecycle are defined in
 [`../local-first-contract.md`](../local-first-contract.md).
 

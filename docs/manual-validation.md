@@ -18,7 +18,7 @@ acceptance. The checkout commands remain useful for developer diagnostics.
   and explicitly prepared weights
 - Optional cloud transcription: AssemblyAI key, explicit provider selection,
   and accepted `external-audio-v1` notice
-- Required Backup: private B2 bucket and bucket-scoped S3-compatible credentials
+- Optional Backup: private B2 bucket and bucket-scoped S3-compatible credentials
 - Optional Notes: Anthropic key
 
 ## 1. Doctor

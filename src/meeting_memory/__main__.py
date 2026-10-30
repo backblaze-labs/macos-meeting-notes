@@ -116,11 +116,11 @@ def run_setup() -> int:
 
     backup = report.status_for(Capability.BACKUP)
     if backup.usable:
-        sys.stdout.write("\nRecording Core and required Backblaze B2 backup are configured.\n")
+        sys.stdout.write("\nRecording Core and optional Backblaze B2 backup are configured.\n")
     else:
         sys.stdout.write(
-            "\nRecording Core is usable. Configure required Backblaze B2 backup "
-            "from the app, then rerun make doctor.\n"
+            "\nRecording Core is usable. Optional Backblaze B2 backup can be enabled "
+            "from the app if you are authorized to upload meeting content.\n"
         )
     return 0
 

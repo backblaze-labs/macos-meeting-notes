@@ -11,7 +11,11 @@ When ending a work session with deferred behavior, append a dated note with:
 - why the original request was deferred,
 - the first thing to check if the user raises it again.
 
-## 2026-08-12 Required B2 Onboarding
+## 2026-08-12 Required B2 Onboarding (Superseded 2026-10-30)
+
+The required-backup policy below is historical. Backup is optional again;
+Recording Core alone gates startup and doctor success. See the current
+local-first contract.
 
 Request: require Backblaze B2 credentials, direct new users to sign up, and do
 not expose the normal recording UI until Backup is configured.

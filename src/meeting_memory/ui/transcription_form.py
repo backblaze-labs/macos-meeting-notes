@@ -25,7 +25,7 @@ ASSEMBLYAI_NOTICE = (
 DATA_BOUNDARIES = (
     "Local runs speech recognition and speaker diarization on this Mac. "
     "Preparing models downloads weights from Hugging Face without sending meeting content. "
-    "Backblaze B2 Backup still sends audio and transcripts. When enabled, Notes and "
+    "When enabled, Backblaze B2 Backup sends audio and transcripts. When enabled, Notes and "
     "speaker suggestions send transcript text and relevant context to Anthropic. "
     "Saving changes pauses new transcription jobs until you quit and reopen the app."
 )

@@ -4,7 +4,7 @@
 **Status:** Draft  
 **Author:** Meeting Memory contributors
 **Date:** 2026-08-17
-**Version:** 0.10
+**Version:** 0.11
 **Methodology:** RFC-inspired SRS (requirement language per RFC 2119: MUST / SHOULD / MAY / MUST NOT)
 
 **Revision note (v0.2):** Added a second, first-class design goal: **the
@@ -57,6 +57,11 @@ external-audio consent. Legacy keys do not infer consent, and preparation does
 not process historical recordings. B2 onboarding and existing Anthropic data
 boundaries remain in effect.
 
+**Revision note (v0.11):** B2 Backup is optional again. Local recording and
+default doctor readiness require only Recording Core. Enabling Backup requires
+an authorization warning for sending meeting audio and transcripts to B2.
+This supersedes the required-backup onboarding policy introduced in v0.6.
+
 ---
 
 ## Table of Contents
@@ -81,7 +86,7 @@ boundaries remain in effect.
 
 This document specifies the requirements for **Meeting Memory**, a macOS menu
 bar application whose repository is named **macos-meeting-notes**. The app
-records meetings locally, backs up portable artifacts to required Backblaze B2
+records meetings locally, backs up portable artifacts to optional Backblaze B2
 storage, and can optionally transcribe them with speaker diarization and
 generate AI summaries.
 
@@ -93,7 +98,7 @@ Naming is intentionally split during the low-risk external rename: the visible a
 
 It is a native, local-first B2 sample: rather than a browser upload flow, it
 captures real system + microphone audio on the desktop and saves it locally.
-B2 is the required durable archive; users may opt into calendar context,
+B2 is the optional durable archive; users may opt into calendar context,
 external transcription, and derived notes. Speech recognition and diarization
 use Local by default on supported Apple Silicon systems.
 
@@ -159,7 +164,7 @@ There is no web UI, no application database, and no always-on server.
            ┌─────────────┴─────────────────────┐
            ▼                                   ▼
   Local MLX subprocess                  External capabilities
-  Whisper + Nemotron                    B2 Backup (required setup)
+  Whisper + Nemotron                    B2 Backup (optional)
   (Apple Silicon + Metal)               Calendar / Anthropic (optional)
                                         AssemblyAI (explicit consent)
 
@@ -169,7 +174,7 @@ There is no web UI, no application database, and no always-on server.
 
 ### 2.2 Product Functions (Summary)
 
-- F0: Local-first capability readiness: require B2 configuration for onboarding while preserving local artifacts through provider failures
+- F0: Local-first capability readiness: allow recording without B2 configuration while preserving local artifacts through provider failures
 - F1: Optional calendar watching: detect upcoming meetings with video conferencing links
 - F2: Pre-meeting notification: remind the user to start recording
 - F3: Audio recording: natively capture system audio with optional microphone and playback by mode
@@ -199,7 +204,7 @@ the CLI.
   MUST NOT require developer tools
 - Recording requires the user to explicitly trigger start/stop (no fully automatic recording)
 - Recording Core preserves captures without internet access after onboarding
-- B2 credentials are required for onboarding; uploads require internet access,
+- B2 credentials are required only when enabling Backup; uploads require internet access,
   while a temporary provider or network failure does not remove local artifacts
 - Local transcription requires native arm64 Apple Silicon macOS, Metal,
   runtime dependencies, and explicitly prepared weights; inference then works
@@ -218,14 +223,14 @@ migration, and phase acceptance. If a pre-v0.4 statement implies that an
 provider reachability blocks local commit, the local-first contract takes
 precedence.
 
-**REQ-LF-01** A new user MUST configure a Backblaze B2 account, dedicated
-private bucket, and bucket-scoped application key before the normal recording
-UI becomes available. After setup, a temporary network or provider failure MUST
+**REQ-LF-01** A new user MUST be able to use the normal recording UI without
+configuring Backup. B2 Backup MUST be optional and unconfigured on a fresh profile.
+Before enabling it, the app MUST warn the user to confirm authorization to send
+meeting audio and transcripts to the destination bucket under applicable policies. After setup, a temporary network or provider failure MUST
 NOT prevent local commit, playback, or reveal-in-Finder behavior.
 
 **REQ-LF-02** The application MUST model Recording Core, Transcription, Backup,
-Calendar, and Notes as separate capabilities. Recording Core and complete
-Backup configuration MAY gate access to Start Recording. Live B2 reachability
+Calendar, and Notes as separate capabilities. Only Recording Core MAY gate access to Start Recording. Live B2 reachability
 MUST NOT gate local commit after onboarding.
 
 **REQ-LF-03** Each capability MUST report exactly one of `unconfigured`,
@@ -234,8 +239,7 @@ an actionable recovery step. `unconfigured`, `degraded`, and `failed` MUST have
 a non-empty action; only `checking` and `ready` MAY omit it.
 
 **REQ-LF-04** The default doctor and in-app setup check MUST share one typed
-readiness report. Default doctor success MUST require usable Recording Core and
-Backup configuration; Transcription, Calendar, and Notes failures MUST remain
+readiness report. Default doctor success MUST require only usable Recording Core; Transcription, Calendar, and Notes failures MUST remain
 visible and non-blocking.
 
 **REQ-LF-05** The application MUST commit durable local audio plus its schema-v2
@@ -724,7 +728,7 @@ readable for compatibility.
 
 ### F7: B2 Backup
 
-**REQ-F7-01** With required Backup configured, the schema-v2 automatic policy MUST
+**REQ-F7-01** With optional Backup enabled and configured, the schema-v2 automatic policy MUST
 upload exactly `recording.m4a` and `transcript.md` for eligible Meeting
 Memory-owned meetings. `notes.md` is excluded unless a future separate opt-in
 expands the disclosed scope. A failed upload MUST NOT block local completion;

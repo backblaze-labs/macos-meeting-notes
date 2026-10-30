@@ -34,13 +34,13 @@ def test_doctor_renders_all_capabilities_and_actions() -> None:
         (CapabilityState.READY, CapabilityState.READY, 0),
         (CapabilityState.DEGRADED, CapabilityState.READY, 0),
         (CapabilityState.READY, CapabilityState.DEGRADED, 0),
-        (CapabilityState.READY, CapabilityState.UNCONFIGURED, 1),
-        (CapabilityState.READY, CapabilityState.FAILED, 1),
+        (CapabilityState.READY, CapabilityState.UNCONFIGURED, 0),
+        (CapabilityState.READY, CapabilityState.FAILED, 0),
         (CapabilityState.FAILED, CapabilityState.READY, 1),
         (CapabilityState.CHECKING, CapabilityState.READY, 1),
     ],
 )
-def test_default_doctor_exit_requires_recording_core_and_backup(
+def test_default_doctor_exit_requires_only_recording_core(
     core_state: CapabilityState,
     backup_state: CapabilityState,
     expected: int,

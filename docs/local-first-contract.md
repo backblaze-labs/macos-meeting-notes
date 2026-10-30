@@ -7,14 +7,13 @@ and provider-service behavior
 
 This document defines the target behavior for Meeting Memory's local-first
 transition. `SPEC.md` owns detailed feature requirements; this document owns
-how those features compose. Complete B2 configuration is an onboarding gate;
+how those features compose. B2 configuration is optional and never an onboarding gate;
 provider reachability is not a local-commit gate after onboarding.
 
 ## Product Promise
 
-A new user configures a Backblaze B2 account, dedicated private bucket, and
-bucket-scoped application key before the normal recording UI becomes available.
-After that setup, the user can grant the macOS permissions needed by the
+A new user can use the normal recording UI without configuring B2.
+The user can grant the macOS permissions needed by the
 selected audio mode, record about 30 seconds of real audio, stop it, play the
 saved local result, and reveal its meeting directory in Finder. A temporary
 network or B2 failure does not discard or hide the local recording.
@@ -30,12 +29,14 @@ work.
 | --- | --- | --- | --- |
 | **Recording Core** | Capture, recover, convert, store, browse, and search local audio | Supported macOS, writable local folder, native helper, mode-specific macOS permission | **Yes** |
 | **Transcription** | Produce a diarized `transcript.md`, Local by default | Recording Core; Local needs native Apple Silicon macOS, Metal, runtime, and prepared weights; AssemblyAI needs network, explicit selection, consent, and key | No |
-| **Backup** | Copy owned meeting artifacts to B2 | Local artifact, network, B2 destination credentials | **Configuration only** |
+| **Backup** | Copy owned meeting artifacts to B2 | Local artifact, network, B2 destination credentials | No |
 | **Calendar** | Detect meeting context and reminders | Network, Google credentials and OAuth grant | No |
 | **Notes** | Prepare unconfirmed speaker suggestions and produce derived `notes.md` after explicit speaker review | Completed transcript, network, Anthropic credential | No |
 
-Recording Core is always present. Backup credentials and destination settings
-are required to leave setup. Transcription defaults to Local and is enabled
+Recording Core is always present. Backup is optional and unconfigured on a
+fresh profile. Credentials are needed only when enabling Backup. The app MUST
+warn users to confirm authorization to upload meeting audio and transcripts
+to the configured bucket, including under their organization's policies. Transcription defaults to Local and is enabled
 unless explicitly disabled; Calendar and Notes remain opt-in.
 Capabilities remain independently configurable and retryable. Enabling one
 MUST NOT implicitly enable another, and local audio does not require
@@ -110,16 +111,15 @@ recovery context. The action is required for `unconfigured`, `degraded`, and
 `ready` or `degraded`; it is not usable in `unconfigured`, `checking`, or
 `failed`.
 
-The app MUST allow Start Recording when Recording Core is usable and Backup has
-complete enabled configuration. Transcription, Calendar, and Notes states MUST
+The app MUST allow Start Recording when Recording Core is usable.
+Backup, Transcription, Calendar, and Notes states MUST
 NOT gate that action. Before a recording starts, the app MUST validate only the
 requirements for the selected audio mode; it MUST NOT make a B2 network probe.
 
 `meeting-memory doctor` and the in-app setup check share the same report:
 
-- exit `0` when Recording Core and Backup configuration are usable;
-- exit non-zero when Recording Core cannot produce durable local audio or
-  Backup configuration is absent, disabled, or invalid;
+- exit `0` when Recording Core is usable;
+- exit non-zero when Recording Core cannot produce durable local audio;
 - render every capability, not a flat list of undifferentiated failures; and
 - never make a network request on the UI thread.
 
@@ -266,7 +266,7 @@ process the backlog.
 
 Recordings commit locally, and default speech recognition and diarization run
 locally on supported hardware. This is not a whole-application offline or
-confidentiality promise: required B2 Backup and enabled external capabilities
+confidentiality promise: optional B2 Backup and enabled external capabilities
 send content as disclosed. The app MUST identify each boundary before enabling
 an external integration:
 
@@ -357,7 +357,7 @@ Offer dismissal/suppression lives separately in private atomic
 `speaker-onboarding.json`; the menu remains available for later onboarding.
 
 B2 objects remain private. A dedicated private bucket and least-privilege,
-bucket-scoped credentials are required for supported setup.
+bucket-scoped credentials are required only when enabling Backup.
 
 The installed app owns runtime secrets. The target store is macOS Keychain for
 API secrets and OAuth tokens; non-secret preferences belong in app-managed
@@ -423,7 +423,7 @@ confirmed import; it performs no automatic import and never mutates `.env`.
 ### Phase 2: Local core and isolated adapters (complete)
 
 - The local recording substrate remains operable without provider reachability;
-  the product-level B2 configuration gate is applied by the setup/runtime UI.
+  Backup configuration remains optional in the setup/runtime UI.
 - Local audio is committed before optional work.
 - The committed artifact is `recording.m4a` plus the schema-v2 metadata stub;
   ownership no longer depends on `assemblyai_id`.
@@ -487,7 +487,7 @@ computer-use validation of the installed app.
 
 ### Phase 5: Native onboarding validation
 
-- A clean macOS user configures required B2 backup, records about 30 seconds of
+- A clean macOS user configures optional B2 backup, records about 30 seconds of
   real audio, stops, plays the saved result, reveals its directory in Finder,
   and confirms the private bucket objects.
 - Keyboard, VoiceOver labels, denial/retry paths, relaunch, and permission
