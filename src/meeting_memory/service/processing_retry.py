@@ -80,6 +80,7 @@ def retry_failed_processing(
                 if provider is TranscriptionProvider.LOCAL:
                     transcript = processor.transcribe(
                         snapshot.audio[0].stream,
+                        meeting_title=snapshot.meta.calendar_title,
                         progress=lambda progress: (
                             event_sink(TranscriptionProgress(ref, progress)) if event_sink else None
                         ),

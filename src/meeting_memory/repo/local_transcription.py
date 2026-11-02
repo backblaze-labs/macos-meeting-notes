@@ -11,6 +11,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import BinaryIO
 
+from meeting_memory.repo.local_asr_profile import load_local_asr_profile
 from meeting_memory.repo.local_model_cache import cache_root, validate_models
 from meeting_memory.repo.local_models import inspect_local_backend
 from meeting_memory.repo.local_process import (
@@ -67,6 +68,7 @@ class LocalTranscriptionClient:
         self,
         audio: BinaryIO,
         *,
+        meeting_title: str = "",
         progress: ProgressSink = lambda _event: None,
         cancelled: Cancelled = lambda: False,
     ) -> LocalTranscriptionOutput:
@@ -77,6 +79,7 @@ class LocalTranscriptionClient:
 
         if cancelled():
             raise LocalTranscriptionCancelled()
+        options = load_local_asr_profile().options(meeting_title)
         status = inspect_local_backend(cache=self._cache)
         if not status.supported or not status.runtime_available:
             raise LocalTranscriptionError(status.summary, status.action)
@@ -97,7 +100,12 @@ class LocalTranscriptionClient:
                     request = root / "request.json"
                     request.write_text(
                         json.dumps(
-                            {"operation": "infer", "cache": str(self._cache), "audio": str(pcm)}
+                            {
+                                "operation": "infer",
+                                "cache": str(self._cache),
+                                "audio": str(pcm),
+                                "asr": options.to_wire(),
+                            }
                         )
                     )
                     request.chmod(0o600)

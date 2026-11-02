@@ -8,7 +8,7 @@ from pathlib import Path
 from meeting_memory.service.frontmatter import split_frontmatter
 from meeting_memory.service.ownership import classify_ownership, map_speaker_status
 from meeting_memory.service.pinned_fs import open_directory_tree
-from meeting_memory.service.speaker_excerpt import LINE
+from meeting_memory.service.speaker_excerpt import LINE, substantive_rank
 from meeting_memory.types.artifacts import ArtifactOwnership
 from meeting_memory.types.speaker_knowledge import PersonHistory, SpeakerHistory
 
@@ -17,11 +17,11 @@ MAX_HISTORY_FOLDERS = 200
 MAX_HISTORY_BYTES = 2_097_152
 MAX_PERSON_CHARS = 4_000
 MAX_TOTAL_CHARS = 60_000
-ANONYMOUS = re.compile(r"^(?:Speaker |speaker_)[A-Z]+$", re.IGNORECASE)
+ANONYMOUS = re.compile(r"^(?:Unknown|(?:Speaker |speaker_)[A-Z]+)$", re.IGNORECASE)
 
 
 def harvest_speaker_history(root: Path, only: Path | None = None) -> SpeakerHistory:
-    collected: dict[str, list[str]] = {}
+    collected: dict[str, list[list[str]]] = {}
     count = scanned = 0
     try:
         root_fd = open_directory_tree(root.expanduser())
@@ -55,13 +55,22 @@ def harvest_speaker_history(root: Path, only: Path | None = None) -> SpeakerHist
                 if not names:
                     continue
                 count += 1
-                for name in names:
-                    collected.setdefault(name, [])
+                per_meeting: dict[str, list[str]] = {name: [] for name in names}
                 for match in LINE.finditer(body):
                     label, text = match.group("label"), match.group("text")
                     person = aliases.get(label, label)
-                    if person in names and sum(map(len, collected[person])) < MAX_PERSON_CHARS:
-                        collected[person].append(text[:MAX_PERSON_CHARS])
+                    if person in per_meeting:
+                        per_meeting[person].append(text)
+                for name, quotes in per_meeting.items():
+                    # Rank before bounding so opening smalltalk cannot exhaust the budget.
+                    ranked = sorted(dict.fromkeys(quotes), key=substantive_rank, reverse=True)
+                    selected, size = [], 0
+                    for quote in ranked:
+                        excerpt = quote[: MAX_PERSON_CHARS - size]
+                        if excerpt:
+                            selected.append(excerpt)
+                            size += len(excerpt)
+                    collected.setdefault(name, []).append(selected)
                 if count >= MAX_HISTORY_MEETINGS:
                     break
             except (OSError, ValueError, UnicodeError):
@@ -70,13 +79,20 @@ def harvest_speaker_history(root: Path, only: Path | None = None) -> SpeakerHist
         os.close(root_fd)
     budget = min(MAX_PERSON_CHARS, MAX_TOTAL_CHARS // max(1, len(collected)))
     people = []
-    for name, quotes in collected.items():
-        bounded, size = [], 0
-        for quote in quotes:
-            excerpt = quote[: max(0, budget - size)]
-            if excerpt:
-                bounded.append(excerpt)
-                size += len(excerpt)
+    for name, meetings in collected.items():
+        usable = [quotes for quotes in meetings if quotes]
+        share = budget // max(1, len(usable))
+        bounded, seen = [], set()
+        for quotes in usable:
+            size = 0
+            for quote in quotes:
+                if quote in seen:
+                    continue
+                seen.add(quote)
+                excerpt = quote[: max(0, share - size)]
+                if excerpt:
+                    bounded.append(excerpt)
+                    size += len(excerpt)
         people.append(PersonHistory(name, tuple(bounded)))
     return SpeakerHistory(tuple(people), count, scanned)
 

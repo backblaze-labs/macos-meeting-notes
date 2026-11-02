@@ -212,3 +212,39 @@ def test_no_history_does_not_offer_or_write_suppression(tmp_path):
     svc, store, _ = service(tmp_path)
     assert svc.offer() == ()
     assert not (store.path.parent / "speaker-onboarding.json").exists()
+
+
+def test_history_prioritizes_work_after_opening_smalltalk(tmp_path):
+    root = tmp_path / "meetings"
+    meeting(
+        root,
+        aliases={"A": "Alex"},
+        body=(
+            "**Alex** (0:00:01): "
+            + "lovely weather " * 500
+            + "\n**Alex** (0:10:00): I am implementing the SDK release integration."
+        ),
+    )
+    quotes = harvest_speaker_history(root).people[0].quotes
+    assert quotes[0] == "I am implementing the SDK release integration."
+    assert sum(map(len, quotes)) <= 4000
+
+
+def test_history_balances_recent_meetings_for_each_person(tmp_path):
+    root = tmp_path / "meetings"
+    for day in (1, 2, 3):
+        meeting(
+            root,
+            f"2026-01-0{day}",
+            aliases={"A": "Alex"},
+            body=f"**Alex** (0:00:01): I am working on project {day}. " + "details " * 1000,
+        )
+    quotes = harvest_speaker_history(root).people[0].quotes
+    assert all(any(f"project {day}." in quote for quote in quotes) for day in (1, 2, 3))
+    assert sum(map(len, quotes)) <= 4000
+
+
+def test_history_does_not_promote_unknown_to_a_named_person(tmp_path):
+    root = tmp_path / "meetings"
+    meeting(root, aliases={"A": "Unknown"}, body="**Unknown** (0:00:01): I test SDK releases.")
+    assert not harvest_speaker_history(root).people

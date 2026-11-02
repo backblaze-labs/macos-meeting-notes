@@ -11,10 +11,12 @@ import sys
 import wave
 from pathlib import Path
 
+from meeting_memory.repo.local_asr_prompt import persistent_vocabulary
 from meeting_memory.repo.local_model_cache import models, validate_models
 from meeting_memory.repo.local_worker_lifetime import worker_parent_lifetime
+from meeting_memory.types.local_asr import LocalASROptions
 
-MAX_REQUEST_BYTES = 4096
+MAX_REQUEST_BYTES = 16_384
 
 
 class MetalUnavailable(RuntimeError):
@@ -48,13 +50,16 @@ def read_request(path: Path) -> dict:
     if not isinstance(row, dict) or row.get("operation") not in {"prepare", "infer", "probe"}:
         raise ValueError("invalid operation")
     required = {"operation", "cache"} | ({"audio"} if row["operation"] == "infer" else set())
-    if set(row) != required or not isinstance(row["cache"], str):
+    optional = {"asr"} if row["operation"] == "infer" else set()
+    if set(row) - optional != required or not isinstance(row["cache"], str):
         raise ValueError("invalid request schema")
     cache = Path(row["cache"])
     if not cache.is_absolute():
         raise ValueError("cache must be absolute")
     if row["operation"] == "infer":
         _private_regular(Path(row["audio"]))
+        if "asr" in row:
+            LocalASROptions.from_wire(row["asr"])
     return row
 
 
@@ -106,7 +111,9 @@ def _field(value, key: str, default=None):
     return value.get(key, default) if isinstance(value, dict) else getattr(value, key, default)
 
 
-def transcribe(audio: Path, snapshot: Path) -> tuple[list[dict], str]:
+def transcribe(
+    audio: Path, snapshot: Path, options: LocalASROptions = LocalASROptions()
+) -> tuple[list[dict], str]:
     import mlx.core as mx
     from mlx_audio.stt import load
 
@@ -114,14 +121,16 @@ def transcribe(audio: Path, snapshot: Path) -> tuple[list[dict], str]:
     model = load(snapshot, strict=True, model_type="whisper")
     mx.eval(model.parameters())
     emit("transcribing")
-    result = model.generate(
-        str(audio),
-        language=None,
-        task="transcribe",
-        word_timestamps=True,
-        condition_on_previous_text=False,
-        verbose=None,
-    )
+    with persistent_vocabulary(model, options.initial_prompt):
+        result = model.generate(
+            str(audio),
+            language=options.language,
+            initial_prompt=options.initial_prompt,
+            task="transcribe",
+            word_timestamps=True,
+            condition_on_previous_text=False,
+            verbose=None,
+        )
     mx.synchronize()
     segments = []
     for segment in _field(result, "segments", ()) or ():
@@ -200,7 +209,8 @@ def infer(row: dict, destination: Path) -> None:
     with wave.open(str(audio), "rb") as pcm:
         if pcm.getnchannels() != 1 or pcm.getframerate() != 16000 or pcm.getsampwidth() != 2:
             raise ValueError("unexpected PCM format")
-    segments, language = transcribe(audio, whisper)
+    options = LocalASROptions.from_wire(row["asr"]) if "asr" in row else LocalASROptions()
+    segments, language = transcribe(audio, whisper, options)
     turns = diarize(audio, nemotron)
     destination.write_text(
         json.dumps(

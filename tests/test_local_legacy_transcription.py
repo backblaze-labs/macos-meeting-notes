@@ -34,7 +34,8 @@ def test_legacy_local_retry_claims_before_call_and_preserves_review_notes(tmp_pa
     events = []
 
     class Backend:
-        def transcribe(self, audio, *, progress, cancelled):
+        def transcribe(self, audio, *, progress, cancelled, meeting_title=""):
+            assert meeting_title == files.meta.calendar_title
             fields, _ = split_frontmatter(files.transcript_path.read_text())
             assert fields["transcription_provider"] == "local"
             assert fields["transcription_status"] == "running"

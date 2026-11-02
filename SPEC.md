@@ -464,6 +464,19 @@ local commit. Missing/corrupt local models MUST leave requested work pending
 with a preparation action. Incompatibility and failures MUST retain the audio
 and offer recovery without blocking recording completion or selecting cloud.
 
+**REQ-F4-01a** Local recognition MAY read the optional private fixed file
+`~/Library/Application Support/meeting-memory/transcription-profile.json` per job.
+Absent profiles MUST preserve automatic language detection. Profiles MAY select
+`en`, `es`, or `auto` by default and ordered case-insensitive title-substring rules,
+and supply a bounded glossary composed into an ASR vocabulary prompt. The static
+glossary SHOULD remain available when decoding windows reset, without enabling
+conditioning on previous recognized speech. The reader
+MUST reject symlink, non-regular, non-owned, non-private, oversized or invalid files
+without processing meeting audio or logging profile content. Worker requests MUST
+validate language and vocabulary options independently. Profile reads and inference
+MUST remain local; title context MUST NOT enter speaker-identification requests.
+Editing a profile MUST NOT automatically process completed meetings.
+
 **REQ-F4-02** The application MUST write the schema-v2 `transcript.md` metadata
 stub before any transcription work. Local artifact ownership and recording
 completion MUST NOT depend on remote IDs. The completed owned `transcript.md`
@@ -487,7 +500,9 @@ preparation MUST join that pending worker. Changed review identity MUST reload
 on a worker before presentation; the main thread MUST NOT call a provider.
 The request MUST reuse the Notes Anthropic key and honor its current-session
 pause. It MUST include only diarized local transcript text (at most 60,000
-characters, at a whole-utterance boundary), relevant candidate names, and local
+characters, at whole-utterance boundaries). Long excerpts SHOULD retain useful
+context for each detected voice rather than only a transcript prefix. It MUST
+include relevant candidate names, and local
 known-person descriptions. Calendar matching aliases/emails and frontmatter metadata (including local
 paths, meeting dates, and provider transcript IDs) MUST NOT be sent for identification.
 Named Calendar candidates MUST remain eligible without a `KNOWN_SPEAKERS`
@@ -552,7 +567,9 @@ Identification suggestions under REQ-F4-04.
 local roster editor independent of Calendar enablement or its Save action,
 including names-only access during setup. It MUST offer explicit import from
 at most 20 confirmed named transcripts within the latest 200 meeting folders,
-with the included/scanned counts disclosed. Each metadata read MUST be bounded
+with the included/scanned counts disclosed. Within the existing quote bounds,
+selection SHOULD favor substantive work passages and balance recent meetings per
+person instead of exhausting the allowance on opening smalltalk. Each metadata read MUST be bounded
 to 2 MiB and reject symlink/non-regular artifacts. Kept anonymous labels,
 unreviewed transcripts, foreign artifacts, and schema-v2 aliases without explicit
 confirmation MUST NOT supply identities. Imported names MUST be exact confirmed
