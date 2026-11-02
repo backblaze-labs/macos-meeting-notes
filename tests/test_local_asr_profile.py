@@ -47,6 +47,12 @@ def test_profile_language_overrides_are_local_ordered_and_case_insensitive(tmp_p
         {"glossary": [str(i) + "x" * 75 for i in range(30)]},
         {"language_overrides": [{"title_contains": "", "language": "es"}]},
         {"secret": "unexpected"},
+        {"spanish_attendees": "Alex"},
+        {"spanish_attendees": [None]},
+        {"spanish_attendees": [" "]},
+        {"spanish_attendees": ["x" * 201]},
+        {"spanish_attendees": ["Alex\nCasey"]},
+        {"spanish_attendees": ["Alex"] * 65},
     ],
 )
 def test_invalid_profile_cannot_reach_inference(value):
@@ -142,6 +148,7 @@ def test_client_reads_profile_per_job_and_passes_title_policy(monkeypatch, tmp_p
             "default_language": "en",
             "language_overrides": [{"title_contains": "Spanish", "language": "es"}],
             "glossary": ["SDK"],
+            "spanish_attendees": ["Alex", "Casey"],
         }
     )
     monkeypatch.setattr(client_module, "load_local_asr_profile", lambda: profile)
@@ -156,7 +163,9 @@ def test_client_reads_profile_per_job_and_passes_title_policy(monkeypatch, tmp_p
     sent = []
 
     def run_worker(request, **_kwargs):
-        sent.append(json.loads(request.read_text())["asr"])
+        row = json.loads(request.read_text())
+        assert set(row) == {"operation", "cache", "audio", "asr"}
+        sent.append(row["asr"])
         (request.parent / "result.json").write_text(
             json.dumps(
                 {
@@ -173,5 +182,43 @@ def test_client_reads_profile_per_job_and_passes_title_policy(monkeypatch, tmp_p
         client.transcribe(source, meeting_title="Spanish catchup")
     with audio.open("rb") as source:
         client.transcribe(source, meeting_title="Standup")
-    assert [row["language"] for row in sent] == ["es", "en"]
+    with audio.open("rb") as source:
+        client.transcribe(source, meeting_title="Standup", speaker_candidates=("Alex", "Casey"))
+    with audio.open("rb") as source:
+        client.transcribe(
+            source, meeting_title="Spanish catchup", speaker_candidates=("Alex", "Other")
+        )
+    assert [row["language"] for row in sent] == ["es", "en", "es", "en"]
     assert all(row["initial_prompt"] == "Vocabulary: SDK" for row in sent)
+
+
+@pytest.mark.parametrize(
+    ("title", "attendees", "expected"),
+    [
+        ("Standup", ("Alex",), "es"),
+        ("Standup", ("Casey", "  ALEX "), "es"),
+        ("Standup", ("ALEx@EXAMPLE.COM",), "es"),
+        ("Spanish catchup", ("Alex", "Other"), "en"),
+        ("Spanish catchup", ("Alexandra",), "en"),
+        ("Spanish catchup", ("",), "en"),
+        ("Spanish catchup", (), "es"),
+        ("Standup", (), "en"),
+        ("Unmatched", (), None),
+    ],
+)
+def test_attendee_membership_overrides_title_only_with_calendar_context(title, attendees, expected):
+    profile = LocalASRProfile.from_json(
+        {
+            "language_overrides": [
+                {"title_contains": "standup", "language": "en"},
+                {"title_contains": "Spanish", "language": "es"},
+            ],
+            "spanish_attendees": [" Alex ", "Casey", "alex@example.com"],
+        }
+    )
+    assert profile.options(title, speaker_candidates=attendees).language == expected
+
+
+def test_unconfigured_attendee_group_preserves_existing_title_policy():
+    profile = LocalASRProfile.from_json({"default_language": "es", "spanish_attendees": []})
+    assert profile.options("Call", speaker_candidates=("Other",)).language == "es"

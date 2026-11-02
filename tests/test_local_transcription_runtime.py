@@ -38,7 +38,11 @@ def meeting(tmp_path):
     source.write_bytes(b"private source")
     return MeetingStore(tmp_path / "meetings").commit(
         source,
-        MeetingMeta("local-meeting", datetime(2026, 10, 27, tzinfo=UTC)),
+        MeetingMeta(
+            "local-meeting",
+            datetime(2026, 10, 27, tzinfo=UTC),
+            speaker_candidates=("Alex", "Casey"),
+        ),
         PostCommitPolicy(transcription=True),
     )
 
@@ -62,6 +66,7 @@ class LocalClient:
 
     def transcribe(self, audio, **kwargs):
         assert kwargs["meeting_title"] == self.files.meta.calendar_title
+        assert kwargs["speaker_candidates"] == self.files.meta.speaker_candidates
         state = metadata(self.files)
         assert state["transcription_provider"] == "local"
         assert state["transcription_status"] == "running"
@@ -246,7 +251,9 @@ def test_shutdown_cancels_active_local_work_and_closes_client_once(tmp_path):
         def close(self):
             closed.append(True)
 
-        def transcribe(self, audio, *, cancelled, progress, meeting_title=""):
+        def transcribe(
+            self, audio, *, cancelled, progress, meeting_title="", speaker_candidates=()
+        ):
             runtime.shutdown()
             assert cancelled()
             raise LocalTranscriptionCancelled()

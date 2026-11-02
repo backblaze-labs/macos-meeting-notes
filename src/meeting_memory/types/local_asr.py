@@ -44,6 +44,7 @@ class LocalASRProfile:
     default_language: str | None = None
     language_overrides: tuple[tuple[str, str | None], ...] = ()
     glossary: tuple[str, ...] = ()
+    spanish_attendees: tuple[str, ...] = ()
 
     @classmethod
     def from_json(cls, value: object) -> "LocalASRProfile":
@@ -51,6 +52,7 @@ class LocalASRProfile:
             "default_language",
             "language_overrides",
             "glossary",
+            "spanish_attendees",
         }:
             raise ValueError("invalid local transcription profile")
         default = language_code(value.get("default_language", "auto"))
@@ -72,15 +74,41 @@ class LocalASRProfile:
             not isinstance(term, str) or not term.strip() or len(term) > 80 for term in glossary
         ):
             raise ValueError("invalid glossary term")
-        profile = cls(default, tuple(overrides), tuple(dict.fromkeys(glossary)))
+        attendees = value.get("spanish_attendees", [])
+        if not isinstance(attendees, list) or len(attendees) > 64:
+            raise ValueError("invalid Spanish attendee group")
+        if any(
+            not isinstance(name, str)
+            or not name.strip()
+            or len(name) > 200
+            or any(ord(char) < 32 for char in name)
+            for name in attendees
+        ):
+            raise ValueError("invalid Spanish attendee name")
+        profile = cls(
+            default,
+            tuple(overrides),
+            tuple(dict.fromkeys(glossary)),
+            tuple(dict.fromkeys(name.strip().casefold() for name in attendees)),
+        )
         profile.options("")  # Validate the complete composed prompt before accepting the file.
         return profile
 
-    def options(self, meeting_title: str) -> LocalASROptions:
+    def options(
+        self, meeting_title: str, *, speaker_candidates: tuple[str, ...] = ()
+    ) -> LocalASROptions:
         language = self.default_language
         for title, override in self.language_overrides:
             if title in meeting_title.casefold():
                 language = override
                 break
+        if self.spanish_attendees and speaker_candidates:
+            language = (
+                "es"
+                if all(
+                    name.strip().casefold() in self.spanish_attendees for name in speaker_candidates
+                )
+                else "en"
+            )
         prompt = "Vocabulary: " + ", ".join(self.glossary) if self.glossary else None
         return LocalASROptions(language, prompt)

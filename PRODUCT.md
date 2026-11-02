@@ -87,7 +87,10 @@ all labels. Notes start only after a successful confirmation.
 - Let provider failures, including B2 upload failures after setup, preserve and
   expose the local recording with a concrete retry path.
 - Support an optional private local ASR profile for English, Spanish or automatic
-  language selection by meeting title and a bounded technical vocabulary. Keep
+  language selection by meeting title, an optional Spanish-speaking attendee group,
+  and a bounded technical vocabulary. A configured group selects Spanish only
+  for a nonempty attendee list wholly within that group; an outsider selects
+  English, overriding title rules. Missing attendees retain title/default policy. Keep
   the generic default automatic and preserve completed transcripts until explicit retry.
 - Use Local recognition and diarization by default without a cloud credential.
   Keep model preparation explicit and separate from retrying existing work.

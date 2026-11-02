@@ -160,6 +160,7 @@ class RuntimeTranscription:
                     output = self._client.transcribe(
                         audio,
                         meeting_title=handle.files.meta.calendar_title,
+                        speaker_candidates=handle.files.meta.speaker_candidates,
                         progress=lambda progress: self._event_sink(
                             TranscriptionProgress(_meeting_ref(handle.files), progress)
                         ),

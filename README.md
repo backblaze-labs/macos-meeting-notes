@@ -176,6 +176,16 @@ For example:
 }
 ```
 
+Optionally add `"spanish_attendees": ["Alex", "Casey", "alex@example.com"]` to
+select language from Calendar attendees. With this group configured and a nonempty
+attendee list, Spanish is selected only when **every attendee** is an exact member
+of the group; any outsider selects English. This takes priority over title rules,
+including standup rules. Add the canonical names or explicit aliases that Calendar
+actually supplies. Matching ignores surrounding whitespace and case; it does not
+guess nicknames or partial names. An absent or empty attendee list falls back to
+the title/default rules. An absent or empty group preserves the existing policy.
+The group accepts at most 64 nonblank names or aliases of at most 200 characters.
+
 Keep this file local with mode `0600`. Rules match title substrings without case
 sensitivity; the first match wins. Supported language values are `en`, `es`, and
 `auto`. Without a matching rule, `default_language` applies. Specifying English
@@ -184,7 +194,7 @@ an explicit rule or use `auto` for them. New recordings and explicit retries
 read the profile per job. Editing it never reprocesses a completed transcript.
 Vocabulary hints bias each decoding window without carrying prior speech into
 subsequent windows. They do not replace words after transcription.
-The profile and title rules stay local and are not sent to the speaker-name provider.
+The profile, attendee group and title rules stay local and are not sent to the speaker-name provider.
 Invalid or non-private files fail with an actionable message and preserve audio.
 
 ### Local development commands
