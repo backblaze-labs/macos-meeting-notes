@@ -25,6 +25,7 @@ from meeting_memory.service.notes_rendering import (
     summary_text,
 )
 from meeting_memory.service.speaker_mapping import apply_speaker_mapping
+from meeting_memory.service.transcript_turns import coalesce_transcript_turns
 from meeting_memory.types.capabilities import MeetingJobState
 from meeting_memory.types.meeting import MeetingMeta, PostCommitPolicy
 from meeting_memory.types.summary import SummaryResult
@@ -246,9 +247,12 @@ def _participants(transcript: TranscriptResult) -> str:
 def _transcript_text(transcript: TranscriptResult) -> str:
     if transcript.error:
         return f"_Transcription failed: {transcript.error}_"
-    return "\n".join(
-        f"**{segment.speaker_label}** ({segment.timestamp}): {segment.text}"
-        for segment in transcript.segments
+    return coalesce_transcript_turns(
+        "\n".join(
+            f"**{segment.speaker_label}** ({segment.timestamp}): "
+            f"{' '.join(segment.text.splitlines())}"
+            for segment in transcript.segments
+        )
     )
 
 

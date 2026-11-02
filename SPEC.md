@@ -489,7 +489,17 @@ stub before any transcription work. Local artifact ownership and recording
 completion MUST NOT depend on remote IDs. The completed owned `transcript.md`
 is the transcript source of truth for review, search, Notes, and Backup.
 
-**REQ-F4-03** Transcript segments MUST be formatted as `**<Speaker Label>** (<HH:MM:SS>): <text>` in `transcript.md`.
+**REQ-F4-03** Transcript turns MUST be formatted as
+`**<Speaker Label>** (<HH:MM:SS>): <text>` in `transcript.md`. Consecutive segments
+with the same displayed speaker MUST occupy one line, retaining the first
+segment timestamp and every spoken text token in order. A different speaker MUST
+start a new line; returning to a previous speaker after an interruption MUST stay
+separate. Confirmation and relabeling MUST coalesce adjacent labels mapped to the
+same displayed person without changing speaker identity or non-owned metadata.
+Headings and other nonblank non-transcript content MUST remain intact and prevent
+merging across them. Blank spacing between adjacent entries MAY be removed when
+joining. Display turns MUST NOT be split at an arbitrary character limit; raw ASR
+segments and word timing MUST remain unchanged.
 
 **REQ-F4-04** Speaker labels produced by the selected backend (e.g. "Speaker A",
 "Speaker B") MUST be preserved until the user either confirms local
@@ -507,7 +517,10 @@ preparation MUST join that pending worker. Changed review identity MUST reload
 on a worker before presentation; the main thread MUST NOT call a provider.
 The request MUST reuse the Notes Anthropic key and honor its current-session
 pause. It MUST include only diarized local transcript text (at most 60,000
-characters, at whole-utterance boundaries). Long excerpts SHOULD retain useful
+characters, normally at whole-utterance boundaries). A displayed turn exceeding
+that allowance MAY supply bounded source-exact contiguous passages split at
+whitespace boundaries for model input only; no words or speaker labels may be
+invented. Long excerpts SHOULD retain useful
 context for each detected voice rather than only a transcript prefix. It MUST
 include relevant candidate names, and local
 known-person descriptions. Calendar matching aliases/emails and frontmatter metadata (including local

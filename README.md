@@ -628,7 +628,9 @@ not supported because anonymous labels can change between transcription jobs.
 History selection favors substantive work passages and shares each person's
 quote budget across recent confirmed meetings. Long identification excerpts
 reserve context for later voices before filling the remaining allowance, keeping
-whole utterances in chronological order. These selection heuristics do not verify
+whole utterances in chronological order. A turn too long for the identification
+allowance supplies source-exact passages split at whitespace boundaries for model
+input only; the displayed transcript keeps the complete turn on one line. These selection heuristics do not verify
 identity or turn a topic match into a confirmed name.
 
 ## Local Search
@@ -668,7 +670,10 @@ successful transcripts stay terminal.
   stop at the calendar event end time, but fully automatic recording is out of
   scope.
 - Speaker labels are preserved by default until you confirm aliases in
-  `transcript.md`.
+  `transcript.md`. Consecutive segments from the same displayed speaker share one
+  transcript line with the first timestamp. Speaker changes start another line;
+  headings and other non-transcript content remain separate. Confirmation and
+  relabeling also join adjacent labels mapped to the same person.
 - Calendar watching uses all accessible calendars by default; set
   `GOOGLE_CALENDAR_ID` to a specific ID to narrow it.
 - Local transcription requires native arm64 macOS on Apple Silicon with Metal.

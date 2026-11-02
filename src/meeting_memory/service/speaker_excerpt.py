@@ -24,7 +24,9 @@ def substantive_rank(text: str) -> tuple[int, int]:
 
 def speaker_excerpt(body: str) -> tuple[SpeakerUtterance, ...]:
     turns = tuple(
-        SpeakerUtterance(match.group("label"), match.group("text")) for match in LINE.finditer(body)
+        SpeakerUtterance(match.group("label"), excerpt)
+        for match in LINE.finditer(body)
+        for excerpt in _bounded_passages(match.group("label"), match.group("text"))
     )
     costs = [len(turn.label) + len(turn.text) + 20 for turn in turns]
     if sum(costs) <= MAX_SPEAKER_EXCERPT_CHARS:
@@ -54,5 +56,25 @@ def speaker_excerpt(body: str) -> tuple[SpeakerUtterance, ...]:
                 if index not in selected and size + costs[index] <= MAX_SPEAKER_EXCERPT_CHARS:
                     selected.add(index)
                     size += costs[index]
-    # Retain whole utterances and original order for named transitions.
+    # Preserve source-exact passages and chronological context.
     return tuple(turn for index, turn in enumerate(turns) if index in selected)
+
+
+def _bounded_passages(label: str, text: str):
+    if len(label) + len(text) + 20 <= MAX_SPEAKER_EXCERPT_CHARS:
+        yield text
+        return
+    # Presentation turns remain intact. Only model input needs bounded passages.
+    limit = MAX_SPEAKER_EXCERPT_CHARS // 4
+    start = end = None
+    for word in re.finditer(r"\S+", text):
+        if start is not None and word.end() - start > limit:
+            yield text[start:end]
+            start = end = None
+        if word.end() - word.start() > limit:
+            continue  # An overlong unbroken token cannot provide bounded word context.
+        if start is None:
+            start = word.start()
+        end = word.end()
+    if start is not None:
+        yield text[start:end]

@@ -8,8 +8,7 @@ def test_excerpt_includes_late_voice_after_long_dominant_speaker():
         f"**A** (0:00:01): I review project {i}. " + "details " * 150 for i in range(60)
     )
     body = (
-        opening
-        + "\n**A** (0:30:00): Alex, your update?"
+        opening + "\n**A** (0:30:00): Alex, your update?"
         "\n**B** (0:30:01): I am implementing the billing integration."
     )
     result = speaker_excerpt(body)
@@ -27,3 +26,12 @@ def test_excerpt_skips_oversized_turn_and_keeps_later_usable_voice():
     )
     result = speaker_excerpt(body)
     assert len(result) == 1 and result[0].label == "B"
+
+
+def test_oversized_solo_turn_keeps_bounded_source_exact_model_context():
+    text = "I review the SDK integration and test releases. " * 2000
+    assert len(text) > MAX_SPEAKER_EXCERPT_CHARS
+    result = speaker_excerpt("**Alex** (0:00:01): " + text)
+    assert result and all(turn.label == "Alex" and turn.text in text for turn in result)
+    assert all("SDK integration" in turn.text for turn in result)
+    assert sum(len(t.label) + len(t.text) + 20 for t in result) <= MAX_SPEAKER_EXCERPT_CHARS
