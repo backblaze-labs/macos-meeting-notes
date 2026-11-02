@@ -81,6 +81,7 @@ def retry_failed_processing(
                     transcript = processor.transcribe(
                         snapshot.audio[0].stream,
                         meeting_title=snapshot.meta.calendar_title,
+                        speaker_candidates=snapshot.meta.speaker_candidates,
                         progress=lambda progress: (
                             event_sink(TranscriptionProgress(ref, progress)) if event_sink else None
                         ),

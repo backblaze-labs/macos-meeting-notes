@@ -69,6 +69,7 @@ class LocalTranscriptionClient:
         audio: BinaryIO,
         *,
         meeting_title: str = "",
+        speaker_candidates: tuple[str, ...] = (),
         progress: ProgressSink = lambda _event: None,
         cancelled: Cancelled = lambda: False,
     ) -> LocalTranscriptionOutput:
@@ -79,7 +80,9 @@ class LocalTranscriptionClient:
 
         if cancelled():
             raise LocalTranscriptionCancelled()
-        options = load_local_asr_profile().options(meeting_title)
+        options = load_local_asr_profile().options(
+            meeting_title, speaker_candidates=speaker_candidates
+        )
         status = inspect_local_backend(cache=self._cache)
         if not status.supported or not status.runtime_available:
             raise LocalTranscriptionError(status.summary, status.action)

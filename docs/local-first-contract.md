@@ -91,7 +91,12 @@ review or Notes; Unknown preserves text in unassigned gaps after successful
 diarization.
 
 An optional private `transcription-profile.json` in the app support directory
-supplies bounded local language/title rules and technical vocabulary. Missing
+supplies bounded local language/title rules and technical vocabulary. An optional
+`spanish_attendees` group selects Spanish only for a nonempty Calendar attendee
+list wholly within the group after exact case/whitespace normalization. An outsider
+selects English, taking priority over title rules. Missing attendees or an empty
+group retain title/default fallback. Runtime and legacy jobs pass Calendar candidates
+locally; inference requests receive only resolved language and vocabulary. Missing
 profiles preserve automatic detection. Present profiles must be owned private
 regular files, read without following file links and validated before decoding.
 A scoped adapter on the ephemeral pinned Whisper model restores the static

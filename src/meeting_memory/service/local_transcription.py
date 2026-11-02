@@ -24,6 +24,7 @@ class LocalTranscriber(Protocol):
         audio: BinaryIO,
         *,
         meeting_title: str = "",
+        speaker_candidates: tuple[str, ...] = (),
         progress: Callable[[LocalModelProgress], None],
         cancelled: Callable[[], bool],
     ) -> LocalTranscriptionOutput:
@@ -116,11 +117,17 @@ class LocalTranscriptAdapter:
         self._enabled = enabled
 
     def transcribe(
-        self, audio: BinaryIO, *, meeting_title: str = "", progress=lambda _event: None
+        self,
+        audio: BinaryIO,
+        *,
+        meeting_title: str = "",
+        speaker_candidates: tuple[str, ...] = (),
+        progress=lambda _event: None,
     ) -> TranscriptResult:
         output = self._client.transcribe(
             audio,
             meeting_title=meeting_title,
+            speaker_candidates=speaker_candidates,
             progress=progress,
             cancelled=lambda: not self._enabled(),
         )

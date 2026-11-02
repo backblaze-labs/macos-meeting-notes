@@ -26,16 +26,24 @@ def test_legacy_local_retry_claims_before_call_and_preserves_review_notes(tmp_pa
     source.write_bytes(b"private audio")
     files = write_meeting_dir(
         tmp_path / "meetings",
-        MeetingMeta("legacy", datetime(2026, 10, 27, tzinfo=UTC)),
+        MeetingMeta(
+            "legacy",
+            datetime(2026, 10, 27, tzinfo=UTC),
+            speaker_candidates=("Alex", "Casey"),
+        ),
         source,
         TranscriptResult("transcription-failed", (), error="old failure"),
         SummaryResult.skipped(),
+        speaker_candidates=("Alex", "Casey"),
     )
     events = []
 
     class Backend:
-        def transcribe(self, audio, *, progress, cancelled, meeting_title=""):
+        def transcribe(
+            self, audio, *, progress, cancelled, meeting_title="", speaker_candidates=()
+        ):
             assert meeting_title == files.meta.calendar_title
+            assert speaker_candidates == files.meta.speaker_candidates
             fields, _ = split_frontmatter(files.transcript_path.read_text())
             assert fields["transcription_provider"] == "local"
             assert fields["transcription_status"] == "running"

@@ -468,7 +468,14 @@ and offer recovery without blocking recording completion or selecting cloud.
 `~/Library/Application Support/meeting-memory/transcription-profile.json` per job.
 Absent profiles MUST preserve automatic language detection. Profiles MAY select
 `en`, `es`, or `auto` by default and ordered case-insensitive title-substring rules,
-and supply a bounded glossary composed into an ASR vocabulary prompt. The static
+and supply a bounded glossary composed into an ASR vocabulary prompt. An optional
+`spanish_attendees` group MUST accept at most 64 nonblank exact names or aliases,
+with at most 200 characters each. When that group and Calendar speaker candidates
+are both nonempty, language MUST be Spanish only if every candidate is an exact
+member after stripping surrounding whitespace and case-folding; any outsider
+MUST select English. This attendee rule MUST override title/default language.
+Missing candidates or an absent/empty group MUST retain title/default fallback.
+Candidate names MUST remain local and MUST NOT be included in inference requests. The static
 glossary SHOULD remain available when decoding windows reset, without enabling
 conditioning on previous recognized speech. The reader
 MUST reject symlink, non-regular, non-owned, non-private, oversized or invalid files
