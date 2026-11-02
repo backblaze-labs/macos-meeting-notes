@@ -159,6 +159,34 @@ flow and enter credentials only in the app's secure form.
 For the full walkthrough, provider setup, permissions, and troubleshooting,
 read [docs/setup-tutorial.md](docs/setup-tutorial.md).
 
+### Private local transcription profile
+
+Local ASR uses automatic language detection unless the optional private file
+`~/Library/Application Support/meeting-memory/transcription-profile.json` is present.
+For example:
+
+```json
+{
+  "default_language": "en",
+  "language_overrides": [
+    {"title_contains": "standup", "language": "en"},
+    {"title_contains": "Spanish catchup", "language": "es"}
+  ],
+  "glossary": ["SDK", "ObjectStore"]
+}
+```
+
+Keep this file local with mode `0600`. Rules match title substrings without case
+sensitivity; the first match wins. Supported language values are `en`, `es`, and
+`auto`. Without a matching rule, `default_language` applies. Specifying English
+for Spanish speech can produce unwanted translation, so give Spanish meetings
+an explicit rule or use `auto` for them. New recordings and explicit retries
+read the profile per job. Editing it never reprocesses a completed transcript.
+Vocabulary hints bias each decoding window without carrying prior speech into
+subsequent windows. They do not replace words after transcription.
+The profile and title rules stay local and are not sent to the speaker-name provider.
+Invalid or non-private files fail with an actionable message and preserve audio.
+
 ### Local development commands
 
 ```bash
@@ -587,6 +615,12 @@ Per-meeting `speaker_aliases` are the source of truth for who spoke in a
 specific recording. Global `Speaker A` / `Speaker B` mappings are intentionally
 not supported because anonymous labels can change between transcription jobs.
 
+History selection favors substantive work passages and shares each person's
+quote budget across recent confirmed meetings. Long identification excerpts
+reserve context for later voices before filling the remaining allowance, keeping
+whole utterances in chronological order. These selection heuristics do not verify
+identity or turn a topic match into a confirmed name.
+
 ## Local Search
 
 Search saved meeting markdown from the terminal:
@@ -632,7 +666,7 @@ successful transcripts stay terminal.
   remains available under the existing setup contract; cloud transcription
   requires a separate explicit selection and consent.
 - Local uses pinned Whisper and Nemotron models with automatic language
-  detection and preserves the spoken language. English and Spanish have been
+  detection by default and optional local language/vocabulary hints. English and Spanish have been
   exercised; this does not establish accuracy for every language or recording.
   Diarization supports up to eight labels and does not fully resolve overlap.
 - Missing or corrupt local models leave transcription pending with audio

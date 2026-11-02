@@ -86,6 +86,9 @@ all labels. Notes start only after a successful confirmation.
 - Explain failures with a concrete recovery action.
 - Let provider failures, including B2 upload failures after setup, preserve and
   expose the local recording with a concrete retry path.
+- Support an optional private local ASR profile for English, Spanish or automatic
+  language selection by meeting title and a bounded technical vocabulary. Keep
+  the generic default automatic and preserve completed transcripts until explicit retry.
 - Use Local recognition and diarization by default without a cloud credential.
   Keep model preparation explicit and separate from retrying existing work.
   Show actionable pending states without blocking recording.

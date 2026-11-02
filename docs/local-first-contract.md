@@ -90,6 +90,17 @@ A complete diarization failure publishes no partial transcript and starts no
 review or Notes; Unknown preserves text in unassigned gaps after successful
 diarization.
 
+An optional private `transcription-profile.json` in the app support directory
+supplies bounded local language/title rules and technical vocabulary. Missing
+profiles preserve automatic detection. Present profiles must be owned private
+regular files, read without following file links and validated before decoding.
+A scoped adapter on the ephemeral pinned Whisper model restores the static
+glossary on reset decoding windows, preserves nonempty prompts, and restores the
+original decoder on completion or failure. Previous recognized speech remains
+unconditioned. Only validated language and vocabulary hints reach the inference worker; no
+meeting title or profile is sent externally. Jobs reload this file individually;
+profile edits do not trigger historical processing or change diarization identity.
+
 Claiming a job MUST atomically record provider and attempt identity before
 execution. Every state update MUST compare that identity plus the captured
 directory and audio. Stale completions MUST fail closed. `assemblyai_id` is

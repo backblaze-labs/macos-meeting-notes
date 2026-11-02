@@ -61,6 +61,7 @@ class LocalClient:
         self.files, self.error, self.mutate, self.calls = files, error, mutate, 0
 
     def transcribe(self, audio, **kwargs):
+        assert kwargs["meeting_title"] == self.files.meta.calendar_title
         state = metadata(self.files)
         assert state["transcription_provider"] == "local"
         assert state["transcription_status"] == "running"
@@ -245,7 +246,7 @@ def test_shutdown_cancels_active_local_work_and_closes_client_once(tmp_path):
         def close(self):
             closed.append(True)
 
-        def transcribe(self, audio, *, cancelled, progress):
+        def transcribe(self, audio, *, cancelled, progress, meeting_title=""):
             runtime.shutdown()
             assert cancelled()
             raise LocalTranscriptionCancelled()

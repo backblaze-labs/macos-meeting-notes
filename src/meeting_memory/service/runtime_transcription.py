@@ -159,6 +159,7 @@ class RuntimeTranscription:
                         raise LocalTranscriptionCancelled()
                     output = self._client.transcribe(
                         audio,
+                        meeting_title=handle.files.meta.calendar_title,
                         progress=lambda progress: self._event_sink(
                             TranscriptionProgress(_meeting_ref(handle.files), progress)
                         ),
