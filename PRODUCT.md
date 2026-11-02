@@ -82,6 +82,10 @@ all labels. Notes start only after a successful confirmation.
   offer from confirmed history or newly confirmed names. Draft names locally,
   keep unknown matches editable, and ask explicitly before suggesting topics
   from historical quotes. Saving the draft never changes Calendar setup.
+- Present each consecutive displayed speaker turn on one transcript line, keeping
+  its first timestamp and all spoken text in order. Start a new line when the
+  speaker changes, including after an interruption. Apply the same formatting
+  after speaker confirmation and relabeling, without re-transcribing audio.
 - Preserve user control over private data, speaker identity, and AI behavior.
 - Explain failures with a concrete recovery action.
 - Let provider failures, including B2 upload failures after setup, preserve and

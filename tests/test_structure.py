@@ -106,6 +106,7 @@ REQUIRED_SOURCE_FILES = (
     "service/meeting_state_fields.py",
     "service/transcript_state.py",
     "service/speaker_state.py",
+    "service/transcript_turns.py",
     "service/speaker_suggestions.py",
     "service/speaker_history.py",
     "service/runtime_retry_sweeps.py",

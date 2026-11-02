@@ -19,12 +19,13 @@ from meeting_memory.service.storage import (
     is_ours,
     read_frontmatter,
 )
+from meeting_memory.service.transcript_turns import coalesce_transcript_turns
 from meeting_memory.types.artifacts import ArtifactOwnership
 from meeting_memory.types.meeting import MeetingMeta, RecentMeeting
 from meeting_memory.types.summary import SummaryResult
 from meeting_memory.types.transcript import SpeakerReviewState
 
-SPEAKER_LABEL_RE = re.compile(r"^\*\*(?P<label>[^*]+)\*\*", re.MULTILINE)
+SPEAKER_LABEL_RE = re.compile(r"^\*\*(?P<label>[^*]+)\*\*(?= \(\d+:\d\d:\d\d\): )", re.MULTILINE)
 TRANSCRIPT_LINE_RE = re.compile(
     r"^\*\*(?P<label>[^*]+)\*\* \(\d+:\d\d:\d\d\): (?P<text>.+)$",
     re.MULTILINE,
@@ -100,7 +101,7 @@ def _confirm_speaker_aliases_legacy(
 
     markdown = read_regular_text_snapshot(state.transcript_path)
     frontmatter, body = split_frontmatter(markdown)
-    participants = [selected.get(label, label) for label in state.speaker_labels]
+    participants = list(dict.fromkeys(selected.values()))
     relabeled = SPEAKER_LABEL_RE.sub(lambda match: _replace_label(match, selected), body)
     relabeled = PARTICIPANTS_RE.sub(
         f"**Participants:** {', '.join(participants)}",
@@ -110,7 +111,7 @@ def _confirm_speaker_aliases_legacy(
     frontmatter["speaker_aliases"] = stored_aliases
     frontmatter["speaker_status"] = "confirmed"
     state.transcript_path.write_text(
-        f"{dump_frontmatter(frontmatter)}\n{relabeled}",
+        f"{dump_frontmatter(frontmatter)}\n{coalesce_transcript_turns(relabeled)}",
         encoding="utf-8",
     )
     return state.transcript_path
@@ -147,12 +148,11 @@ def _relabel_transcript_legacy(
         f"**Participants:** {', '.join(participants) or '_None identified._'}",
         relabeled_body,
     )
-
     frontmatter["participants"] = participants
     frontmatter["speaker_aliases"] = aliases
     frontmatter["speaker_status"] = "confirmed"
     transcript_path.write_text(
-        f"{dump_frontmatter(frontmatter)}\n{relabeled_body}",
+        f"{dump_frontmatter(frontmatter)}\n{coalesce_transcript_turns(relabeled_body)}",
         encoding="utf-8",
     )
     return transcript_path

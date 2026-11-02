@@ -14,9 +14,10 @@ from meeting_memory.service.meeting_document import (
 )
 from meeting_memory.service.meeting_locks import meeting_lock
 from meeting_memory.service.meeting_state import MeetingStateConflict
+from meeting_memory.service.transcript_turns import coalesce_transcript_turns
 from meeting_memory.types.capabilities import MeetingJobState
 
-SPEAKER_LABEL_RE = re.compile(r"^\*\*(?P<label>[^*]+)\*\*", re.MULTILINE)
+SPEAKER_LABEL_RE = re.compile(r"^\*\*(?P<label>[^*]+)\*\*(?= \(\d+:\d\d:\d\d\): )", re.MULTILINE)
 TRANSCRIPT_LINE_RE = re.compile(
     r"^\*\*(?P<label>[^*]+)\*\* \(\d+:\d\d:\d\d\): (?P<text>.+)$",
     re.MULTILINE,
@@ -63,7 +64,12 @@ def _confirm_locked(
     if current_status == "confirmed":
         stored = _stored_aliases(frontmatter)
         if cleaned == stored:
-            return document.path / "transcript.md"
+            coalesced = coalesce_transcript_turns(body)
+            if coalesced == body:
+                return document.path / "transcript.md"
+            return _publish_transcript(
+                document, frontmatter, _replace_body(document.text, coalesced)
+            )
         if stored or keep_labels or not cleaned:
             raise MeetingStateConflict("confirmed speaker aliases are terminal")
         # Labels were kept (a historical automatic Notes run, or an explicit Keep
@@ -91,8 +97,12 @@ def _confirm_locked(
                 "speaker_status": "confirmed",
             },
         ),
-        relabeled,
+        coalesce_transcript_turns(relabeled),
     )
+    return _publish_transcript(document, frontmatter, updated)
+
+
+def _publish_transcript(document, frontmatter, updated) -> Path:
     if frontmatter.get("backup_status") == MeetingJobState.SUCCEEDED.value:
         revision = document.backup_revision(updated)
         if revision != frontmatter.get("backup_uploaded_revision"):

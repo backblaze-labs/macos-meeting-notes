@@ -90,6 +90,14 @@ A complete diarization failure publishes no partial transcript and starts no
 review or Notes; Unknown preserves text in unassigned gaps after successful
 diarization.
 
+Transcript presentation coalesces consecutive segments with the same displayed
+speaker into one line, retaining the first timestamp and spoken text in order.
+Speaker confirmation and relabeling apply the same formatting, including when
+several raw labels map to one person. Other nonblank body content acts as a
+separator and remains intact; raw ASR segment/word timing is unchanged. Oversized
+display turns remain complete. Identification context may use bounded source-exact
+passages at whitespace boundaries, without splitting the displayed turn.
+
 An optional private `transcription-profile.json` in the app support directory
 supplies bounded local language/title rules and technical vocabulary. An optional
 `spanish_attendees` group selects Spanish only for a nonempty Calendar attendee
