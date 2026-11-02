@@ -8,8 +8,8 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 
+from meeting_memory.repo import local_worker as worker
 from meeting_memory.repo.local_asr_profile import load_local_asr_profile
-from meeting_memory.repo.local_worker import read_request, transcribe
 from meeting_memory.types.local_asr import LocalASROptions, LocalASRProfile
 from meeting_memory.types.local_transcription import LocalTranscriptionError
 
@@ -79,19 +79,17 @@ def test_worker_accepts_old_requests_and_strict_optional_asr(tmp_path):
     row = {"operation": "infer", "cache": str(tmp_path), "audio": str(audio)}
     request.write_text(json.dumps(row))
     request.chmod(0o600)
-    assert "asr" not in read_request(request)
+    assert "asr" not in worker.read_request(request)
     row["asr"] = LocalASROptions("en", "Vocabulary: SDK").to_wire()
     request.write_text(json.dumps(row))
-    assert read_request(request)["asr"]["language"] == "en"
+    assert worker.read_request(request)["asr"]["language"] == "en"
     row["asr"]["api_key"] = "unexpected"
     request.write_text(json.dumps(row))
     with pytest.raises(ValueError):
-        read_request(request)
+        worker.read_request(request)
 
 
 def test_worker_forwards_explicit_language_and_initial_prompt(monkeypatch, tmp_path):
-    import meeting_memory.repo.local_worker as worker
-
     mx = SimpleNamespace(eval=lambda _: None, synchronize=lambda: None, clear_cache=lambda: None)
     mlx = ModuleType("mlx")
     mlx.core = mx
@@ -110,7 +108,7 @@ def test_worker_forwards_explicit_language_and_initial_prompt(monkeypatch, tmp_p
     stt.load = lambda *_a, **_k: model
     monkeypatch.setitem(sys.modules, "mlx_audio.stt", stt)
     monkeypatch.setattr(worker, "emit", lambda _: None)
-    result, language = transcribe(
+    result, language = worker.transcribe(
         tmp_path / "audio.wav", tmp_path, LocalASROptions("en", "Vocabulary: SDK")
     )
     assert result[0]["text"] == "SDK" and language == "en"
@@ -157,7 +155,7 @@ def test_client_reads_profile_per_job_and_passes_title_policy(monkeypatch, tmp_p
     monkeypatch.setattr(client_module, "decoded_native_audio", decode)
     sent = []
 
-    def worker(request, **_kwargs):
+    def run_worker(request, **_kwargs):
         sent.append(json.loads(request.read_text())["asr"])
         (request.parent / "result.json").write_text(
             json.dumps(
@@ -169,7 +167,7 @@ def test_client_reads_profile_per_job_and_passes_title_policy(monkeypatch, tmp_p
             )
         )
 
-    monkeypatch.setattr(client_module, "run_local_worker", worker)
+    monkeypatch.setattr(client_module, "run_local_worker", run_worker)
     client = client_module.LocalTranscriptionClient(cache=tmp_path)
     with audio.open("rb") as source:
         client.transcribe(source, meeting_title="Spanish catchup")
