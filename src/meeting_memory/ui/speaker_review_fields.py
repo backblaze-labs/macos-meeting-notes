@@ -3,7 +3,7 @@
 import re
 from typing import Any
 
-from meeting_memory.types.transcript import SpeakerReviewState
+from meeting_memory.types.transcript import SpeakerReviewState, is_unknown_speaker
 
 MANUAL_OPTION = "Manual..."
 
@@ -73,6 +73,7 @@ def _alias_text(state: SpeakerReviewState) -> str:
     return "\n".join(
         f"{label}={state.speaker_aliases.get(label) or state.speaker_suggestions.get(label, '')}"
         for label in state.speaker_labels
+        if not is_unknown_speaker(label)
     )
 
 

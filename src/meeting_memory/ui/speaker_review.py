@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from meeting_memory.types.transcript import SpeakerReviewState
+from meeting_memory.types.transcript import SpeakerReviewState, is_unknown_speaker
 from meeting_memory.ui.modal_focus import run_modal
 from meeting_memory.ui.speaker_review_fields import (
     _alias_text,
@@ -76,7 +76,9 @@ def open_speaker_review_window(
         if aliases is not KEEP_SPEAKER_LABELS:
             remember_draft(aliases)
             missing = [
-                label for label in state.speaker_labels if not aliases.get(label, "").strip()
+                label
+                for label in state.speaker_labels
+                if not is_unknown_speaker(label) and not aliases.get(label, "").strip()
             ]
             if missing:
                 _alert(rumps, "Review Speakers", "Assign a name to: " + ", ".join(missing))
@@ -130,12 +132,19 @@ def _prompt_aliases_appkit(
     while True:
         width = 640
         row_height = 126
-        content_height = max(140, 62 + len(state.speaker_labels) * row_height)
+        content_height = max(
+            140,
+            62
+            + len([label for label in state.speaker_labels if not is_unknown_speaker(label)])
+            * row_height,
+        )
         height = min(content_height, SPEAKER_REVIEW_MAX_HEIGHT)
         view = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, width, content_height))
         rows: list[tuple[str, Any, Any]] = []
 
-        for index, label in enumerate(state.speaker_labels):
+        for index, label in enumerate(
+            label for label in state.speaker_labels if not is_unknown_speaker(label)
+        ):
             y = content_height - 38 - index * row_height
             label_field = _label_field(_display_label(label), 0, y, 120, 22)
             popup = NSPopUpButton.alloc().initWithFrame_pullsDown_(
@@ -238,8 +247,9 @@ def _review_message(state: SpeakerReviewState) -> str:
     speakers = ", ".join(_display_label(label) for label in state.speaker_labels)
     message = (
         f"Detected speakers: {speakers}\nCandidates: {candidates}\n"
-        "Assign every speaker a name. To keep one label, enter its text as the manual name "
-        "(for example, Unknown). Keep Speaker Labels keeps all labels."
+        "Assign each identified speaker a name. Unknown fragments stay unchanged automatically. "
+        "To keep another label, enter its text as the manual name. "
+        "Keep Speaker Labels keeps all labels."
     )
     return f"{message}\n{state.suggestion_message}" if state.suggestion_message else message
 

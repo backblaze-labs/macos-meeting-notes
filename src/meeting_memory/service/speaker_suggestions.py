@@ -19,7 +19,7 @@ from meeting_memory.types.speakers import (
     SpeakerIdentificationResult,
     SpeakerSuggestion,
 )
-from meeting_memory.types.transcript import SpeakerReviewState
+from meeting_memory.types.transcript import SpeakerReviewState, is_unknown_speaker
 
 LOGGER = logging.getLogger(__name__)
 
@@ -161,7 +161,8 @@ def validate_suggestions(
     proposed = tuple(
         item
         for item in result.suggestions
-        if item.name in names
+        if not is_unknown_speaker(item.label)
+        and item.name in names
         and item.method in {"direct", "elimination"}
         and bool(item.evidence.strip())
         and any(turn.label == item.label and item.evidence in turn.text for turn in turns)

@@ -37,7 +37,8 @@ Use method elimination and quote a substantive utterance from that remaining lab
 Elimination requires contextual support that this is the remaining attendee, not merely
 equal counts of labels and invitees. Attendees may be silent or absent, speakers may
 be uninvited, and diarization may split one voice into extra labels or Unknown fragments.
-Never assign Unknown by elimination or force a match to reconcile those fragments.
+Never assign Unknown to any person: fragments may contain different voices or noise.
+Do not force a match to reconcile those fragments.
 If multiple candidates or substantive speakers remain plausible, abstain.
 If evidence is insufficient return suggestions: [].
 Choose evidence AFTER identifying the speaker from the full supplied conversation.

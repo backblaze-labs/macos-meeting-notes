@@ -88,6 +88,11 @@ class SpeakerReviewState:
     transcription_attempt_id: str | None = None
 
 
+def is_unknown_speaker(label: str) -> bool:
+    """Unassigned fragments do not establish a shared speaker identity."""
+    return label.strip().casefold() in {"unknown", "speaker unknown"}
+
+
 def format_timestamp(seconds: float) -> str:
     whole_seconds = int(seconds)
     hours, remainder = divmod(whole_seconds, 3600)

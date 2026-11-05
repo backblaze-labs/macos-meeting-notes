@@ -16,6 +16,7 @@ from meeting_memory.service.meeting_locks import meeting_lock
 from meeting_memory.service.meeting_state import MeetingStateConflict
 from meeting_memory.service.transcript_turns import coalesce_transcript_turns
 from meeting_memory.types.capabilities import MeetingJobState
+from meeting_memory.types.transcript import is_unknown_speaker
 
 SPEAKER_LABEL_RE = re.compile(r"^\*\*(?P<label>[^*]+)\*\*(?= \(\d+:\d\d:\d\d\): )", re.MULTILINE)
 TRANSCRIPT_LINE_RE = re.compile(
@@ -134,11 +135,13 @@ def reviewed_speaker_names(
         if cleaned:
             raise ValueError("keeping speaker labels does not accept aliases")
         return {label: label for label in labels}, {}
-    missing = [label for label in labels if label not in cleaned]
+    missing = [label for label in labels if not is_unknown_speaker(label) and label not in cleaned]
     if missing:
         raise ValueError(f"missing aliases for: {', '.join(missing)}")
-    selected = {label: cleaned[label] for label in labels}
-    return selected, selected
+    selected = {label: label if is_unknown_speaker(label) else cleaned[label] for label in labels}
+    return selected, {
+        label: name for label, name in selected.items() if not is_unknown_speaker(label)
+    }
 
 
 def _clean_aliases(aliases: Mapping[str, str]) -> dict[str, str]:
