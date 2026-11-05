@@ -20,43 +20,20 @@ def _actions(fake, confirm=None, keep=None, notes=None):
     )
 
 
-def test_missing_unknown_returns_to_form_preserving_names(tmp_path):
+def test_unknown_requires_no_assignment(tmp_path):
     fake = FakeActions(
-        replace(
-            _state(tmp_path),
-            speaker_labels=("Speaker A", "Speaker B", "Unknown"),
-            speaker_suggestions={"Speaker A": "Alex", "Speaker B": "Casey"},
-        )
+        replace(_state(tmp_path), speaker_labels=("Speaker A", "Speaker B", "Unknown"))
     )
     rumps = FakeRumps()
-    drafts = []
-    responses = iter(
-        [
-            {"Speaker A": "Alex", "Speaker B": "Casey", "Unknown": "   "},
-            {"Speaker A": "Alex", "Speaker B": "Casey", "Unknown": "Unknown"},
-        ]
-    )
-
-    def prompt(state):
-        drafts.append(state)
-        return next(responses)
-
     assert review.open_speaker_review_window(
         tmp_path,
         _actions(fake),
         rumps_module=rumps,
-        prompt_aliases=prompt,
+        prompt_aliases=lambda state: {"Speaker A": "Alex", "Speaker B": "Casey"},
     )
-    assert len(drafts) == 2
-    assert drafts[1].speaker_aliases == {
-        "Speaker A": "Alex",
-        "Speaker B": "Casey",
-        "Unknown": "   ",
-    }
-    assert drafts[1].speaker_suggestions == {}
     assert len(fake.confirmed) == 1
     assert fake.notes == [tmp_path]
-    assert "Unknown" in rumps.alerts[0]["message"]
+    assert not rumps.alerts
 
 
 def test_cancel_after_invalid_assignment_never_saves(tmp_path):

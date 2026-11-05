@@ -574,8 +574,10 @@ any suggested-name evidence. Both clues remain visible in the scrollable review.
 Incomplete speaker assignments return to Review Speakers with the selected names
 and blank fields preserved, and identify the labels that still need a name.
 A save failure also returns to review for correction, retry, or cancellation.
-To keep one anonymous label while naming the others, enter its exact text
-(for example, `Unknown`) as the manual name. **Keep Speaker Labels** keeps
+Unknown fragments stay unchanged when names are confirmed. They have no name
+assignment controls, require no alias, and receive no identity suggestions:
+they may contain different voices or noise. To keep another anonymous label
+while naming the others, enter its exact text as the manual name. **Keep Speaker Labels** keeps
 all labels. Notes start only after a successful confirmation.
 
 **REQ-F4-06** Google Calendar attendees MAY populate `speaker_candidates`. Candidates SHOULD use the attendee's Calendar full name, except aliases explicitly configured in `KNOWN_SPEAKERS`. These candidates are hints for review and MAY be sent for unconfirmed Speaker
