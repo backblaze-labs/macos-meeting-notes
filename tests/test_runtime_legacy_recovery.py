@@ -42,6 +42,7 @@ def test_successful_empty_scan_is_durably_once_only(tmp_path: Path) -> None:
         NotifyEvent(
             "Legacy recovery scan complete",
             "No legacy recordings found.",
+            show_notification=False,
             rebuild_menu=True,
         )
     ]

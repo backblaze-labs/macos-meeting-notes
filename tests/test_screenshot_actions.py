@@ -47,8 +47,8 @@ def test_take_stages_a_screenshot_for_the_active_recording(tmp_path: Path) -> No
     actions.take()
 
     assert controller.drain_events() == [
-        NotifyEvent(SAVED_TITLE, "Screenshot 1 · Product Sync"),
-        NotifyEvent(SAVED_TITLE, "Screenshot 2 · Product Sync"),
+        NotifyEvent(SAVED_TITLE, "Screenshot 1 · Product Sync", show_notification=False),
+        NotifyEvent(SAVED_TITLE, "Screenshot 2 · Product Sync", show_notification=False),
     ]
     assert sorted(path.name for path in (store.pending_root / SESSION).iterdir()) == [
         "screenshot-01-at-01m05s.png",
@@ -106,7 +106,7 @@ def test_tray_take_screenshot_stages_and_commit_attaches(tmp_path: Path) -> None
         "screenshot-01-at-01m05s.png",
         "screenshot-02-at-01m05s.png",
     ]
-    assert fake_rumps.notifications[0][0] == "Recording saved"
+    assert fake_rumps.notifications == []
 
 
 def _controller(

@@ -272,8 +272,8 @@ drains those events on the main thread.
 The local-commit worker emits `RecordingCommitted`
 after atomic publication and optional transcription emits `TranscriptReady`
 only after job success or `TranscriptionFailed` on failure. The tray main thread
-alone translates those typed events into the separate Recording saved,
-Transcript ready, and Transcription failed notifications.
+alone translates those typed events into silent recording-save updates and
+actionable Transcript ready and Transcription failed notifications.
 
 Runtime startup follows the same boundary and isolates optional adapter
 construction failures from Recording Core. Capability-aware setup/doctor is

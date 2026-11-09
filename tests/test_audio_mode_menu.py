@@ -36,6 +36,7 @@ def test_audio_mode_menu_applies_mode_and_rebuilds(tmp_path) -> None:
     assert event_queue.get_nowait() == NotifyEvent(
         "Audio mode changed",
         ("Silent System Only: record system audio with microphone off and playback muted."),
+        show_notification=False,
     )
 
 

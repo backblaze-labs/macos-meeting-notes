@@ -108,6 +108,7 @@ class Pipeline:
         self.event_sink(
             NotifyEvent(
                 title="Meeting ready",
+                show_notification=bool(transcript.error or summary.status == "failed"),
                 body=body,
                 action_label=action_label,
                 action=action,

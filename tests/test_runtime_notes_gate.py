@@ -35,3 +35,12 @@ def test_gate_is_unavailable_without_a_generator_or_while_paused(tmp_path) -> No
     ready.set_enabled(False)
 
     assert ready.available is False
+
+
+def test_successful_notes_generation_is_silent(tmp_path):
+    events = []
+    RuntimeNotesGate(lambda p: p / "notes.md", events.append, ImmediateThread, lambda: True).start(
+        tmp_path
+    )
+    assert len(events) == 1
+    assert events[0].show_notification is False

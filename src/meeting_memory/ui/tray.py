@@ -267,7 +267,8 @@ class RumpsTrayApp:
             return
         runtime_event = runtime_notification(event)
         if runtime_event is not None:
-            self.notify_event(runtime_event)
+            if runtime_event.show_notification:
+                self.notify_event(runtime_event)
             self.refresh_sidebar()
             return
         if isinstance(event, NotifyEvent):

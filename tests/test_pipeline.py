@@ -41,6 +41,7 @@ def test_pipeline_happy_path_writes_files_emits_event_and_updates_b2(tmp_path: P
     assert events == [
         NotifyEvent(
             title="Meeting ready",
+            show_notification=False,
             body="Product Sync · transcript ready",
             action_label="Open",
             action="open_meeting",

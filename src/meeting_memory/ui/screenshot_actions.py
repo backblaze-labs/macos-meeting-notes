@@ -69,7 +69,9 @@ class ScreenshotActions:
         return attached
 
     def _notify(self, title: str, body: str) -> None:
-        self.controller.event_queue.put(NotifyEvent(title, body))
+        self.controller.event_queue.put(
+            NotifyEvent(title, body, show_notification=title != SAVED_TITLE)
+        )
 
 
 def recording_session_id(session: RecordingSession | None) -> str | None:

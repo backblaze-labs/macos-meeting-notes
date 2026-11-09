@@ -546,3 +546,8 @@ computer-use validation of the installed app.
 
 These are not prerequisites for the first-value promise. Additions must retain
 capability isolation and the durable local-audio invariant.
+
+Notifications are reserved for failures and requests for user input, such as
+speaker review or recording reminders. Successful recording saves, screenshots,
+audio mode changes, and Notes generation update the app silently. The explicit
+Test Notification action remains available for checking delivery.
