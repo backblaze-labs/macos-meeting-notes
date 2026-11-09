@@ -927,11 +927,11 @@ before sending this separate macOS notification:
 
 Preparation MUST finish with proposals or a manual fallback before the action
 is offered. Empty or failed proposals MUST NOT trigger another provider request
-when the notification is clicked. Notes announce `"Notes generated"` only
-after explicit speaker confirmation and successful generation.
+when the notification is clicked. Notes generation requires explicit speaker confirmation; successful generation
+updates local state silently.
 
-**REQ-F9-02** Both the required recording-saved notification and any later
-transcript-ready notification MUST be independent of Backup state or completion.
+**REQ-F9-02** Recording-save state updates and actionable transcript-ready
+notifications MUST be independent of Backup state or completion.
 
 **REQ-F9-03** When `transcription_status` becomes `failed`, the worker MUST
 enqueue typed `TranscriptionFailed`; the tray main thread MUST render this
@@ -940,13 +940,11 @@ mandatory notification without any worker UI call:
 - Body: `"<meeting-title> · audio saved locally"`
 - Action button: `"Open"`: opens the meeting directory in Finder
 
-**REQ-F9-04** Immediately after the audio and metadata stub are atomically
-committed, the local-commit worker MUST enqueue `RecordingCommitted` and the
-tray main thread MUST send this notification without waiting for any optional
-capability:
-- Title: `"Recording saved"`
-- Body: `"<meeting-title> · audio saved locally"`
-- Action button: `"Reveal"`: reveals the meeting directory in Finder
+**REQ-F9-04** Immediately after audio and metadata are atomically committed,
+the worker MUST enqueue `RecordingCommitted`. The tray MUST refresh local state
+without a success notification. Routine successful operations remain silent;
+failures and requests for user input (including speaker review and recording
+reminders) retain notifications. Explicit notification tests remain available.
 
 ### F10: Local macOS App Wrapper and Login Item
 
@@ -1221,7 +1219,7 @@ LocalCommit.run(audio_path, meeting_meta)
   └── event_queue.put(RecordingCommitted)         ← typed boundary event
         │
         ▼
-Tray main thread → notify("Recording saved")      ← first value is complete
+Tray main thread → refresh local state silently      ← first value is complete
         │
         ├── Transcription ready? enqueue pending job
         │     └── Selected backend: Local decode/infer or consented AssemblyAI upload/poll

@@ -20,7 +20,7 @@ meeting directory; two or more are grouped in a `screenshots/` subfolder.
 - `<meeting>/screenshot-01-at-05m12s.png` when a meeting has exactly one
   screenshot (the suffix is the offset into the recording)
 - `<meeting>/screenshots/screenshot-NN-at-MMmSSs.png` when it has two or more
-- A "Screenshot saved" notification per capture
+- Successful captures stay silent; capture failures notify the user
 
 ## Threading
 

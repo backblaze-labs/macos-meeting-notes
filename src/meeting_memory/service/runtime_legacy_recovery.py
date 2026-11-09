@@ -88,7 +88,12 @@ class LegacyRecoveryRuntime:
         count = len(result.entries)
         body = "No legacy recordings found." if count == 0 else f"{count} recording(s) found."
         self._event_sink(
-            NotifyEvent("Legacy recovery scan complete", body, rebuild_menu=True)
+            NotifyEvent(
+                "Legacy recovery scan complete",
+                body,
+                rebuild_menu=True,
+                show_notification=count > 0,
+            )
         )
 
     def _commit(self, entry: RecoveryIndexEntry) -> None:
@@ -97,9 +102,7 @@ class LegacyRecoveryRuntime:
             if self._committer.commit(entry, entry.meta) is None:
                 return
             with self._lock:
-                remaining = [
-                    item for item_key, item in self._entries.items() if item_key != key
-                ]
+                remaining = [item for item_key, item in self._entries.items() if item_key != key]
             if not remaining:
                 try:
                     persist_legacy_discovery_complete(self._marker_path)

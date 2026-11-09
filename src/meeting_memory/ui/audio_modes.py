@@ -47,6 +47,7 @@ class AudioModeMenu:
             NotifyEvent(
                 "Audio mode changed",
                 f"{mode.label}: {mode.description}.",
+                show_notification=False,
             )
         )
         self.on_change()

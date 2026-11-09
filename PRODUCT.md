@@ -117,3 +117,8 @@ Use native macOS controls and system typography so keyboard navigation, focus,
 VoiceOver semantics, contrast, and text scaling follow platform conventions.
 Never rely on color alone to communicate state. Keep motion minimal and honor
 the system's reduced-motion preference wherever custom motion is introduced.
+
+Notifications are reserved for failures and requests for user input, such as
+speaker review or recording reminders. Successful recording saves, screenshots,
+audio mode changes, and Notes generation update the app silently. The explicit
+Test Notification action remains available for checking delivery.

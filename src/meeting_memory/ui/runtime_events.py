@@ -17,6 +17,7 @@ def runtime_notification(event: object) -> NotifyEvent | None:
         return NotifyEvent(
             "Recording saved",
             f"{event.meeting.calendar_title} · audio saved locally",
+            show_notification=False,
             action_label="Reveal",
             action="open_meeting",
             meeting_directory=event.meeting.directory,

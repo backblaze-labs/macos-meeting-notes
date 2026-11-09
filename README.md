@@ -695,3 +695,8 @@ successful transcripts stay terminal.
 - Enabling a capability or changing its credentials/destination requires
   quitting and reopening the app. Disable pauses new current-session egress;
   process environment overrides can enable it again after restart.
+
+Notifications are reserved for failures and requests for user input, such as
+speaker review or recording reminders. Successful recording saves, screenshots,
+audio mode changes, and Notes generation update the app silently. The explicit
+Test Notification action remains available for checking delivery.

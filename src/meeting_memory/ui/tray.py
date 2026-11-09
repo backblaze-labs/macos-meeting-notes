@@ -238,9 +238,7 @@ class RumpsTrayApp:
             items.recording.title = recording_label
 
     def handle_event(self, event: object) -> None:
-        if self.local_models.handle_event(event):
-            return
-        if self.local_models.handle_runtime_event(event):
+        if self.local_models.handle_event(event) or self.local_models.handle_runtime_event(event):
             return
         if self.people_base.handle_event(event):
             return
@@ -267,7 +265,8 @@ class RumpsTrayApp:
             return
         runtime_event = runtime_notification(event)
         if runtime_event is not None:
-            self.notify_event(runtime_event)
+            if runtime_event.show_notification:
+                self.notify_event(runtime_event)
             self.refresh_sidebar()
             return
         if isinstance(event, NotifyEvent):

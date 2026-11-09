@@ -76,6 +76,7 @@ class RuntimeNotesGate:
         self._event_sink(
             NotifyEvent(
                 title="Notes generated",
+                show_notification=False,
                 body=f"{notes_path.parent.name} · notes.md ready",
                 action_label="Open",
                 meeting_directory=notes_path.parent,

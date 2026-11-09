@@ -52,3 +52,15 @@ def test_runtime_events_map_to_exact_local_first_copy_and_actions(tmp_path: Path
         "review_speakers",
         "open_meeting",
     ]
+
+
+def test_saved_recording_is_silent_but_actionable_events_notify(tmp_path):
+    meeting = MeetingRef("sync", "Sync", tmp_path)
+    assert runtime_notification(RecordingCommitted(meeting)).show_notification is False
+    for event in (
+        RecordingPublicationUncertain(meeting),
+        RecordingCleanupPending(meeting),
+        TranscriptReady(meeting),
+        TranscriptionFailed(meeting),
+    ):
+        assert runtime_notification(event).show_notification is True
