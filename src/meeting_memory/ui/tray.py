@@ -238,9 +238,7 @@ class RumpsTrayApp:
             items.recording.title = recording_label
 
     def handle_event(self, event: object) -> None:
-        if self.local_models.handle_event(event):
-            return
-        if self.local_models.handle_runtime_event(event):
+        if self.local_models.handle_event(event) or self.local_models.handle_runtime_event(event):
             return
         if self.people_base.handle_event(event):
             return
