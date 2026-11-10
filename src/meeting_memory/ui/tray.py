@@ -54,6 +54,7 @@ from meeting_memory.ui.speaker_knowledge import SpeakerKnowledgeUI
 from meeting_memory.ui.speaker_review_flow import SpeakerReviewFlow
 from meeting_memory.ui.status_menu import (
     StatusMenuItems,
+    cancel_active_recording,
     rebuild_status_menu,
     sidebar_toggle_label,
 )
@@ -141,7 +142,6 @@ class RumpsTrayApp:
             on_change=self.refresh_sidebar,
         )
         self.refresh_sidebar()
-
     def run(self) -> None:
         if self.screenshot_hotkey is not None:
             self.screenshot_hotkey.install()
@@ -180,6 +180,7 @@ class RumpsTrayApp:
             sidebar_visible=self.sidebar.is_visible,
             on_toggle_recording=self.toggle_recording,
             on_toggle_sidebar=self.sidebar.toggle_panel,
+            on_cancel_recording=lambda: cancel_active_recording(self),
             on_quit=self.shutdown.quit,
             sidebar_rows=(*self.sidebar.preference_rows(on_change=self.refresh_sidebar),),
         )

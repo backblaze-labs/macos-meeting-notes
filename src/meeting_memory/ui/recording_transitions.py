@@ -13,7 +13,7 @@ from meeting_memory.types.events import NotifyEvent
 from meeting_memory.types.meeting import RecordingContext
 
 LOGGER = logging.getLogger(__name__)
-TransitionKind = Literal["start", "stop"]
+TransitionKind = Literal["start", "stop", "cancel"]
 ThreadFactory = Callable[..., threading.Thread]
 ContextProvider = Callable[[], RecordingContext | None]
 StartedCallback = Callable[[str, datetime | None], None]
@@ -53,6 +53,12 @@ class RecordingTransitions:
             "start",
             lambda: self._start(calendar_title, ends_at, speaker_candidates),
         )
+
+    def request_cancel(self, session, on_cancelled: Callable[[], None]) -> bool:
+        def cancel() -> None:
+            if self._recorder.cancel(session):
+                on_cancelled()
+        return self._request("cancel", cancel)
 
     def request_stop(self) -> bool:
         return self._request("stop", self._stop)
