@@ -44,6 +44,7 @@ def rebuild_status_menu(
     on_toggle_sidebar: Callable[[], None],
     on_quit: Callable[..., None],
     sidebar_rows: Iterable[RowView] = (),
+    on_cancel_recording: Callable[[], None] | None = None,
 ) -> StatusMenuItems:
     """Rebuild `app_menu` in place (SPEC F8-01 order) and return the live items."""
 
@@ -52,6 +53,8 @@ def rebuild_status_menu(
     app_menu.add(None)
     recording_item = _item(rumps, RowView(view_model.recording.label, action=on_toggle_recording))
     app_menu.add(recording_item)
+    if view_model.recording.is_recording and on_cancel_recording is not None:
+        app_menu.add(_item(rumps, RowView("Cancel Recording…", action=on_cancel_recording)))
     app_menu.add(None)
     toggle_item = _item(
         rumps,
@@ -128,3 +131,19 @@ def _set_tooltip(item: Any, tooltip: str) -> None:
     set_tooltip = getattr(native_item, "setToolTip_", None)
     if callable(set_tooltip):
         set_tooltip(tooltip)
+
+
+def cancel_active_recording(app) -> None:
+    session = app.controller.recorder.active_session
+    if session is None:
+        return
+    answer = app.rumps.alert(
+        title="Cancel this recording?",
+        message=("Discard the recorded audio without saving or processing it? "
+                 "This cannot be undone."),
+        ok="Keep Recording",
+        cancel="Discard Recording",
+    )
+    if answer == 0:
+        app.controller.cancel_recording(session)
+    app.refresh_sidebar()

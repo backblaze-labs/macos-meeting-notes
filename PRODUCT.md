@@ -122,3 +122,12 @@ Notifications are reserved for failures and requests for user input, such as
 speaker review or recording reminders. Successful recording saves, screenshots,
 audio mode changes, and Notes generation update the app silently. The explicit
 Test Notification action remains available for checking delivery.
+
+
+### Cancel an active recording
+
+The menu bar menu offers **Cancel Recording…** while recording. The confirmation
+defaults to **Keep Recording**. Choosing **Discard Recording** stops that capture
+and deletes its temporary audio and recovery index, without saving a meeting,
+transcribing, generating Notes, or backing it up. The confirmation applies only
+to the session that was active when it opened. Stop Recording still saves normally.

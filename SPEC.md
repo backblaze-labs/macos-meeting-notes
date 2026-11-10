@@ -1515,3 +1515,12 @@ All v0.1 open questions are resolved as of v0.2 (section retitled from "Open Que
 | OQ-3 | Watch multiple Google calendars, or one configured calendar ID? | **Watch all accessible calendars by default.** `GOOGLE_CALENDAR_ID=all` scans non-deleted calendars visible to the authenticated account; set `primary` or a specific calendar ID to narrow. |
 | OQ-4 | Preferences as a native macOS window, or terminal config editor? | **Native settings UI.** Phase 4 stores non-secret values in app-owned preferences and secrets in Keychain while retaining read-only `.env` compatibility and explicit import. |
 | OQ-5 | Is `claude-sonnet-5` right, or should the model be configurable? | **Use `claude-sonnet-5`** as the default, with optional `ANTHROPIC_MODEL` and `SUMMARY_PROMPT_FILE` overrides (§8, REQ-EXT-09, REQ-F5-06). The application leaves Sonnet's adaptive-thinking effort level at Anthropic's `high` default to prioritize complete notes. Speaker label display names are handled separately by per-meeting `speaker_aliases`. |
+
+
+### Cancel an active recording
+
+The menu bar menu offers **Cancel Recording…** while recording. The confirmation
+defaults to **Keep Recording**. Choosing **Discard Recording** stops that capture
+and deletes its temporary audio and recovery index, without saving a meeting,
+transcribing, generating Notes, or backing it up. The confirmation applies only
+to the session that was active when it opened. Stop Recording still saves normally.

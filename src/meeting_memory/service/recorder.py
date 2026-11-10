@@ -17,6 +17,7 @@ from typing import Any
 
 from meeting_memory.config.defaults import DEFAULT_MEETINGS_DIR
 from meeting_memory.repo.native_audio import convert_native_audio, start_native_capture
+from meeting_memory.service.pinned_fs import open_directory_tree
 from meeting_memory.service.recovery_index import (
     create_recovery_session,
     pin_recovery_source,
@@ -123,10 +124,18 @@ class RecorderService:
             LOGGER.info("Recording started slug=%s mode=%s", slug, self.capture_mode)
             return session
 
+    def cancel(self, expected: RecordingSession) -> bool:
+        return self._finish(discard=expected) is True
+
     def stop(self) -> RecordingResult | None:
+        result = self._finish()
+        return result if isinstance(result, RecordingResult) else None
+
+    def _finish(self, *, discard: RecordingSession | None = None) -> RecordingResult | bool | None:
         with self._lock:
             session = self._session
-            if session is None or self._stopping:
+            if (session is None or self._stopping
+                    or (discard is not None and session is not discard)):
                 return None
             capture = self._capture
             self._stopping = True
@@ -135,6 +144,23 @@ class RecorderService:
             with self._capture_io_lock:
                 if capture is not None:
                     capture.stop()
+            if discard is not None:
+                entry = session.recovery
+                if entry is None:
+                    raise RuntimeError("recording session has no recovery index")
+                descriptor = open_directory_tree(entry.session_directory)
+                try:
+                    info = os.fstat(descriptor)
+                    if (info.st_dev, info.st_ino) != (entry.session_device, entry.session_inode):
+                        raise ValueError("recording session changed before cancellation")
+                    os.unlink(session.wav_path.name, dir_fd=descriptor)
+                    if entry.index_path is not None:
+                        os.unlink(entry.index_path.name, dir_fd=descriptor)
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+                entry.session_directory.rmdir()
+                return True
             diagnostics = getattr(capture, "diagnostics", None)
             if diagnostics is not None and not isinstance(diagnostics, CaptureDiagnostics):
                 raise TypeError("capture diagnostics must use the typed boundary model")

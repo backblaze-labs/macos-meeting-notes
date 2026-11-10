@@ -116,7 +116,11 @@ class TrayController:
 
     def stop_recording(self) -> None:
         self._transitions.request_stop()
-
+    def cancel_recording(self, session) -> None:
+        def cancelled() -> None:
+            self._recording_token = None
+            self.event_queue.put(NotifyEvent("Recording canceled", "Temporary audio discarded."))
+        self._transitions.request_cancel(session, cancelled)
     def _recording_started(self, title: str, reminder_end: datetime | None) -> None:
         self._recording_token = object()
         token = self._recording_token
